@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <title>Editor</title>
+    <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/build/css/bootstrap-enterprise.css" />
+    <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/css/build/pages/dashboard-simple-bootstrap.min.css"/>
+    <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/app/config-editor/config.css" media="all" />
+    <meta name="referrer" content="never" />
+    <meta name="referrer" content="no-referrer" />
+</head>
+
+<body class="simplexml locale-en" data-splunk-version="7.0.0" data-splunk-product="enterprise">
+    <header>
+        <a class="navSkip" href="#navSkip" tabindex="1">Screen reader users, click here to skip the navigation bar</a>
+        <div class="header splunk-header">
+            <div id="placeholder-splunk-bar">
+                <a href="{{SPLUNKWEB_URL_PREFIX}}/app/launcher/home" class="brand" title="splunk &gt; listen to your data">splunk<strong>&gt;</strong></a>
+            </div>
+            <div id="placeholder-app-bar"></div>
+        </div>
+        <a id="navSkip"></a>
+    </header>
+    
+    <div class="dashboard-body container-fluid main-section-body" data-role="main">
+        <div class="wrap">
+            <ul class="ce_file_list"></ul>
+            <textarea class="input input-text ce_contents"></textarea>
+        </div>
+    </div>
+	
+    <script src="{{SPLUNKWEB_URL_PREFIX}}/config?autoload=1" crossorigin="use-credentials"></script>
+    <script src="{{SPLUNKWEB_URL_PREFIX}}/static/js/i18n.js"></script>
+    <script src="{{SPLUNKWEB_URL_PREFIX}}/i18ncatalog?autoload=1"></script>
+    <script src="{{SPLUNKWEB_URL_PREFIX}}/static/build/simplexml/index.js"></script>
+	<script src="{{SPLUNKWEB_URL_PREFIX}}/static/app/config-editor/config.js"></script>
+
+</body>
+</html>
+
