@@ -1,5 +1,3 @@
-
-//require.config({ paths: { "app": "../app" } });
 require.config({ paths: { 'vs': '../app/config-editor/node_modules/monaco-editor/min/vs' }});
 
 require([
@@ -31,6 +29,14 @@ require([
     var $container = $(".ce_contents");
     var $tabs = $(".ce_tabs");
     
+    $(window)
+    .on("beforeunload", function() {
+        for (var i = 0; i < editors.length; i++) {
+			if (editors[i].hasChanges) {
+				return "Unsaved changes will be lost.";
+			}
+		}
+    });
 	
     $dirlist.on("click", ".ce_add_file", function(e){
         e.stopPropagation();
@@ -69,15 +75,20 @@ require([
     }).on("mouseleave", ".ce_leftnav_editable", function(){
         $(this).find('.ce_right_icon').remove();
     });
-    
-    $tabs.on("click", ".ce_close_tab", function(e){
-        var idx = $(this).parent().index();
-        e.stopPropagation();
+
+	function closetab(idx, check){
+		if (check && editors[idx].hasChanges) {
+			var result = confirm("discard changes?");
+			if (!result) {
+				return;
+			}
+		}
         editors[idx].editor.dispose();
         editors[idx].tab.remove();
         editors[idx].container.remove();
         editors.splice(idx, 1);
-        if ($tabs.children(".ce_active").length === 0) {
+		// if there are still tabs open, find the most recently used tab and activate that one
+        if ($tabs.children().length > 0 && $tabs.children(".ce_active").length === 0) {
             var last_used_idx, 
                 newest;
             for (var i = 0; i < editors.length; i++) {
@@ -88,6 +99,12 @@ require([
             }
             activateTab(last_used_idx);
         }
+	}
+	
+    $tabs.on("click", ".ce_close_tab", function(e){
+        var idx = $(this).parent().index();
+        e.stopPropagation();
+		closetab(idx, true);
         
     }).on("click", ".ce_tab", function(){
         activateTab($(this).index());
@@ -137,10 +154,19 @@ require([
 				} else if (r.data.info === "error") {
 					alert("ERROR: " + r.data.result)
 				}
-				// TODO if "path" is open in an editor, it needs to be closed without warning
+				if (type == "rename" || type == "delete") {
+					// if "path" is open in an editor, it needs to be closed without warning
+					for (var i = 0; i < editors.length; i++) {
+						if (editors[i].file === path) {
+							closetab(i, false);
+							break;
+						}
+					}
+				}
 			}				
 		});		
 	}
+	
     function read(f) {
 		if (! f) {
 			f = inFolder;
@@ -181,15 +207,45 @@ require([
                     ecfg.file = f;
                     ecfg.tab = $("<div class='ce_tab ce_active'>" + dodgy_basename(f) + "</div>").attr("title", f).appendTo($tabs);
                     ecfg.last_opened = Date.now();
+					ecfg.hasChanges = false;
                     ecfg.editor = monaco.editor.create(ecfg.container[0], {
                         value: r.data.result,
                         language: language,
                         theme: "vs-dark",
                     });
-                    ecfg.editor.addCommand(monaco.KeyCode.KEY_S, function() {
-                        //alert('s pressed!');
-                    });
-                    editors.push(ecfg);             
+					ecfg.server_content = ecfg.editor.getValue();
+					ecfg.editor.onDidChangeModelContent(function (e) {
+						// check against saved copy
+						if (ecfg.editor.getValue() !== ecfg.server_content) {
+							if (!ecfg.hasChanges) {
+								ecfg.tab.append("<i class='ce_right_icon icon-alert-circle'></i>")
+								ecfg.hasChanges = true;
+							}
+						} else {
+							if (ecfg.hasChanges) {
+								ecfg.tab.find('.icon-alert-circle').remove()
+								ecfg.hasChanges = false;
+							}							
+						}
+					});
+					ecfg.editor.addAction({
+						id: 'splunk-save',
+						label: 'Splunk Save',
+						keybindings: [
+							monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
+						],
+						run: function(ed) {
+							var saved_value = ecfg.editor.getValue();
+							write(ecfg.file, saved_value, function(){
+								ecfg.server_content = saved_value;
+								ecfg.tab.find('.icon-alert-circle').remove()
+								ecfg.hasChanges = false;															
+							});
+							return null;
+						}
+					});
+                    editors.push(ecfg);
+					
                 } else if (r.data.info === "dir") {
 					inFolder = f;
                     r.data.result.sort();
@@ -206,7 +262,6 @@ require([
                         $("<li class='ce_leftnav ce_leftnav_editable'></li>").text(r.data.result[i].substr(1)).attr("f", f + "/" + r.data.result[i].substr(1)).prepend("<i class='icon-" + icon + "'></i> ").appendTo($dirlist);
                     }
                 }
-                
             }
         });
     }
@@ -214,7 +269,7 @@ require([
 	function dodgy_basename(f) {
 		return f.replace(/.*\//,'')
 	}
-    function write(f, c) {
+    function write(f, c, cb) {
         service.post('/services/writefile', {file: f, contents: c}, function(err, r) {
             if (err) {
                 console.log('response: ', err);
