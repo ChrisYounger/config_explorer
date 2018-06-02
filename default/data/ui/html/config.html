@@ -26,7 +26,10 @@
     <div class="dashboard-body container-fluid main-section-body" data-role="main">
         <div class="wrap">
             <ul class="ce_file_list"></ul>
-            <textarea class="input input-text ce_contents"></textarea>
+            <div class="ce_container">
+                <div class="ce_tabs"></div>
+                <div class="ce_contents"></div>
+            </div>
         </div>
     </div>
 	
@@ -35,6 +38,7 @@
     <script src="{{SPLUNKWEB_URL_PREFIX}}/i18ncatalog?autoload=1"></script>
     <script src="{{SPLUNKWEB_URL_PREFIX}}/static/build/simplexml/index.js"></script>
 	<script src="{{SPLUNKWEB_URL_PREFIX}}/static/app/config-editor/config.js"></script>
+	<!--<script src="{{SPLUNKWEB_URL_PREFIX}}/static/app/config-editor/node_modules/monaco-editor/min/vs/loader.js"></script>-->
 
 </body>
 </html>

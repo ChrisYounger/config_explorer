@@ -1,22 +1,104 @@
+.wrap * {box-sizing: border-box;}
 .wrap {
-    display: flex;
-    width: 1200px;
-    
+    position: fixed;
+    top: 78px;  /* todo this will need to be fixed */
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    box-sizing: border-box;
+    background-color: #353535;
 }
 
 .ce_file_list {
     list-style-type: none;
-    cursor: pointer;
-    width: 200px;
-    overflow: hidden;
+    background-color: #262626;
+    color: #ccc;
+    position:absolute;
+    width: 280px;
+    margin: 0;
+    padding: 20px 0; 
+    overflow-x: auto;
+    height: 100%;
 }
 .ce_file_list li {
     white-space:nowrap;
-    
+    padding: 2px 10px 2px 22px;
+    text-overflow: ellipsis;
+    overflow: hidden;
 }
-.ace_editor {
-	width: 900px;
-    min-height: 600px;
+.ce_file_list li i {
+    padding-right: 6px;
+}
+.ce_leftnav {
+    cursor: pointer;    
+}
+.ce_leftnav:hover {
+    background-color:#2a2d2e;
+}
+.ce_leftnavfolder {
+    background-color:black;
+}
+.ce_container {
+    position: absolute;
+	left: 280px;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    border-left: 1px solid black;
+    background-color: #1e1e1e;
+}
+.ce_tabs {
+    height: 32px;
+    width: 100%;
+    position:absolute;
+    left: 0;
+    right: 0;
+    top: 0;
+    display: flex;
+    background-color: #1e1e1e;
+    color: #ccc;
+    border-bottom: 1px solid black;
+}
+.ce_tab {
+    width: 160px;
+    white-space:nowrap;
+    overflow: hidden;
+    padding: 0 2px 0 5px;
+    line-height: 32px;
+    border-right: 1px solid black;
+    background-color: #1e1e1e; 
+    cursor: pointer;
+    position: relative;
+}
+.ce_right_icon {
+    position:absolute;
+    right: 7px;
+    padding: 2px 6px;
+    margin-top: -2px;
+    cursor: pointer;
+    background-color: inherit;
+}
+.ce_right_icon:hover {
+    color: #00A4FD;
+}
+.ce_right_icon.ce_right_two {
+    right: 26px;    
+}
+.ce_contents {
+    top: 32px;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    position: absolute;
+}
+.ce_contents > div {
+    height: 100%
+}
+.ce_hidden {
+    display:none !important;
+}
+.ce_active {
+    background-color: #2a2d2e;
 }
 /* Buttons 
 .hidden { display: none !important;}
