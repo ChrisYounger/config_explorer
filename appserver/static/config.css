@@ -304,7 +304,7 @@
 /* Track */
 ::-webkit-scrollbar-track {
     background: #262626; 
-    border-left:1px solid #383838  
+    border-left:1px solid #1d1d1d  
 }
 /* Handle */
 ::-webkit-scrollbar-thumb {
@@ -313,6 +313,7 @@
 /* Handle on hover */
 ::-webkit-scrollbar-thumb:hover {
     background: #1e1e1e; 
+    cursor: pointer;
 }
 /* Buttons 
 .hidden { display: none !important;}

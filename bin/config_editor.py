@@ -1,36 +1,54 @@
-import splunk, sys, os, logging, time, json, re, shutil, subprocess, platform
+# Copyright (C) 2018 Chris Younger
 
+import splunk, sys, os, logging, time, json, re, shutil, subprocess, platform, logging, logging.handlers
 
-
+	
 class ceditor(splunk.rest.BaseRestHandler):
 	def handle_POST(self):
 		sessionKey = self.sessionKey
 		textchars = bytearray({7,8,9,10,12,13,27} | set(range(0x20, 0x100)) - {0x7f})
 		
 		is_binary_string = lambda bytes: bool(bytes.translate(None, textchars))
-
+			
 		def runCommand(cmds):
 			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
 			o = p.communicate()
 			return str(o[0]) + "\n" + str(o[1]) + "\n"
-	
+
+		# this sucks. but it comes from here: http://dev.splunk.com/view/logging/SP-CAAAFCN
+		def setup_logging():
+			logger = logging.getLogger('splunk.config_editor')    
+			SPLUNK_HOME = os.environ['SPLUNK_HOME']
+			LOGGING_DEFAULT_CONFIG_FILE = os.path.join(SPLUNK_HOME, 'etc', 'log.cfg')
+			LOGGING_LOCAL_CONFIG_FILE = os.path.join(SPLUNK_HOME, 'etc', 'log-local.cfg')
+			LOGGING_STANZA_NAME = 'python'
+			LOGGING_FILE_NAME = "config_editor.log"
+			BASE_LOG_PATH = os.path.join('var', 'log', 'splunk')
+			LOGGING_FORMAT = "%(asctime)s %(levelname)-s\t%(module)s:%(lineno)d - %(message)s"
+			splunk_log_handler = logging.handlers.RotatingFileHandler(os.path.join(SPLUNK_HOME, BASE_LOG_PATH, LOGGING_FILE_NAME), mode='a') 
+			splunk_log_handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
+			logger.addHandler(splunk_log_handler)
+			splunk.setupSplunkLogger(logger, LOGGING_DEFAULT_CONFIG_FILE, LOGGING_LOCAL_CONFIG_FILE, LOGGING_STANZA_NAME)
+			return logger
+		logger = setup_logging()	
+		
 		try:
 			result = ""
 			info = ""
 			debug = ""
-
+			action = self.request['form']['action']
+			
 			server_response, server_content = splunk.rest.simpleRequest('/services/authentication/current-context?output_mode=json', sessionKey=sessionKey, raiseAllErrors=True)
 			transforms_content = json.loads(server_content)
 			
 			user = transforms_content['entry'][0]['content']['username']
 			capabilities = transforms_content['entry'][0]['content']['capabilities']
-
+			
 			if not "admin_all_objects" in capabilities:
 				result = "User [" + user + "] must be granted the [admin_all_objects] capability to be able to use this tool"
 				info = "error"
 			else:
 				
-				action = self.request['form']['action']
 				if action[:5] == 'btool':
 					system = platform.system()
 					splunk_base = os.path.join(os.path.dirname( __file__ ), '..', '..', '..', '..')
@@ -57,7 +75,7 @@ class ceditor(splunk.rest.BaseRestHandler):
 
 				else:
 					file_str = self.request['form']['path']
-					if action == 'spec':
+					if action[:4] == 'spec':
 						spec_path = os.path.join(os.path.dirname( __file__ ), '..', '..', '..', 'system', 'README', file_str + '.conf.spec')
 						if os.path.exists(spec_path):
 							with open(spec_path, 'r') as fh:
@@ -145,6 +163,13 @@ class ceditor(splunk.rest.BaseRestHandler):
 									
 			self.response.setHeader('content-type', 'application/json')
 			self.response.write(json.dumps({'result': result, 'info': info, 'debug': debug}, ensure_ascii=False))
+			p1 = self.request['form']['param1']
+			if action == 'save':
+				p1 = ""
+			if info == "error":
+				logger.info('user={} action={} path="{}" param1="{}" status={} status="{}"'.format(user, action, self.request['form']['path'], info, p1, result))
+			else:
+				logger.info('user={} action={} path="{}" param1="{}" status={}'.format(user, action, self.request['form']['path'], p1, info))
 			
 		except Exception as ex:
 			template = "An exception of type {0} occurred. Arguments:\n{1!r}"

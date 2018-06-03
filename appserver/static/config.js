@@ -1,3 +1,5 @@
+// Copyright (C) 2018 Chris Younger
+
 require.config({ paths: { 'vs': '../app/config_editor/node_modules/monaco-editor/min/vs' }});
 
 require([
@@ -27,42 +29,19 @@ require([
     var $dirlist = $(".ce_file_list");
     var $container = $(".ce_contents");
     var $tabs = $(".ce_tabs");
-	var confFiles = null;
+	var activeTab = null;
+	var confFiles = {};
+	var confFilesSorted = [];
 	var action_mode = 'read';
     
-    $(window)
-    .on("beforeunload", function() {
+    $(window).on("beforeunload", function() {
         for (var i = 0; i < editors.length; i++) {
 			if (editors[i].hasChanges) {
 				return "Unsaved changes will be lost.";
 			}
 		}
     });
-	
-	function prettyPrompt(title, message, defaulttext, callback){
-		showModal({
-			title: title,
-			size: ((title === "Delete") ? false : "small"),
-			body: "<div><p>" + message + "</p><p></p><p><input type='text' value='" + defaulttext + "' class='ce_prompt_input input input-text ' /></p></div>",
-			actions: [{
-				onClick: function(){
-					$('.modal').one('hidden.bs.modal', function (e) {
-						callback($('.ce_prompt_input').val());
-					});
-					$(".modal").modal('hide');
-				},
-				cssClass: ((title === "Delete") ? 'btn-danger' : 'btn-primary'),
-				label: "Confirm"
-			},{
-				onClick: function(){ 
-					$(".modal").modal('hide');
-				},
-				cssClass: '',
-				label: "Cancel"
-			}]
-		});		
-	} 
-	
+
 		
     $dirlist.on("click", ".ce_add_file", function(e){
         e.stopPropagation();
@@ -178,13 +157,8 @@ require([
 			} else {
 				action_mode = 'spec';
 			}
-			if (confFiles === null) {
-				serverAction('btool-check', undefined, function(){
-					showConfList(action_mode);
-				});
-			} else {
-				showConfList(action_mode);
-			}
+
+			showConfList(action_mode);
 		}
 	});
 	
@@ -194,6 +168,7 @@ require([
         $container.children().eq(idx).removeClass('ce_hidden');
         $tabs.children().eq(idx).addClass('ce_active');
         editors[idx].last_opened = Date.now();        
+		activeTab = idx;
     }
 	
     function hideAllTabs() {
@@ -231,7 +206,10 @@ require([
 		editors[idx].container.remove();
 		editors.splice(idx, 1);
 		// if there are still tabs open, find the most recently used tab and activate that one
-		if ($tabs.children().length > 0 && $tabs.children(".ce_active").length === 0) {
+		if ($tabs.children().length === 0) {
+			activeTab = null;
+		
+		} else if ($tabs.children(".ce_active").length === 0) {
 			var last_used_idx, 
 				newest;
 			for (var i = 0; i < editors.length; i++) {
@@ -317,6 +295,7 @@ require([
 			}
 		});
 		
+		activeTab = editors.length;
 		editors.push(ecfg);	
 		return ecfg;		
 	}	
@@ -334,8 +313,8 @@ require([
 				}
 			});
 		}
-		for (var i = 0; i < confFiles.length; i++) {
-			$("<li class='ce_leftnav'></li>").text(confFiles[i]).attr("file", confFiles[i]).prepend("<i class='icon-report'></i> ").appendTo($dirlist);
+		for (var i = 0; i < confFilesSorted.length; i++) {
+			$("<li class='ce_leftnav'></li>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-report'></i> ").appendTo($dirlist);
 		}
 	}	
 	
@@ -347,9 +326,7 @@ require([
 	
 	function serverAction(type, path, callback, param1) {
 		var tab_path;
-		if (typeof callback !== 'function') {
-			callback = function (){};
-		}
+
 		if (type == "read") {
 			if (! path) {
 				path = inFolder;
@@ -403,7 +380,16 @@ require([
 				
 			} else if (type === "read") {
 				if (r.data.info === "file") {					
-					openNewTab(tab_path, r.data.result, true)
+					var ecfg = openNewTab(tab_path, r.data.result, true);
+					
+					var re = /([^\/]+).conf$/;
+					var found = tab_path.match(re);
+					if (found && confFiles.hasOwnProperty(found[1])) {
+						var conf = found[1];
+						serverAction('spec-hinting', conf, function(contents){
+							ecfg.hinting = buildHintingLookup(conf, contents);
+						});
+					}
 					
 				} else if (r.data.info === "dir") {
 					inFolder = path;
@@ -412,8 +398,7 @@ require([
 					$dirlist.empty();
 					var dir = $("<li class='ce_leftnavfolder'><span></span><bdi></bdi><i title='Create new folder' class='ce_add_folder ce_right_icon ce_right_two icon-folder'></i><i title='Create new file' class='ce_add_file ce_right_icon icon-report'></i></li>").attr("file", path).attr("title", path).appendTo($dirlist);
 					var span = dir.find("span").text(path + '/');
-					var bdi = dir.find("bdi").text(path + '/');
-					console.log(span.width(), dir.width());
+					dir.find("bdi").text(path + '/');
 					if (span.width() > (dir.width() - 50)) {
 						dir.addClass('ce_rtl');
 					}
@@ -431,16 +416,15 @@ require([
 				
 			} else if (type == "btool-check") {
 				var rex = /^Checking: .*\/([^\/]+?).conf\s*$/gm,
-					res,
-					found = {};
-				confFiles = [];
+					res;
+				confFilesSorted = [];
 				while((res = rex.exec(r.data.result)) !== null) {
-					if (! found.hasOwnProperty(res[1])) {
-						found[res[1]] = 1;
-						confFiles.push(res[1]);
+					if (! confFiles.hasOwnProperty(res[1])) {
+						confFiles[res[1]] = null;
+						confFilesSorted.push(res[1]);
 					}
 				}
-				confFiles.sort();
+				confFilesSorted.sort();
 			
 				
 			} else if (type == "btool-list") {
@@ -455,6 +439,9 @@ require([
 						size: "small"
 					});							
 				}
+				
+			} else if (type == "spec-hinting") {
+				// do nothing
 				
 			} else if (type == "spec") {
 				var c = r.data.result
@@ -485,8 +472,11 @@ require([
 					}
 				} 
 			}
-			
-			(callback)(r.data.result);				
+
+			if (typeof callback === 'function') {
+				callback(r.data.result);	
+			}			
+						
 		});		
 	}
 
@@ -508,13 +498,141 @@ require([
 		});
 	}
 	
-	var htmlEncode = function(value){
+	function htmlEncode(value){
 		//create a in-memory div, set it's inner text(which jQuery automatically encodes)
 		//then grab the encoded contents back out.  The div never exists on the page.
 		return $('<div/>').text(value).html();
-	};
+	}
+	
+		
+	monaco.languages.registerHoverProvider('ini', {
+		provideHover: function(model, position, token) {
+			return new Promise(function(resolve, reject) {
+				// do somthing
+				if (editors[activeTab].hasOwnProperty('hinting')) {
+					// get all text up to hovered line becuase we need to find what stanza we are in
+					var contents = model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber)));
+					var rex = /^(?:(\w+)|(\[\w+))?.*$/gm;
+					var currentStanza = "";
+					var currentField = "";
+					while(res = rex.exec(contents)) {
+						// need this because our rex can match a zero length string
+						if (res.index == rex.lastIndex) {
+							rex.lastIndex++;
+						}
+						if (res[1] || res[2]) {
+							if (res[1]) {
+								currentField = res[1];
+							} else {
+								currentStanza = res[2];
+								currentField = "";
+							}
+						}
+					}
+					if (editors[activeTab].hinting.hasOwnProperty(currentStanza) && editors[activeTab].hinting[currentStanza].hasOwnProperty(currentField)) {
+						resolve({
+							// This is what will be highlighted
+							range: new monaco.Range(position.lineNumber, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber)),
+							contents: [
+								{ value: '**' + editors[activeTab].hinting[currentStanza][currentField].t + '**' },
+								{ value: '\n' + editors[activeTab].hinting[currentStanza][currentField].c.replace(/^#/mg,'') + '\n' }
+							]
+						})						
+					} else if (editors[activeTab].hinting[""].hasOwnProperty(currentField)) {
+						resolve({
+							// This is what will be highlighted
+							range: new monaco.Range(position.lineNumber, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber)),
+							contents: [
+								{ value: '**' + editors[activeTab].hinting[""][currentField].t + '**' },
+								{ value: '\n' + editors[activeTab].hinting[""][currentField].c.replace(/^#/mg,'') + '\n' }
+							]
+						})						
+					} else {
+						console.log("cant find:", currentStanza,currentField, editors[activeTab].hinting );
+						resolve()
+					}
+				} else {
+					resolve();
+				}
+			});
+		}
+	});
+	monaco.languages.registerCompletionItemProvider('ini', {
+		provideCompletionItems: function(model, position) {
+			if (editors[activeTab].hasOwnProperty('hinting')) {
+				// get all text up to hovered line becuase we need to find what stanza we are in
+				var contents = model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber)));
+// TODO This needs to be optimised becuase we only need to find what stanza we are in				
+				var rex = /^(?:(\w+)|(\[\w+))?.*$/gm;
+				var currentStanza = "";
+				var currentField = "";
+				while(res = rex.exec(contents)) {
+					// need this because our rex can match a zero length string
+					if (res.index == rex.lastIndex) {
+						rex.lastIndex++;
+					}
+					if (res[1] || res[2]) {
+						if (res[1]) {
+							//currentField = res[1];
+						} else {
+							currentStanza = res[2];
+							//currentField = "";
+						}
+					}
+				}
+				if (! editors[activeTab].hinting.hasOwnProperty(currentStanza)) {
+					currentStanza = "";
+				}
+				
+				var ret = [];
+				for (key in editors[activeTab].hinting[currentStanza]) {
+					if (editors[activeTab].hinting[currentStanza].hasOwnProperty(key)) {
+						ret.push({
+							 label: key,
+							 kind: monaco.languages.CompletionItemKind.Property,
+							 documentation: "**" + editors[activeTab].hinting[currentStanza][key].t + "**\n\n" + editors[activeTab].hinting[currentStanza][key].c + "\n",
+						});
+					}
+				}
+				console.log(ret);
+				return ret;					
+
+			} else {
+				return [];
+			}			
+		}
+	});	
+	
+	function buildHintingLookup(conf, contents){
+		var rex = /^(?:(\w+).*=|(\[\w+))?.*$/gm,
+			res,								
+			currentStanza = "",
+			currentField = "";
+		confFiles[conf] = {"": {"":{t:"", c:""}}};
+		while(res = rex.exec(contents)) {
+			// need this because our rex can match a zero length string
+			if (res.index == rex.lastIndex) {
+				rex.lastIndex++;
+			}
+			if (res[1] || res[2]) {
+				if (res[1]) {
+					currentField = res[1];
+					confFiles[conf][currentStanza][currentField] = {t:"", c:""};
+				} else {
+					currentStanza = res[2];
+					currentField = "";
+					confFiles[conf][currentStanza] = {"":{t:"", c:""}}
+				}
+				confFiles[conf][currentStanza][currentField].t = res[0];
+			} else {
+				confFiles[conf][currentStanza][currentField].c += res[0] + "\n";
+			}
+		}	
+		return confFiles[conf];
+	}
 	
     serverAction('read');
+	serverAction('btool-check');
 
 	function showToast(message) {
 		var t = $('.ce_toaster');
@@ -525,6 +643,30 @@ require([
 		},3000)
 	};
 	
+	function prettyPrompt(title, message, defaulttext, callback){
+		showModal({
+			title: title,
+			size: ((title === "Delete") ? false : "small"),
+			body: "<div><p>" + message + "</p><p></p><p><input type='text' value='" + defaulttext + "' class='ce_prompt_input input input-text ' /></p></div>",
+			actions: [{
+				onClick: function(){
+					$('.modal').one('hidden.bs.modal', function (e) {
+						callback($('.ce_prompt_input').val());
+					});
+					$(".modal").modal('hide');
+				},
+				cssClass: ((title === "Delete") ? 'btn-danger' : 'btn-primary'),
+				label: "Confirm"
+			},{
+				onClick: function(){ 
+					$(".modal").modal('hide');
+				},
+				cssClass: '',
+				label: "Cancel"
+			}]
+		});		
+	} 
+		
 	var showModal = function self(o) {
 		var options = $.extend({
 				title : '',
