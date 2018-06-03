@@ -1,7 +1,79 @@
-.wrap * {box-sizing: border-box;}
-.wrap {
-    position: fixed;
-    top: 78px;  /* todo this will need to be fixed */
+.dashboard-body {
+	height: 100%;
+	margin: 0;
+	padding: 0;
+}
+.dashboard-body * {
+	box-sizing: border-box;
+}
+.dashboard-body a:focus,
+.dashboard-body a:active {
+	box-shadow: none !important;
+}
+.ce_app_bar  {
+	top: 0;
+	height: 44px;
+	width: 100%;
+	background-color: #3c434d;
+	color: #c3cbd4;
+}
+.ce_app_link {
+	float: left;
+	padding: 3px 15px 3px 20px;
+	line-height: 38px;
+	position:relative;
+}
+.ce_app_link > a {
+	color: #c3cbd4;
+	position: relative;
+	display: block;
+	text-decoration: none;
+}
+.ce_app_link:hover > a,
+.ce_app_link.ce_active > a {
+	color: white;
+}
+.ce_app_link:hover > a:before,
+.ce_app_link.ce_active > a:before {
+	border-top: 3px solid #00A4FD;
+}
+.ce_app_link > a:before {
+	transition: border-top 100ms;
+	border-top: 0px solid #00A4FD;
+	position:absolute;
+	bottom:-2px;
+	width: 100%;
+    content: "";
+}
+.ce_saving_icon > i {
+	font-size: 24px;
+	color: #00A4FD;
+	animation: pulsate 1s infinite linear;
+}
+@keyframes pulsate{
+	0% {
+		transform: scale(0.1, 0.1);
+		opacity: 0.0;
+	}
+	50% {
+		opacity: 1.0;
+	}
+	100% {
+		transform: scale(1.2, 1.2);
+		opacity: 0.0;
+	}		
+}
+.ce_app_name {
+	float:right;
+	font-size: 16px;
+	font-weight: 200;
+	color: white;
+	padding-right: 20px;
+	
+}
+.ce_wrap {
+    position:absolute;
+    top:44px;
     bottom: 0;
     left: 0;
     width: 100%;
@@ -63,12 +135,15 @@
     width: 160px;
     white-space:nowrap;
     overflow: hidden;
-    padding: 0 2px 0 5px;
+    padding: 0 2px 0 8px;
     line-height: 32px;
     border-right: 1px solid black;
     background-color: #1e1e1e; 
     cursor: pointer;
     position: relative;
+}
+.ce_tab.ce_active {
+    background-color: #2a2d2e;
 }
 .ce_right_icon {
     position:absolute;
@@ -97,9 +172,7 @@
 .ce_hidden {
     display:none !important;
 }
-.ce_active {
-    background-color: #2a2d2e;
-}
+
 /* Buttons 
 .hidden { display: none !important;}
 .green {color: #65a637}
@@ -378,5 +451,4 @@
     box-shadow: 0 -17px 16px -16px rgba(0, 0, 0, 0.4);
     border-top: 1px solid #ccc;
     z-index: 9;
-}*/
 }*/

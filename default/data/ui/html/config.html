@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>Editor</title>
+    <title>Files</title>
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/build/css/bootstrap-enterprise.css" />
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/css/build/pages/dashboard-simple-bootstrap.min.css"/>
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/app/config-editor/config.css" media="all" />
@@ -24,7 +24,17 @@
     </header>
     
     <div class="dashboard-body container-fluid main-section-body" data-role="main">
-        <div class="wrap">
+		<div class="ce_app_bar">
+			<div class='ce_app_link ce_active ce_app_filesystem'><a href=''>Filesystem</a></div>
+			<div class='ce_app_link ce_app_effective'><a href=''>View effective config</a></div>
+			<div class='ce_app_link ce_app_specs'><a href=''>View config specs</a></div>
+			<div class='ce_app_link ce_app_changelog'><a href=''>Change log</a></div>
+			<div class='ce_app_link ce_app_refresh'><a href=''>Config refresh</a></div>
+			<div class='ce_app_link ce_app_errors'><a href=''>Check config</a></div>
+			<div class="ce_app_link ce_saving_icon"><i class="icon-bulb" title='Please wait...'></i></div>			
+			<div class='ce_app_link ce_app_name'>Config Editor</div>
+		</div>
+        <div class="ce_wrap">
             <ul class="ce_file_list"></ul>
             <div class="ce_container">
                 <div class="ce_tabs"></div>
