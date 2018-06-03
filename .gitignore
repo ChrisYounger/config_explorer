@@ -1,0 +1,3 @@
+*.pyc
+local/*.conf
+metadata/local.meta
