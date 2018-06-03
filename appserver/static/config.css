@@ -297,7 +297,23 @@
     color: #fff;
     background: #2f96b4;
 }
-
+/* width */
+::-webkit-scrollbar {
+    width: 14px;
+}
+/* Track */
+::-webkit-scrollbar-track {
+    background: #262626; 
+    border-left:1px solid #383838  
+}
+/* Handle */
+::-webkit-scrollbar-thumb {
+    background: #383838; 
+}
+/* Handle on hover */
+::-webkit-scrollbar-thumb:hover {
+    background: #1e1e1e; 
+}
 /* Buttons 
 .hidden { display: none !important;}
 .green {color: #65a637}
