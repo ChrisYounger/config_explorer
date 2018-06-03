@@ -172,14 +172,59 @@
 .ce_hidden {
     display:none !important;
 }
+.ce_toaster {
+	background-color: white;
+    width: 232px;
+    height: 60px;
+    position: absolute;
+    right: 40px;
+    bottom: 50px;
+    line-height: 60px;
+    padding: 0 20px;
+    box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+    color: black;
+	visibility: hidden;
+	opacity: 0;
+	transform: translateY(30px);
+	transition: all 200ms;
+}
 
-/* Buttons 
-.hidden { display: none !important;}
-.green {color: #65a637}
-.red { color: #d6563c;}
-.blue { color: #1e93c6;}
-.orange{ color: #ed8440;}
-.bold {font-weight: bold;}
+.ce_toaster i {
+    font-size: 50px;
+    position: absolute;
+    color: #39ba23;
+}
+.ce_toaster span {
+	margin-left: 60px;
+}
+.ce_toaster.ce_show {
+	opacity: 1;
+	visibility: visible;
+	transform: translateY(0);
+}
+.modal-lg {
+    width: 900px;
+    margin-left: -400px;
+}
+.modal-sm {
+    width: 300px;
+    margin-left: -150px;
+}
+.modal-body {
+	overflow: auto;
+}
+.modal-body  .pre-no-color{
+	background-color: white;
+	padding: 0;
+	border: 0 none;
+}
+.modal-body  img{
+	margin-bottom: 16px;
+	box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+    border: 1px solid #e2e2e2;
+	width: 700px;
+}
+
 
 .btn.btn-danger {
     color: #fff;
@@ -240,6 +285,14 @@
     background: #2f96b4;
 }
 
+/* Buttons 
+.hidden { display: none !important;}
+.green {color: #65a637}
+.red { color: #d6563c;}
+.blue { color: #1e93c6;}
+.orange{ color: #ed8440;}
+.bold {font-weight: bold;}
+
 .centered {
 	text-align:center;
 }
@@ -279,28 +332,7 @@
     border: 1px solid #e2e2e2;
 }
 
-.modal-lg {
-    width: 900px;
-    margin-left: -400px;
-}
-.modal-sm {
-    width: 300px;
-    margin-left: -150px;
-}
-.modal-body {
-	overflow: auto;
-}
-.modal-body  .pre-no-color{
-	background-color: white;
-	padding: 0;
-	border: 0 none;
-}
-.modal-body  img{
-	margin-bottom: 16px;
-	box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
-    border: 1px solid #e2e2e2;
-	width: 700px;
-}
+
 .spinner {
   margin: 100px auto;
   width: 40px;

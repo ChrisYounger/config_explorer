@@ -1,4 +1,4 @@
-require.config({ paths: { 'vs': '../app/config-editor/node_modules/monaco-editor/min/vs' }});
+require.config({ paths: { 'vs': '../app/config_editor/node_modules/monaco-editor/min/vs' }});
 
 require([
 	"splunkjs/mvc",
@@ -39,34 +39,68 @@ require([
 		}
     });
 	
+	function prettyPrompt(title, message, defaulttext, callback){
+		showModal({
+			title: title,
+			size: ((title === "Delete") ? false : "small"),
+			body: "<div><p>" + message + "</p><p></p><p><input type='text' value='" + defaulttext + "' class='ce_prompt_input input input-text ' /></p></div>",
+			actions: [{
+				onClick: function(){
+					$('.modal').one('hidden.bs.modal', function (e) {
+						callback($('.ce_prompt_input').val());
+					});
+					$(".modal").modal('hide');
+				},
+				cssClass: ((title === "Delete") ? 'btn-danger' : 'btn-primary'),
+				label: "Confirm"
+			},{
+				onClick: function(){ 
+					$(".modal").modal('hide');
+				},
+				cssClass: '',
+				label: "Cancel"
+			}]
+		});		
+	} 
+	
+		
     $dirlist.on("click", ".ce_add_file", function(e){
         e.stopPropagation();
-		var fname = prompt("New file name:", "");
-		if (fname) {
-			serverAction("newfile", $(this).parent().attr('file'), undefined, fname);
-		}
+		var parentPath = $(this).parent().attr('file');
+		prettyPrompt("New file", "Enter new file name:", "", function(fname){
+			if (fname) {
+				serverAction("newfile", parentPath, undefined, fname);
+			}
+		});
+		
 		
     }).on("click", ".ce_add_folder", function(e){
         e.stopPropagation();
-		var fname = prompt("New folder name:", "");
-		if (fname) {
-			serverAction("newfolder", $(this).parent().attr('file'), undefined, fname);
-		}
+		var parentPath = $(this).parent().attr('file');
+		prettyPrompt("New folder", "Enter new folder name:", "", function(fname){
+			if (fname) {
+				serverAction("newfolder", parentPath, undefined, fname);
+			}
+		});
 		
     }).on("click", ".ce_rename_icon", function(e){
         e.stopPropagation();
-		var bn = dodgyBasename($(this).parent().attr('file'));
-		var newname = prompt("New name for [" + bn + "]:", bn);
-		if (newname) {
-			serverAction("rename", $(this).parent().attr('file'), undefined, newname);
-		}
+		var parentPath = $(this).parent().attr('file');
+		var bn = dodgyBasename(parentPath);
+		prettyPrompt("Rename", "Enter new name for <code>" + bn + "</code><br><br>", bn, function(newname){
+			if (newname) {
+				serverAction("rename", parentPath, undefined, newname);
+			}
+		});
 		
     }).on("click", ".ce_delete_icon", function(e){
         e.stopPropagation();
-		var newname = prompt("Are you sure you want to delete [" + $(this).parent().attr('file') + "]? To confirm type 'yes':", "");
-		if (newname === 'yes') {
-			serverAction("delete", $(this).parent().attr('file'));
-		}
+		var parentPath = $(this).parent().attr('file');
+		prettyPrompt("Delete", "Are you sure you want to delete: <code>" + $(this).parent().attr('file') + "</code><br><br>To confirm type 'yes':", '', function(conf){
+			if (conf.toLowerCase() === 'yes') {
+				serverAction("delete", parentPath);
+			}
+		});		
 		
     }).on("click", ".ce_leftnav", function(){
         serverAction(action_mode, $(this).attr('file'));
@@ -83,7 +117,7 @@ require([
     $tabs.on("click", ".ce_close_tab", function(e){
         var idx = $(this).parent().index();
         e.stopPropagation();
-		closetab(idx, true);
+		closeTab(idx);
         
     }).on("click", ".ce_tab", function(){
         activateTab($(this).index());
@@ -107,17 +141,29 @@ require([
 				if ($.trim(contents)) {
 					openNewTab('btool-check', contents, false, 'none');
 				} else {
-					alert("No configuration errors found!");
+					showModal({
+						title: "Info",
+						body: "<div class='alert alert-info'><i class='icon-alert'></i>No configuration errors found</div>",
+						size: "small"
+					});	
 				}				
 			});
 			return;
 		} 
 		if (p.hasClass('ce_app_changelog')) {
-			alert("GIT Integration is coming soon");
+			showModal({
+				title: "Info",
+				body: "<div class='alert alert-info'><i class='icon-alert'></i>GIT Integration coming soon</div>",
+				size: "small"
+			});		
 			return;
 		}
 		if (p.hasClass('ce_app_refresh')) {
-			alert("Selective debug/refresh is coming soon");
+			showModal({
+				title: "Info",
+				body: "<div class='alert alert-info'><i class='icon-alert'></i>Debug/Refresh coming soon</div>",
+				size: "small"
+			});	
 			return;
 		}
 		$('.ce_app_link.ce_active').removeClass('ce_active');
@@ -155,29 +201,47 @@ require([
         $tabs.children().removeClass("ce_active");
     }
 	
-	function closetab(idx, check){
-		if (check && editors[idx].hasChanges) {
-			var result = confirm("discard changes?");
-			if (!result) {
-				return;
-			}
+	function closeTab(idx){
+		if (editors[idx].hasChanges) {
+			showModal({
+				title: "Unsaved changes",
+				body: "<div><p>Discard unsaved changes?</p></div>",
+				size: "small",
+				actions: [{
+					onClick: function(){
+						$(".modal").modal('hide');
+						closeTabNow(idx);
+					},
+					cssClass: 'btn-danger',
+					label: "Discard"
+				},{
+					onClick: function(){ $(".modal").modal('hide'); },
+					cssClass: '',
+					label: "Cancel"
+				}]
+			});			
+		} else {
+			closeTabNow(idx);
 		}
-        editors[idx].editor.dispose();
-        editors[idx].tab.remove();
-        editors[idx].container.remove();
-        editors.splice(idx, 1);
+	}
+	
+	function closeTabNow(idx) {
+		editors[idx].editor.dispose();
+		editors[idx].tab.remove();
+		editors[idx].container.remove();
+		editors.splice(idx, 1);
 		// if there are still tabs open, find the most recently used tab and activate that one
-        if ($tabs.children().length > 0 && $tabs.children(".ce_active").length === 0) {
-            var last_used_idx, 
-                newest;
-            for (var i = 0; i < editors.length; i++) {
-                if (! newest || newest < editors[i].last_opened) {
-                    newest = editors[i].last_opened;
-                    last_used_idx = i;
-                }
-            }
-            activateTab(last_used_idx);
-        }
+		if ($tabs.children().length > 0 && $tabs.children(".ce_active").length === 0) {
+			var last_used_idx, 
+				newest;
+			for (var i = 0; i < editors.length; i++) {
+				if (! newest || newest < editors[i].last_opened) {
+					newest = editors[i].last_opened;
+					last_used_idx = i;
+				}
+			}
+			activateTab(last_used_idx);
+		}		
 	}
 	
 
@@ -237,14 +301,18 @@ require([
 			run: function(ed) {
 				if (canBeSaved) {
 					var saved_value = ecfg.editor.getValue();
-					save(ecfg.file, saved_value, function(){
+					serverAction('save', ecfg.file, function(){
 						ecfg.server_content = saved_value;
 						ecfg.tab.find('.icon-alert-circle').remove();
 						ecfg.hasChanges = false;															
-					});
+					}, saved_value);
 					return null;
 				} else {
-					alert('ERROR: This file cannot be saved');
+					showModal({
+						title: "Warning",
+						body: "<div class='alert alert-warning'><i class='icon-alert'></i>This file cannot be saved</div>",
+						size: "small"
+					});	
 				}
 			}
 		});
@@ -305,115 +373,117 @@ require([
 		}
 		
 		$('.ce_saving_icon').removeClass('ce_hidden');
-		service.get('/services/ceditor', {action: type, path: path, param1: param1}, function(err, r) {
+		service.post('/services/ceditor', {action: type, path: path, param1: param1}, function(err, r) {
 			$('.ce_saving_icon').addClass('ce_hidden');
-            if (err) {
-                console.log('response: ', err);
-                console.log(err.data.messages["0"].text);
-				alert("Fatal error:" + err)
-            } else {
-                console.log(type, 'response: ', r);
-
-                if (r.data.info === "error") {
-					alert("ERROR: " + r.data.result)
-					return;
-                }
-				
-				if (type == "read") {
-					if (r.data.info === "file") {					
-						openNewTab(tab_path, r.data.result, true)
-						
-					} else if (r.data.info === "dir") {
-						inFolder = path;
-						localStorage.setItem('ce_current_path', inFolder);
-						r.data.result.sort();
-						$dirlist.empty();
-						$("<li class='ce_leftnavfolder'></li>").text(dodgyBasename(path) + '/').attr("file", path).attr("title", path).prepend("<i class='icon-folder'></i> ").append("<i title='Create new folder' class='ce_add_folder ce_right_icon ce_right_two icon-folder'></i><i title='Create new file' class='ce_add_file ce_right_icon icon-report'></i>").appendTo($dirlist);
-						if (path !== ".") {
-							$("<li class='ce_leftnav'><i class='icon-folder'></i> ..</li>").attr("file", path.replace(/\/[^\/]+$/,'')).appendTo($dirlist)
-						}
-						for (var i = 0; i < r.data.result.length; i++) {
-							var icon = "folder";
-							if (r.data.result[i].substr(0,1) === "F") {
-								icon = "report";
-							}
-							$("<li class='ce_leftnav ce_leftnav_editable'></li>").text(r.data.result[i].substr(1)).attr("file", path + "/" + r.data.result[i].substr(1)).prepend("<i class='icon-" + icon + "'></i> ").appendTo($dirlist);
-						}
-					}
-					
-				} else if (type == "btool-check") {
-					var rex = /^Checking: .*\/([^\/]+?).conf\s*$/gm,
-						res,
-						found = {};
-					confFiles = [];
-					while((res = rex.exec(r.data.result)) !== null) {
-						if (! found.hasOwnProperty(res[1])) {
-							found[res[1]] = 1;
-							confFiles.push(res[1]);
-						}
-					}
-					confFiles.sort();
-				
-					
-				} else if (type == "btool-list") {
-					var c = formatBtoolList(r.data.result);
-					if ($.trim(c)) {
-						ecfg = openNewTab(tab_path, c, false, 'ini');
-						ecfg.btoollist = r.data.result;
-					} else {
-						alert("No contents!");
-					}
-					
-				} else if (type == "spec") {
-					var c = r.data.result
-					if ($.trim(c)) {
-						openNewTab(tab_path, c, false, 'ini');
-					} else {
-						alert("No spec file found!");
-					}	
-
-				// delete, rename, new file, new folder
+			var errText = '';
+			console.log(type, err, r);
+			if (err) {
+				if (err.data.hasOwnProperty('messages')) {
+					errText = err.data.messages["0"].text;
 				} else {
-					// refresh folder tree
-					serverAction('read');
-
-					if (r.data.info === "success") {
-						alert("success");
-						 
-						if (type == "rename" || type == "delete") {
-							// if "path" is open in an editor, it needs to be closed without warning
-							for (var i = 0; i < editors.length; i++) {
-								if (editors[i].file === path) {
-									closetab(i, false);
-									break;
-								}
-							}
-						} 
+					errText = JSON.stringify(err);
+				}
+			} else {
+				if (! r.data.hasOwnProperty('info')) {
+					errText = r.data;
+				} else if (r.data.info === "error") {
+					errText = r.data.result;
+				}
+			}
+			
+			if (errText) {
+				showModal({
+					title: "Error",
+					body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br><pre>" + htmlEncode(errText) + "</pre></div>",
+				});
+				return;				
+			}					
+			if (type === "save") {
+				showToast('Saved');
+				
+			} else if (type === "read") {
+				if (r.data.info === "file") {					
+					openNewTab(tab_path, r.data.result, true)
+					
+				} else if (r.data.info === "dir") {
+					inFolder = path;
+					localStorage.setItem('ce_current_path', inFolder);
+					r.data.result.sort();
+					$dirlist.empty();
+					$("<li class='ce_leftnavfolder'></li>").text(dodgyBasename(path) + '/').attr("file", path).attr("title", path).prepend("<i class='icon-folder'></i> ").append("<i title='Create new folder' class='ce_add_folder ce_right_icon ce_right_two icon-folder'></i><i title='Create new file' class='ce_add_file ce_right_icon icon-report'></i>").appendTo($dirlist);
+					if (path !== ".") {
+						$("<li class='ce_leftnav'><i class='icon-arrow-left'></i> ..</li>").attr("file", path.replace(/\/[^\/]+$/,'')).appendTo($dirlist)
+					}
+					for (var i = 0; i < r.data.result.length; i++) {
+						var icon = "folder";
+						if (r.data.result[i].substr(0,1) === "F") {
+							icon = "report";
+						}
+						$("<li class='ce_leftnav ce_leftnav_editable'></li>").text(r.data.result[i].substr(1)).attr("file", path + "/" + r.data.result[i].substr(1)).prepend("<i class='icon-" + icon + "'></i> ").appendTo($dirlist);
 					}
 				}
-				(callback)(r.data.result);
-			}				
+				
+			} else if (type == "btool-check") {
+				var rex = /^Checking: .*\/([^\/]+?).conf\s*$/gm,
+					res,
+					found = {};
+				confFiles = [];
+				while((res = rex.exec(r.data.result)) !== null) {
+					if (! found.hasOwnProperty(res[1])) {
+						found[res[1]] = 1;
+						confFiles.push(res[1]);
+					}
+				}
+				confFiles.sort();
+			
+				
+			} else if (type == "btool-list") {
+				var c = formatBtoolList(r.data.result);
+				if ($.trim(c)) {
+					ecfg = openNewTab(tab_path, c, false, 'ini');
+					ecfg.btoollist = r.data.result;
+				} else {
+					showModal({
+						title: "Warning",
+						body: "<div class='alert alert-warning'><i class='icon-alert'></i>No contents</div>",
+						size: "small"
+					});							
+				}
+				
+			} else if (type == "spec") {
+				var c = r.data.result
+				if ($.trim(c)) {
+					openNewTab(tab_path, c, false, 'ini');
+				} else {
+					showModal({
+						title: "Error",
+						body: "<div class='alert alert-error'><i class='icon-alert'></i>No spec file found!</div>",
+						size: "small"
+					});							
+				}	
+
+			// delete, rename, new file, new folder
+			} else {
+				// refresh folder tree
+				serverAction('read');
+
+				showToast('Success');
+				 
+				if (type == "rename" || type == "delete") {
+					// if "path" is open in an editor, it needs to be closed without warning
+					for (var i = 0; i < editors.length; i++) {
+						if (editors[i].file === path) {
+							closeTabNow(i);
+							break;
+						}
+					}
+				} 
+			}
+			
+			(callback)(r.data.result);				
 		});		
 	}
 
-	
-    function save(f, c, cb) {
-		$('.ce_saving_icon').removeClass('ce_hidden');
-        service.post('/services/ceditor', {file: f, contents: c}, function(err, r) {
-			$('.ce_saving_icon').addClass('ce_hidden');
-			if (!err && r.data.info === "success") {
-				alert("saved ok");
-				cb();
-				return;
-			}
-		    console.log('save response: ', r, err);
-			if (err) {
-				alert("Error saving: " + err.data.messages["0"].text);
-			} else {
-				alert("Error saving: " + r.data);
-			}
-        });        
-    }
 
 	function formatBtoolList(contents) {
 		var indent = 80;
@@ -431,8 +501,72 @@ require([
 			return g2 + path + g3;
 		});
 	}
-
+	
+	var htmlEncode = function(value){
+		//create a in-memory div, set it's inner text(which jQuery automatically encodes)
+		//then grab the encoded contents back out.  The div never exists on the page.
+		return $('<div/>').text(value).html();
+	};
+	
     serverAction('read');
+
+	function showToast(message) {
+		var t = $('.ce_toaster');
+		t.find('span').text(message);
+		t.addClass('ce_show');
+		setTimeout(function(){
+			t.removeClass('ce_show');
+		},3000)
+	};
+	
+	var showModal = function self(o) {
+		var options = $.extend({
+				title : '',
+				body : '',
+				remote : false,
+				backdrop : true,
+				size : false,
+				onShow : false,
+				onHide : false,
+				actions : false
+			}, o);
+
+		self.onShow = typeof options.onShow == 'function' ? options.onShow : function () {};
+		self.onHide = typeof options.onHide == 'function' ? options.onHide : function () {};
+
+		var modalClass = {
+			small: "modal-sm",
+			large: "modal-lg"
+		};
+		
+		if (self.$modal == undefined) {
+			self.$modal = $('<div class="modal fade ' + (modalClass[options.size] || '') + '"><div class="modal-dialog"><div class="modal-content"></div></div></div>').appendTo('body');
+			self.$modal.on('shown.bs.modal', function (e) {
+				self.onShow.call(this, e);
+			});
+			self.$modal.on('hidden.bs.modal', function (e) {
+				self.onHide.call(this, e);
+			});
+		} else {
+			self.$modal.removeClass("modal-sm modal-lg").addClass(modalClass[options.size] || '');
+		}
+
+		self.$modal.data('bs.modal', false);
+		self.$modal.find('.modal-dialog').removeClass().addClass('modal-dialog ');
+		self.$modal.find('.modal-content').html('<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button><h4 class="modal-title">${title}</h4></div><div class="modal-body">${body}</div><div class="modal-footer"></div>'.replace('${title}', options.title).replace('${body}', options.body));
+
+		var footer = self.$modal.find('.modal-footer');
+		if (Object.prototype.toString.call(options.actions) == "[object Array]") {
+			for (var i = 0, l = options.actions.length; i < l; i++) {
+				options.actions[i].onClick = typeof options.actions[i].onClick == 'function' ? options.actions[i].onClick : function () {};
+				$('<button type="button" class="btn ' + (options.actions[i].cssClass || '') + '">' + (options.actions[i].label || '{Label Missing!}') + '</button>').appendTo(footer).on('click', options.actions[i].onClick);
+			}
+		} else {
+			$('<button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>').appendTo(footer);
+		}
+
+		self.$modal.modal(options);
+	};
     
 	// TODO : do we need the following bits?
 	$('header').remove();

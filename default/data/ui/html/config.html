@@ -3,10 +3,10 @@
 <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>Files</title>
+    <title>Config Editor</title>
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/build/css/bootstrap-enterprise.css" />
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/css/build/pages/dashboard-simple-bootstrap.min.css"/>
-    <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/app/config-editor/config.css" media="all" />
+    <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/app/config_editor/config.css" media="all" />
     <meta name="referrer" content="never" />
     <meta name="referrer" content="no-referrer" />
 </head>
@@ -41,14 +41,14 @@
                 <div class="ce_contents"></div>
             </div>
         </div>
+		<div class="ce_toaster"><i class="icon-check"></i><span>Saved</span></div>
     </div>
 	
     <script src="{{SPLUNKWEB_URL_PREFIX}}/config?autoload=1" crossorigin="use-credentials"></script>
     <script src="{{SPLUNKWEB_URL_PREFIX}}/static/js/i18n.js"></script>
     <script src="{{SPLUNKWEB_URL_PREFIX}}/i18ncatalog?autoload=1"></script>
     <script src="{{SPLUNKWEB_URL_PREFIX}}/static/build/simplexml/index.js"></script>
-	<script src="{{SPLUNKWEB_URL_PREFIX}}/static/app/config-editor/config.js"></script>
-	<!--<script src="{{SPLUNKWEB_URL_PREFIX}}/static/app/config-editor/node_modules/monaco-editor/min/vs/loader.js"></script>-->
+	<script src="{{SPLUNKWEB_URL_PREFIX}}/static/app/config_editor/config.js"></script>
 
 </body>
 </html>
