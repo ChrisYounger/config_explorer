@@ -107,8 +107,21 @@
 .ce_leftnav:hover {
     background-color:#2a2d2e;
 }
-.ce_leftnavfolder {
+.ce_file_list .ce_leftnavfolder {
     background-color:black;
+	padding-right: 50px
+}
+.ce_rtl{
+	direction:rtl;
+}
+.ce_leftnavfolder > bdi {
+	display: none;
+}
+.ce_leftnavfolder.ce_rtl > bdi {
+	display: inline;
+}
+.ce_leftnavfolder.ce_rtl > span {
+	display: none;
 }
 .ce_container {
     position: absolute;

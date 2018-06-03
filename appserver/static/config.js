@@ -410,7 +410,13 @@ require([
 					localStorage.setItem('ce_current_path', inFolder);
 					r.data.result.sort();
 					$dirlist.empty();
-					$("<li class='ce_leftnavfolder'></li>").text(dodgyBasename(path) + '/').attr("file", path).attr("title", path).prepend("<i class='icon-folder'></i> ").append("<i title='Create new folder' class='ce_add_folder ce_right_icon ce_right_two icon-folder'></i><i title='Create new file' class='ce_add_file ce_right_icon icon-report'></i>").appendTo($dirlist);
+					var dir = $("<li class='ce_leftnavfolder'><span></span><bdi></bdi><i title='Create new folder' class='ce_add_folder ce_right_icon ce_right_two icon-folder'></i><i title='Create new file' class='ce_add_file ce_right_icon icon-report'></i></li>").attr("file", path).attr("title", path).appendTo($dirlist);
+					var span = dir.find("span").text(path + '/');
+					var bdi = dir.find("bdi").text(path + '/');
+					console.log(span.width(), dir.width());
+					if (span.width() > (dir.width() - 50)) {
+						dir.addClass('ce_rtl');
+					}
 					if (path !== ".") {
 						$("<li class='ce_leftnav'><i class='icon-arrow-left'></i> ..</li>").attr("file", path.replace(/\/[^\/]+$/,'')).appendTo($dirlist)
 					}
