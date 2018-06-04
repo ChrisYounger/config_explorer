@@ -9,24 +9,24 @@ class ceditor(splunk.rest.BaseRestHandler):
 		textchars = bytearray({7,8,9,10,12,13,27} | set(range(0x20, 0x100)) - {0x7f})
 		
 		is_binary_string = lambda bytes: bool(bytes.translate(None, textchars))
-			
+		
+		SPLUNK_HOME = os.environ['SPLUNK_HOME']
+		
 		def runCommand(cmds):
-			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False)
+			my_env = os.environ.copy()
+			my_env["GIT_DIR"] = ""
+			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=False, env=my_env)
 			o = p.communicate()
 			return str(o[0]) + "\n" + str(o[1]) + "\n"
 
-		# this sucks. but it comes from here: http://dev.splunk.com/view/logging/SP-CAAAFCN
+		# From here: http://dev.splunk.com/view/logging/SP-CAAAFCN
 		def setup_logging():
 			logger = logging.getLogger('splunk.config_editor')    
-			SPLUNK_HOME = os.environ['SPLUNK_HOME']
 			LOGGING_DEFAULT_CONFIG_FILE = os.path.join(SPLUNK_HOME, 'etc', 'log.cfg')
 			LOGGING_LOCAL_CONFIG_FILE = os.path.join(SPLUNK_HOME, 'etc', 'log-local.cfg')
 			LOGGING_STANZA_NAME = 'python'
-			LOGGING_FILE_NAME = "config_editor.log"
-			BASE_LOG_PATH = os.path.join('var', 'log', 'splunk')
-			LOGGING_FORMAT = "%(asctime)s %(levelname)-s\t%(module)s:%(lineno)d - %(message)s"
-			splunk_log_handler = logging.handlers.RotatingFileHandler(os.path.join(SPLUNK_HOME, BASE_LOG_PATH, LOGGING_FILE_NAME), mode='a') 
-			splunk_log_handler.setFormatter(logging.Formatter(LOGGING_FORMAT))
+			splunk_log_handler = logging.handlers.RotatingFileHandler(os.path.join(SPLUNK_HOME, 'var', 'log', 'splunk', "config_editor.log"), mode='a') 
+			splunk_log_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)-s\t%(module)s:%(lineno)d - %(message)s"))
 			logger.addHandler(splunk_log_handler)
 			splunk.setupSplunkLogger(logger, LOGGING_DEFAULT_CONFIG_FILE, LOGGING_LOCAL_CONFIG_FILE, LOGGING_STANZA_NAME)
 			return logger
@@ -51,8 +51,7 @@ class ceditor(splunk.rest.BaseRestHandler):
 				
 				if action[:5] == 'btool':
 					system = platform.system()
-					splunk_base = os.path.join(os.path.dirname( __file__ ), '..', '..', '..', '..')
-					os.chdir(splunk_base)
+					os.chdir(SPLUNK_HOME)
 					if system != "Windows" and system != "Linux":
 						info = "error"
 						result = "Unable to run btool on this operating system: " + system				
@@ -76,11 +75,11 @@ class ceditor(splunk.rest.BaseRestHandler):
 				else:
 					file_str = self.request['form']['path']
 					if action[:4] == 'spec':
-						spec_path = os.path.join(os.path.dirname( __file__ ), '..', '..', '..', 'system', 'README', file_str + '.conf.spec')
+						spec_path = os.path.join(SPLUNK_HOME, 'etc', 'system', 'README', file_str + '.conf.spec')
 						if os.path.exists(spec_path):
 							with open(spec_path, 'r') as fh:
 								result = fh.read()					
-						apps_path = os.path.join(os.path.dirname( __file__ ), '..', '..')
+						apps_path = os.path.join(SPLUNK_HOME, 'etc', 'apps')
 						for d in os.listdir(apps_path):
 							spec_path = os.path.join(apps_path, d, 'README', file_str + '.conf.spec')
 							if os.path.exists(spec_path):
@@ -88,10 +87,8 @@ class ceditor(splunk.rest.BaseRestHandler):
 									result = result + fh.read()
 						
 					else:
-						base_path = [os.path.dirname( __file__ ), '..', '..', '..', '..']
-						base_path_abs = os.path.abspath(os.path.join(*base_path))
-						bits = base_path + file_str.split("/")
-						file_path = os.path.join(*bits)
+						base_path_abs = os.path.abspath(os.path.join(SPLUNK_HOME))
+						file_path = os.path.join(SPLUNK_HOME, file_str) #file_str.split("/")
 						file_path_abs = os.path.abspath(file_path)				
 							
 						if (len(str(file_path_abs)) < len(str(base_path_abs))):
@@ -118,7 +115,7 @@ class ceditor(splunk.rest.BaseRestHandler):
 									result = []
 									info = "dir"
 									for f in os.listdir(file_path):
-										if os.path.isdir(os.path.join(file_path,f)):
+										if os.path.isdir(os.path.join(file_path, f)):
 											# for sorting
 											result.append("D" + f)
 										else:
