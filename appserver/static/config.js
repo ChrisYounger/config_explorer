@@ -26,6 +26,8 @@ require([
     var service = mvc.createService({ owner: "nobody" });
     var editors = [];  
 	var inFolder = (localStorage.getItem('ce_current_path') || './etc/apps');
+	var run_history = (JSON.parse(localStorage.getItem('ce_run_history')) || []);
+	var $dashboardBody = $('.dashboard-body');
     var $dirlist = $(".ce_file_list");
     var $container = $(".ce_contents");
     var $tabs = $(".ce_tabs");
@@ -41,45 +43,111 @@ require([
 			}
 		}
     });
+		
+    $dirlist.on("click", ".ce_add_file,.ce_add_folder", function(e){
+        e.stopPropagation();
+		var parentPath = $(this).parent().attr('file');
+		var type = "file";
+		if ($(this).hasClass("ce_add_folder")){
+			type = "folder";
+		}
+		showModal({
+			title: "New " + type,
+			size: 300,
+			body: "<div>Enter new " + type + " name:<br><br><input type='text' value='' class='ce_prompt_input input input-text' style='width: 100%; background-color: #3d424d; color: #cccccc;'/></div>",
+			onShow: function(){ 
+				$('.ce_prompt_input').focus().on('keydown', function(e) {
+					if (e.which == 13) {
+						$('.modal').find('button:first-child').click();
+					}
+				}); 
+			},
+			actions: [{
+				onClick: function(){
+					$('.modal').one('hidden.bs.modal', function (e) {
+						var fname = $('.ce_prompt_input').val();
+						if (fname) {
+							serverAction("new" + type, parentPath, undefined, fname);
+						}
+					}).modal('hide');
+				},
+				cssClass: 'btn-primary',
+				label: "Create"
+			},{
+				onClick: function(){ $(".modal").modal('hide'); },
+				label: "Cancel"
+			}]
+		});		
 
-		
-    $dirlist.on("click", ".ce_add_file", function(e){
-        e.stopPropagation();
-		var parentPath = $(this).parent().attr('file');
-		prettyPrompt("New file", "Enter new file name:", "", function(fname){
-			if (fname) {
-				serverAction("newfile", parentPath, undefined, fname);
-			}
-		});
-		
-		
-    }).on("click", ".ce_add_folder", function(e){
-        e.stopPropagation();
-		var parentPath = $(this).parent().attr('file');
-		prettyPrompt("New folder", "Enter new folder name:", "", function(fname){
-			if (fname) {
-				serverAction("newfolder", parentPath, undefined, fname);
-			}
-		});
 		
     }).on("click", ".ce_rename_icon", function(e){
         e.stopPropagation();
 		var parentPath = $(this).parent().attr('file');
 		var bn = dodgyBasename(parentPath);
-		prettyPrompt("Rename", "Enter new name for <code>" + bn + "</code><br><br>", bn, function(newname){
-			if (newname) {
-				serverAction("rename", parentPath, undefined, newname);
-			}
-		});
+		showModal({
+			title: "Rename",
+			size: 400,
+			body: "<div>Enter new name for <code>" + bn + "</code><br><br><input type='text' value='" + bn + "' class='ce_prompt_input input input-text' style='width: 100%; background-color: #3d424d; color: #cccccc;'/></div>",
+			onShow: function(){ 
+				$('.ce_prompt_input').focus().on('keydown', function(e) {
+					if (e.which == 13) {
+						$('.modal').find('button:first-child').click();
+					}
+				}); 
+			},
+			actions: [{
+				onClick: function(){
+					$('.modal').one('hidden.bs.modal', function (e) {
+						var newname = $('.ce_prompt_input').val();
+						if (newname) {
+							serverAction("rename", parentPath, undefined, newname);
+						}
+					}).modal('hide');
+				},
+				cssClass: 'btn-primary',
+				label: "Rename"
+			},{
+				onClick: function(){ $(".modal").modal('hide'); },
+				label: "Cancel"
+			}]
+		});			
 		
     }).on("click", ".ce_delete_icon", function(e){
         e.stopPropagation();
 		var parentPath = $(this).parent().attr('file');
-		prettyPrompt("Delete", "Are you sure you want to delete: <code>" + $(this).parent().attr('file') + "</code><br><br>To confirm type 'yes':", '', function(conf){
-			if (conf.toLowerCase() === 'yes') {
-				serverAction("delete", parentPath);
-			}
-		});		
+		showModal({
+			title: "Delete",
+			size: 550,
+			body: "<div>Are you sure you want to delete: <code>" + $(this).parent().attr('file') + "</code><br><br>To confirm type 'yes':<br><br><input type='text' value='' class='ce_prompt_input input input-text' style='width: 60px; background-color: #3d424d; color: #cccccc;'/></div>",
+			onShow: function(){ 
+				$('.ce_prompt_input').focus().on("keyup blur", function(){
+					if ($('.ce_prompt_input').val().toLowerCase() === "yes") {
+						$('.modal').find(".btn-danger").removeClass('btn-disabled');
+					} else {
+						$('.modal').find(".btn-danger").addClass('btn-disabled');
+					}
+				}).on('keydown', function(e) {
+					if (e.which == 13) {
+						$('.modal').find('button:first-child').click();
+					}
+				});
+			},
+			actions: [{
+				onClick: function(){
+					if ($('.ce_prompt_input').val().toLowerCase() !== "yes") {
+						return;
+					}
+					$('.modal').one('hidden.bs.modal', function (e) {
+						serverAction("delete", parentPath);
+					}).modal('hide');
+				},
+				cssClass: 'btn-danger btn-disabled',
+				label: "Delete"
+			},{
+				onClick: function(){ $(".modal").modal('hide'); },
+				label: "Cancel"
+			}]
+		});	
 		
     }).on("click", ".ce_leftnav", function(){
         serverAction(action_mode, $(this).attr('file'));
@@ -123,17 +191,78 @@ require([
 					showModal({
 						title: "Info",
 						body: "<div class='alert alert-info'><i class='icon-alert'></i>No configuration errors found</div>",
-						size: "small"
+						size: 300
 					});	
 				}				
 			});
 			return;
 		} 
+		if (p.hasClass('ce_app_run')) {
+			var history_idx = run_history.length,
+				in_progress_cmd = '',
+				$input;
+			showModal({
+				title: "Run ",
+				size: 600,
+				body: "<div>Enter command to run on the server<br><br><input type='text' value='' class='ce_prompt_input input input-text' style='width: 100%; background-color: #3d424d; color: #cccccc;'/></div>",
+				onShow: function(){ 
+					$input = $('.ce_prompt_input');
+					$input.focus().on('keydown', function(e) {
+						if (e.which === 13) {
+							$('.modal').find('button:first-child').click();
+						} else if (e.which === 38) {// up arrow
+							if (history_idx === run_history.length) {
+								in_progress_cmd = $input.val();
+							}
+							history_idx--;
+							if (history_idx < 0) {history_idx = 0;}
+							$input.val(run_history[history_idx]);
+						} else if (e.which === 40) { // down arrow
+							if (history_idx === run_history.length) { return; }
+							history_idx++;
+							if (history_idx === run_history.length) {
+								$input.val(in_progress_cmd);
+							} else {
+								$input.val(run_history[history_idx]);
+							}
+						}
+					});
+				},
+				actions: [{
+					onClick: function(){
+						$('.modal').one('hidden.bs.modal', function (e) {
+							var command = $input.val();
+							if (command) {
+								// trim length
+								if (run_history.length > 50) {
+									run_history.shift();
+								}
+								// only save if the command is different to what was last run
+								if (command !== run_history[(run_history.length - 1)]) {
+									run_history.push(command);
+								}
+								// save to localstorage
+								localStorage.setItem('ce_run_history', JSON.stringify(run_history));
+								serverAction("run", command, function(contents){
+									openNewTab('$ ' + command, contents, false, 'none');
+								}, command);
+							}
+						}).modal('hide');
+					},
+					cssClass: 'btn-primary',
+					label: "Run"
+				},{
+					onClick: function(){ $(".modal").modal('hide'); },
+					label: "Cancel"
+				}]
+			});
+			return;
+		}
 		if (p.hasClass('ce_app_changelog')) {
 			showModal({
 				title: "Info",
 				body: "<div class='alert alert-info'><i class='icon-alert'></i>GIT Integration coming soon</div>",
-				size: "small"
+				size: 300
 			});		
 			return;
 		}
@@ -141,7 +270,7 @@ require([
 			showModal({
 				title: "Info",
 				body: "<div class='alert alert-info'><i class='icon-alert'></i>Debug/Refresh coming soon</div>",
-				size: "small"
+				size: 300
 			});	
 			return;
 		}
@@ -180,8 +309,8 @@ require([
 		if (editors[idx].hasChanges) {
 			showModal({
 				title: "Unsaved changes",
-				body: "<div><p>Discard unsaved changes?</p></div>",
-				size: "small",
+				body: "<div>Discard unsaved changes?</div>",
+				size: 300,
 				actions: [{
 					onClick: function(){
 						$(".modal").modal('hide');
@@ -191,7 +320,6 @@ require([
 					label: "Discard"
 				},{
 					onClick: function(){ $(".modal").modal('hide'); },
-					cssClass: '',
 					label: "Cancel"
 				}]
 			});			
@@ -289,7 +417,7 @@ require([
 					showModal({
 						title: "Warning",
 						body: "<div class='alert alert-warning'><i class='icon-alert'></i>This file cannot be saved</div>",
-						size: "small"
+						size: 300
 					});	
 				}
 			}
@@ -322,8 +450,7 @@ require([
 	function dodgyBasename(f) {
 		return f.replace(/.*\//,'')
 	}
-
-	
+		
 	function serverAction(type, path, callback, param1) {
 		var tab_path;
 
@@ -356,22 +483,29 @@ require([
 			console.log(type, err, r);
 			if (err) {
 				if (err.data.hasOwnProperty('messages')) {
-					errText = err.data.messages["0"].text;
+					errText = "<pre>" + htmlEncode(err.data.messages["0"].text) + "</pre>";
 				} else {
-					errText = JSON.stringify(err);
+					errText = "<pre>" + htmlEncode(JSON.stringify(err)) + "</pre>";
 				}
 			} else {
-				if (! r.data.hasOwnProperty('info')) {
-					errText = r.data;
-				} else if (r.data.info === "error") {
-					errText = r.data.result;
+				if (! r.data.hasOwnProperty('status')) {
+					errText = "<pre>" + htmlEncode(r.data) + "</pre>";
+					
+				} else if (r.data.status === "missing_perm_write") {
+					errText = "<p>You are limited to read-only actions until, your account is granted the capability \"<strong>config_editor_ludicrous_mode</strong>\" via a <a href='/manager/config_editor/authorization/roles'>role</a>.</p>";
+					
+				} else if (r.data.status === "missing_perm_read") {
+					errText = "<p>To use this application you must be have the capability \"<strong>admin_all_objects</strong>\" via a <a href='/manager/config_editor/authorization/roles'>role</a>.</p>";
+					
+				} else if (r.data.status === "error") {
+					errText = "<pre>" + htmlEncode(r.data.result) + "</pre>";
 				}
 			}
 			
 			if (errText) {
 				showModal({
 					title: "Error",
-					body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br><pre>" + htmlEncode(errText) + "</pre></div>",
+					body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + errText + "</pre></div>",
 				});
 				return;				
 			}					
@@ -379,7 +513,7 @@ require([
 				showToast('Saved');
 				
 			} else if (type === "read") {
-				if (r.data.info === "file") {					
+				if (r.data.status === "file") {					
 					var ecfg = openNewTab(tab_path, r.data.result, true);
 					
 					var re = /([^\/]+).conf$/;
@@ -391,7 +525,7 @@ require([
 						});
 					}
 					
-				} else if (r.data.info === "dir") {
+				} else if (r.data.status === "dir") {
 					inFolder = path;
 					localStorage.setItem('ce_current_path', inFolder);
 					r.data.result.sort();
@@ -414,7 +548,7 @@ require([
 					}
 				}
 				
-			} else if (type == "btool-check") {
+			} else if (type == "btool-check" || type == "btool-quick") {
 				var rex = /^Checking: .*\/([^\/]+?).conf\s*$/gm,
 					res;
 				confFilesSorted = [];
@@ -436,7 +570,7 @@ require([
 					showModal({
 						title: "Warning",
 						body: "<div class='alert alert-warning'><i class='icon-alert'></i>No contents</div>",
-						size: "small"
+						size: 300
 					});							
 				}
 				
@@ -451,7 +585,7 @@ require([
 					showModal({
 						title: "Error",
 						body: "<div class='alert alert-error'><i class='icon-alert'></i>No spec file found!</div>",
-						size: "small"
+						size: 300
 					});							
 				}	
 
@@ -557,6 +691,7 @@ require([
 			});
 		}
 	});
+	
 	monaco.languages.registerCompletionItemProvider('ini', {
 		provideCompletionItems: function(model, position) {
 			if (editors[activeTab].hasOwnProperty('hinting')) {
@@ -586,11 +721,11 @@ require([
 				
 				var ret = [];
 				for (key in editors[activeTab].hinting[currentStanza]) {
-					if (editors[activeTab].hinting[currentStanza].hasOwnProperty(key)) {
+					if (editors[activeTab].hinting[currentStanza].hasOwnProperty(key) && key) {
 						ret.push({
 							 label: key,
 							 kind: monaco.languages.CompletionItemKind.Property,
-							 documentation: "**" + editors[activeTab].hinting[currentStanza][key].t + "**\n\n" + editors[activeTab].hinting[currentStanza][key].c + "\n",
+							 documentation: "" + editors[activeTab].hinting[currentStanza][key].t + "\n\n" + editors[activeTab].hinting[currentStanza][key].c + "\n",
 						});
 					}
 				}
@@ -631,8 +766,13 @@ require([
 		return confFiles[conf];
 	}
 	
+	service.get('/services/authentication/current-context', null, function(err, r) {
+		if(r.data.entry[0].content.capabilities.indexOf('config_editor_ludicrous_mode') > -1) {
+			$dashboardBody.removeClass('ce_no_write_access');
+		}
+	});	
     serverAction('read');
-	serverAction('btool-check');
+	serverAction('btool-quick');
 
 	function showToast(message) {
 		var t = $('.ce_toaster');
@@ -642,30 +782,6 @@ require([
 			t.removeClass('ce_show');
 		},3000)
 	};
-	
-	function prettyPrompt(title, message, defaulttext, callback){
-		showModal({
-			title: title,
-			size: ((title === "Delete") ? false : "small"),
-			body: "<div><p>" + message + "</p><p></p><p><input type='text' value='" + defaulttext + "' class='ce_prompt_input input input-text ' /></p></div>",
-			actions: [{
-				onClick: function(){
-					$('.modal').one('hidden.bs.modal', function (e) {
-						callback($('.ce_prompt_input').val());
-					});
-					$(".modal").modal('hide');
-				},
-				cssClass: ((title === "Delete") ? 'btn-danger' : 'btn-primary'),
-				label: "Confirm"
-			},{
-				onClick: function(){ 
-					$(".modal").modal('hide');
-				},
-				cssClass: '',
-				label: "Cancel"
-			}]
-		});		
-	} 
 		
 	var showModal = function self(o) {
 		var options = $.extend({
@@ -673,7 +789,7 @@ require([
 				body : '',
 				remote : false,
 				backdrop : true,
-				size : false,
+				size : 500,
 				onShow : false,
 				onHide : false,
 				actions : false
@@ -681,24 +797,17 @@ require([
 
 		self.onShow = typeof options.onShow == 'function' ? options.onShow : function () {};
 		self.onHide = typeof options.onHide == 'function' ? options.onHide : function () {};
-
-		var modalClass = {
-			small: "modal-sm",
-			large: "modal-lg"
-		};
-		
+		var margin = options.size / 2;	
 		if (self.$modal == undefined) {
-			self.$modal = $('<div class="modal fade ' + (modalClass[options.size] || '') + '"><div class="modal-dialog"><div class="modal-content"></div></div></div>').appendTo('body');
+			self.$modal = $('<div class="modal fade"><div class="modal-dialog"><div class="modal-content"></div></div></div>').appendTo('body');
 			self.$modal.on('shown.bs.modal', function (e) {
 				self.onShow.call(this, e);
 			});
 			self.$modal.on('hidden.bs.modal', function (e) {
 				self.onHide.call(this, e);
 			});
-		} else {
-			self.$modal.removeClass("modal-sm modal-lg").addClass(modalClass[options.size] || '');
 		}
-
+		self.$modal.css({'width': options.size + "px", 'margin-left': -1 * (options.size / 2) + "px"})
 		self.$modal.data('bs.modal', false);
 		self.$modal.find('.modal-dialog').removeClass().addClass('modal-dialog ');
 		self.$modal.find('.modal-content').html('<div class="modal-header"><button type="button" class="close" data-dismiss="modal" aria-label="Close"><span aria-hidden="true">&times;</span></button><h4 class="modal-title">${title}</h4></div><div class="modal-body">${body}</div><div class="modal-footer"></div>'.replace('${title}', options.title).replace('${body}', options.body));
@@ -712,7 +821,6 @@ require([
 		} else {
 			$('<button type="button" class="btn btn-primary" data-dismiss="modal">Close</button>').appendTo(footer);
 		}
-
 		self.$modal.modal(options);
 	};
     
@@ -721,11 +829,11 @@ require([
 	new LayoutView({ "hideAppBar": true, "hideChrome": false, "hideFooter": false, "hideSplunkBar": false, layout: "fixed" })
 		.render()
 		.getContainerElement()
-		.appendChild($('.dashboard-body')[0]);
+		.appendChild($dashboardBody[0]);
 
 	new Dashboard({
 		id: 'dashboard',
-		el: $('.dashboard-body'),
+		el: $dashboardBody,
 		showTitle: true,
 		editable: true
 	}, { tokens: true }).render();

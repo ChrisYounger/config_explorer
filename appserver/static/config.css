@@ -3,6 +3,13 @@
 	margin: 0;
 	padding: 0;
 }
+.ce_no_write_access .ce_add_file,
+.ce_no_write_access .ce_add_folder,
+.ce_no_write_access .ce_rename_icon,
+.ce_no_write_access .ce_delete_icon,
+.ce_no_write_access .ce_app_run {
+	display: none;
+}
 .dashboard-body * {
 	box-sizing: border-box;
 }
@@ -45,8 +52,10 @@
 	width: 100%;
     content: "";
 }
-.ce_saving_icon > i {
+.ce_app_link > i {
 	font-size: 24px;
+}
+.ce_saving_icon > i {
 	color: #00A4FD;
 	animation: pulsate 1s infinite linear;
 }
@@ -215,14 +224,7 @@
 	visibility: visible;
 	transform: translateY(0);
 }
-.modal-lg {
-    width: 900px;
-    margin-left: -400px;
-}
-.modal-sm {
-    width: 300px;
-    margin-left: -150px;
-}
+
 .modal-body {
 	overflow: auto;
 }
@@ -296,6 +298,10 @@
 .btn-info:hover {
     color: #fff;
     background: #2f96b4;
+}
+.btn.btn-disabled {
+    cursor: not-allowed;
+    opacity: 0.2;
 }
 /* width */
 ::-webkit-scrollbar {
