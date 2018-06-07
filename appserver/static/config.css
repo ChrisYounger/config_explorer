@@ -321,6 +321,14 @@
     background: #1e1e1e; 
     cursor: pointer;
 }
+.ceRedLine {
+	border-left: 8px solid red;
+}
+.ceGreeenLine {
+	border-left: 8px solid green;
+}
+
+
 /* Buttons 
 .hidden { display: none !important;}
 .green {color: #65a637}

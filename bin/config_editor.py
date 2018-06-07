@@ -133,18 +133,19 @@ class ceditor(splunk.rest.BaseRestHandler):
 							elif action == 'read':
 								if os.path.isdir(file_path):
 									result = []
-									status = "dir"
 									for f in os.listdir(file_path):
 										if os.path.isdir(os.path.join(file_path, f)):
 											# for sorting
 											result.append("D" + f)
 										else:
 											result.append("F" + f)
+									status = "success"
+											
 								else:
 									with open(file_path, 'r') as fh:
 										result = fh.read()
 										
-									status = "file"
+									status = "success"
 									if is_binary_string(result):
 										result = "unable to open binary file"
 										status = "error"
