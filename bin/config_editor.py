@@ -2,6 +2,8 @@
 
 import splunk, sys, os, time, json, re, shutil, subprocess, platform, logging, logging.handlers
 
+print "hi"
+
 class ceditor(splunk.rest.BaseRestHandler):
 	def handle_POST(self):
 		sessionKey = self.sessionKey
@@ -10,11 +12,14 @@ class ceditor(splunk.rest.BaseRestHandler):
 		is_binary_string = lambda bytes: bool(bytes.translate(None, textchars))
 		
 		SPLUNK_HOME = os.environ['SPLUNK_HOME']
-
+	
+		app_name = "config_editor"
+		conf = splunk.clilib.cli_common.getMergedConf(app_name)
+		
 		# From here: http://dev.splunk.com/view/logging/SP-CAAAFCN
 		def setup_logging():
-			logger = logging.getLogger('config_editor')
-			file_handler = logging.handlers.RotatingFileHandler(os.path.join(SPLUNK_HOME, 'var', 'log', 'splunk', "config_editor.log"), mode='a', maxBytes=25000000, backupCount=2)
+			logger = logging.getLogger(app_name)
+			file_handler = logging.handlers.RotatingFileHandler(os.path.join(SPLUNK_HOME, 'var', 'log', 'splunk', app_name + ".log"), mode='a', maxBytes=25000000, backupCount=2)
 			formatter = logging.Formatter("%(asctime)s %(levelname)s pid=%(process)d tid=%(threadName)s file=%(filename)s:%(funcName)s:%(lineno)d | %(message)s")
 			file_handler.setFormatter(formatter)
 			logger.addHandler(file_handler)	
@@ -23,24 +28,30 @@ class ceditor(splunk.rest.BaseRestHandler):
 		
 		def runCommand(cmds, use_shell=False):
 			my_env = os.environ.copy()
-			my_env["GIT_DIR"] = os.path.join(os.path.dirname( __file__ ), '..', 'git')
-			my_env["GIT_WORK_TREE"] = os.path.join(SPLUNK_HOME)
+			if confIsTrue("git"):
+				my_env["GIT_DIR"] = os.path.join(SPLUNK_HOME, conf["default"]["git_dir"].strip("\""))
+				my_env["GIT_WORK_TREE"] = os.path.join(SPLUNK_HOME, conf["default"]["git_work_tree"].strip("\""))
 			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=use_shell, env=my_env)
 			o = p.communicate()
 			return str(o[0]) + "\n" + str(o[1]) + "\n"
 
 		def git(message, file1, file2=None):
-			if file2 == None:
-				runCommand(['git','add', file1])
-			else:
-				runCommand(['git','add', file1, file2])
-				
-			runCommand(['git','commit','-m', message])		
+			if confIsTrue("git"):
+				if file2 == None:
+					runCommand(['git','add', file1])
+				else:
+					runCommand(['git','add', file1, file2])
+				runCommand(['git','commit','-m', message])		
+
+		def confIsTrue(param):
+			if conf["default"][param].lower().strip() in ("1", "true", "yes", "t", "y"):
+				return True
+			return False
 			
 		try:
 			result = ""
 			status = ""
-			debug = ""
+			debug = conf
 			action = self.request['form']['action']
 			action_item = self.request['form']['path']
 			param1 = self.request['form']['param1']
@@ -50,17 +61,36 @@ class ceditor(splunk.rest.BaseRestHandler):
 			user = transforms_content['entry'][0]['content']['username']
 			capabilities = transforms_content['entry'][0]['content']['capabilities']
 			
+			# when config is locked, we automatically disable run and write access otherwise someone could just reverse it.
+			if confIsTrue("lock_config"):
+				conf["default"]["run_commands"] = "false"
+				conf["default"]["write_access"] = "false"
+			
 			# dont allow write or run access unless the user makes the effort to set the capability
-			if not "config_editor_ludicrous_mode" in capabilities and action in ['run', 'save', 'delete', 'rename', 'newfolder', 'newfile']:
+			if action == 'run' and not confIsTrue("run_commands"):
+				status = "missing_perm_run"
+					
+			elif ((action in ['delete', 'rename', 'newfolder', 'newfile']) or (action == "save" and action_item != "")) and not confIsTrue("write_access"):
 				status = "missing_perm_write"
+			
+			elif action == "save" and action_item == "" and confIsTrue("lock_config"):
+				status = "config_locked"
 			
 			# we need to prevent even read access to admins so that people don't call our api and read the .secrets file
 			elif not "admin_all_objects" in capabilities:
 				status = "missing_perm_read"
 				
 			else:
-
-				if action[:5] == 'btool' or action == 'run':
+				# when calling read or write with an empty argument it means we are trying to change the config
+				if (action == 'read' or action == 'save') and action_item == "":
+					localfolder = os.path.join(os.path.dirname( __file__ ), '..', 'local')
+					action_item = os.path.join(os.path.dirname( __file__ ), '..', 'local', app_name + '.conf')
+					if not os.path.exists(localfolder):
+						os.makedirs(localfolder)
+					if not os.path.exists(action_item):
+						shutil.copyfile(os.path.join(os.path.dirname( __file__ ), '..','default', app_name + '.conf'), action_item)
+					
+				if action[:5] == 'btool' or action == 'run' or action == 'init':
 					system = platform.system()
 					os.chdir(SPLUNK_HOME)
 					if system != "Windows" and system != "Linux":
@@ -72,8 +102,10 @@ class ceditor(splunk.rest.BaseRestHandler):
 						elif system == "Linux":
 							cmd = "./bin/splunk"
 							
-						if action == 'btool-quick':
-							result = runCommand([cmd, 'btool', 'check', '--debug'])
+						if action == 'init':
+							result = {}
+							result['files'] = runCommand([cmd, 'btool', 'check', '--debug'])
+							result['conf'] = conf["default"]
 
 						if action == 'btool-check':
 							result = runCommand([cmd, 'btool', 'check', '--debug'])
@@ -142,10 +174,14 @@ class ceditor(splunk.rest.BaseRestHandler):
 									status = "success"
 											
 								else:
-									with open(file_path, 'r') as fh:
-										result = fh.read()
-										
-									status = "success"
+									fsize = os.path.getsize(file_path) / 1000000
+									if fsize > int(conf["default"]["max_file_size"]):
+										status = "error"
+										result = "File too large to open. File size is " + str(fsize) + " MB and the configured limit is " + conf["default"]["max_file_size"] + " MB"
+									else:
+										with open(file_path, 'r') as fh:
+											result = fh.read()
+											status = "success"
 									if is_binary_string(result):
 										result = "unable to open binary file"
 										status = "error"

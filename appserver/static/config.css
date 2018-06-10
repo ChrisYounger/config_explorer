@@ -6,8 +6,19 @@
 .ce_no_write_access .ce_add_file,
 .ce_no_write_access .ce_add_folder,
 .ce_no_write_access .ce_rename_icon,
-.ce_no_write_access .ce_delete_icon,
-.ce_no_write_access .ce_app_run {
+.ce_no_write_access .ce_delete_icon {
+	display: none;
+}
+.ce_no_run_access .ce_app_run {
+	display: none;
+}
+.ce_no_settings_access .ce_app_settings {
+	display: none;	
+}
+.ce_no_git_access .ce_app_changelog {
+	display: none;	
+}
+.ce_no_running_config .ce_app_running {
 	display: none;
 }
 .dashboard-body * {

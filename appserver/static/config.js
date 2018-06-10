@@ -11,7 +11,7 @@ require([
 	"splunkjs/mvc/layoutview",
 	"splunkjs/mvc/simplexml/dashboardview",
     "splunkjs/mvc/searchmanager",
-    "vs/editor/editor.main"
+    "vs/editor/editor.main",
 ], function(
 	mvc,
 	$,
@@ -21,8 +21,9 @@ require([
 	LayoutView,
 	Dashboard,
     SearchManager,
-    wat
+    wat,
 ) {
+
 	// Lovely globals
     var service = mvc.createService({ owner: "nobody" });
     var editors = [];  
@@ -33,6 +34,7 @@ require([
     var $container = $(".ce_contents");
     var $tabs = $(".ce_tabs");
 	var activeTab = null;
+	var conf = {};
 	var confFiles = {};
 	var confFilesSorted = [];
 	var action_mode = 'read';
@@ -59,6 +61,9 @@ require([
 
 		} else if (p.hasClass('ce_app_run')) {
 			runShellCommand();
+			
+		} else if (p.hasClass('ce_app_settings')) {
+			readFileOrFolderAndUpdate("")
 
 		} else if (p.hasClass('ce_app_changelog')) {
 			showModal({
@@ -83,10 +88,12 @@ require([
 				refreshCurrentPath();
 				action_mode = 'read';
 				
-			} else if (p.hasClass('ce_app_effective') || p.hasClass('ce_app_specs')) {
+			} else if (p.hasClass('ce_app_effective') || p.hasClass('ce_app_specs') || p.hasClass('ce_app_running')) {
 				// The left pane is exactly the same for effective spec or app specs modes.
 				if (p.hasClass('ce_app_effective')) {
 					action_mode = 'btool-list';
+				} else if (p.hasClass('ce_app_running')) {
+					action_mode = 'running';
 				} else {
 					action_mode = 'spec';
 				}
@@ -115,6 +122,9 @@ require([
 			
 		} else if (action_mode === 'spec') {
 			displaySpecFile($(this).attr('file'));
+			
+		} else if (action_mode === 'running') {
+			runningVsLayered($(this).attr('file'));
 			
 		} else if (action_mode === 'read') {
 			readFileOrFolderAndUpdate($(this).attr('file'));
@@ -221,17 +231,19 @@ require([
 		});
 	}
 	
-	function runBToolList(path){
-		var tab_path = 'btool list: ' + path;
+	function runningVsLayered(path){
+		var ce_running_diff = $('.ce_running_diff:checked').length;
+		var tab_path = 'RunningDiff: ' + path;
+		if (ce_running_diff) {
+			tab_path = 'Running: ' + path;
+		}
 		if (! tabAlreadyOpen(tab_path)) {
 			serverAction('btool-list', path, function(contents){
 				var c = formatBtoolList(contents);
 				if ($.trim(c)) {
-					var ecfg = openNewTab(tab_path, c, false, 'ini');
-					ecfg.btoollist = contents;
 					// Experimental feature to compare filesystem config against running config
-					/*service.get('/services/configs/conf-' + path, null, function(err, r) {
-						console.log(r, err);
+					service.get('/services/configs/conf-' + path, null, function(err, r) {
+						//console.log(r, err);
 						var str = "";
 						if (r && r.data && r.data.entry) {
 							for (var i = 0; i < r.data.entry.length; i++) {
@@ -239,15 +251,47 @@ require([
 								var props = Object.keys(r.data.entry[i].content);
 								props.sort();
 								for (var j = 0; j < props.length; j++) {
-									if (props[j].substr(0,4) !== "eai:") {  //  && !(props[j] === "disabled" && r.data.entry[i].content[props[j]] === 'false')
+									if (props[j].substr(0,4) !== "eai:" && !(props[j] === "disabled" && ! r.data.entry[i].content[props[j]])) {
 										str += props[j] + " = " + r.data.entry[i].content[props[j]] + "\n";
 									}
 								}
 							}
-							//openNewTab("Running: " + path, str, false, 'ini');
-							openNewDiffTab("filesystem v running: " + path, formatRunningConfig(ecfg.btoollist), str)
+							if (ce_running_diff) {
+								openNewDiffTab(
+									tab_path, 
+									"# Layered (filesystem) config\n" + formatRunningConfig(contents), 
+									"# Running config\n" + str
+								);
+							} else {
+								openNewTab(tab_path, formatRunningConfig(contents));
+							}
+						} else {
+							showModal({
+								title: "Warning",
+								body: "<div class='alert alert-warning'><i class='icon-alert'></i>Could not get retreieve running config for " + htmlEncode(path) + "</div>",
+								size: 300
+							});							
 						}
-					});*/			
+					});			
+				} else {
+					showModal({
+						title: "Error",
+						body: "<div class='alert alert-error'><i class='icon-alert'></i>Unable to get config for " + htmlEncode(path) + "</div>",
+						size: 300
+					});							
+				}							
+			});
+		}	
+	}
+	
+	function runBToolList(path){
+		var tab_path = 'Layered: ' + path;
+		if (! tabAlreadyOpen(tab_path)) {
+			serverAction('btool-list', path, function(contents){
+				var c = formatBtoolList(contents);
+				if ($.trim(c)) {
+					var ecfg = openNewTab(tab_path, c, false, 'ini');
+					ecfg.btoollist = contents;			
 				} else {
 					showModal({
 						title: "Warning",
@@ -257,10 +301,10 @@ require([
 				}							
 			});
 		}	
-	}
+	}	
 	
 	function displaySpecFile(path) {
-		var tab_path = 'spec: ' + path;
+		var tab_path = 'Spec: ' + path;
 		if (! tabAlreadyOpen(tab_path)) {
 			serverAction('spec', path, function(contents){			
 				if ($.trim(contents)) {
@@ -290,7 +334,7 @@ require([
 					
 					var re = /([^\/]+).conf$/;
 					var found = path.match(re);
-					if (found){
+					if (found && confIsTrue('match_conf_against_btool')) {
 						ecfg.attemptBtooling = found[1];
 						highlightBadConfig(ecfg);
 						if (confFiles.hasOwnProperty(found[1])) {
@@ -304,7 +348,9 @@ require([
 				} else {
 					inFolder = path;
 					localStorage.setItem('ce_current_path', inFolder);
-					contents.sort();
+					contents.sort(function (a, b) {
+						return a.toLowerCase().localeCompare(b.toLowerCase());
+					});
 					$dirlist.empty();
 					var dir = $("<li class='ce_leftnavfolder'><span></span><bdi></bdi><i title='Create new folder' class='ce_add_folder ce_right_icon ce_right_two icon-folder'></i><i title='Create new file' class='ce_add_file ce_right_icon icon-report'></i></li>").attr("file", path).attr("title", path).appendTo($dirlist);
 					var span = dir.find("span").text(path + '/');
@@ -460,6 +506,9 @@ require([
 				}
 			});
 		}
+		if (action_mode === 'running') {
+			$("<li class='ce_leftnavfolder'><i class='icon-settings'></i> Show as diff <input type='checkbox' checked='checked' class='ce_running_diff ce_right_icon'></li>").appendTo($dirlist);
+		}
 		for (var i = 0; i < confFilesSorted.length; i++) {
 			$("<li class='ce_leftnav'></li>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-report'></i> ").appendTo($dirlist);
 		}
@@ -565,6 +614,9 @@ require([
 		}
 		ecfg.container = $("<div></div>").appendTo($container);
 		ecfg.file = filename;
+		if (filename === "") {
+			filename = "Settings"
+		}
 		ecfg.tab = $("<div class='ce_tab ce_active'>" + dodgyBasename(filename) + "</div>").attr("title", filename).appendTo($tabs);
 		ecfg.last_opened = Date.now();
 		ecfg.hasChanges = false;
@@ -612,6 +664,9 @@ require([
 						ecfg.tab.find('.icon-alert-circle').remove();
 						ecfg.hasChanges = false;	
 						highlightBadConfig(ecfg);
+						if (ecfg.file === "") {
+							loadPermissionsAndConfList();
+						}
 					}, saved_value);
 					return null;
 				} else {
@@ -675,14 +730,23 @@ require([
 					errText = "<pre>" + htmlEncode(JSON.stringify(err)) + "</pre>";
 				}
 			} else {
-				if (! r.data.hasOwnProperty('status')) {
-					errText = "<pre>" + htmlEncode(r.data) + "</pre>";
+				if (! r.data) {
+					errText = "<pre>Error communicating with Splunk</pre>";
 					
-				} else if (r.data.status === "missing_perm_write") {
-					errText = "<p>You are limited to read-only actions until, your account is granted the capability \"<strong>config_editor_ludicrous_mode</strong>\" via a <a href='/manager/config_editor/authorization/roles'>role</a>.</p>";
+				} else if (! r.data.hasOwnProperty('status')) {
+					errText = "<pre>" + htmlEncode(r.data) + "</pre>";
 					
 				} else if (r.data.status === "missing_perm_read") {
 					errText = "<p>To use this application you must be have the capability \"<strong>admin_all_objects</strong>\" via a <a href='/manager/config_editor/authorization/roles'>role</a>.</p>";
+
+				} else if (r.data.status === "missing_perm_run") {
+					errText = "<p>You must enable the <code>run_commands</code> setting" + ((confIsTrue('lock_config')) ? " (and set <code>config_locked</code> to false in <code>etc/apps/config_editor/local/config_editor.conf</code>)" : "") + "</p>";
+					
+				} else if (r.data.status === "missing_perm_write") {
+					errText = "<p>You must enable the <code>write_access</code> setting" + ((confIsTrue('lock_config')) ? " (and set <code>config_locked</code> to false in <code>etc/apps/config_editor/local/config_editor.conf</code>)" : "") + "</p>";
+					
+				} else if (r.data.status === "config_locked") {
+					errText = "<p>Unable to write to the settings file becuase it is locked and must be edited externally: <code>etc/apps/config_editor/local/config_editor.conf</code></p>";
 					
 				} else if (r.data.status === "error") {
 					errText = "<pre>" + htmlEncode(r.data.result) + "</pre>";
@@ -741,30 +805,36 @@ require([
 	function highlightBadConfig(ecfg){	
 		if (ecfg.hasOwnProperty('attemptBtooling')) {
 			serverAction('btool-list', ecfg.attemptBtooling, function(btoolcontents){
+				if (! $.trim(btoolcontents)) {
+					delete ecfg.attemptBtooling;
+					return;
+				}
 				// Build lookup of btool output
 				var lookup = buildBadCodeLookup(btoolcontents);
-				// console.log(lookup, ecfg.file);
-				// lookup[stanza][field] = file_path
-				// TODO if we cant build lookup, then delete ecfg.attemptBtooling
 				// Go through everyline of the editor
 				var contents = ecfg.editor.getValue(),
 					rows = contents.split(/\r?\n/),
-					currentStanza,
+					currentStanza = "",
 					reProps = /^\s*([^=\s]+)\s*=/,
 					newdecorations = [];
 				for (var i = 0; i < rows.length; i++) {
 					if (rows[i].substr(0,1) === "[") {
-						currentStanza = rows[i];
+						if (rows[i].substr(0,9) === "[default]") {
+							currentStanza = "";
+						} else {
+							currentStanza = rows[i];
+						}
 					} else {
 						var found = rows[i].match(reProps);
 						if (found) {
-							if (lookup.hasOwnProperty(currentStanza) && lookup[currentStanza].hasOwnProperty(found[1]) && lookup[currentStanza][found[1]] === ecfg.file) {
-								newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine' }});
-							} else {
-								newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine' }});
+							if (found[1].substr(0,1) !== "#") {
+								if (lookup.hasOwnProperty(currentStanza) && lookup[currentStanza].hasOwnProperty(found[1]) && lookup[currentStanza][found[1]] === ecfg.file) {
+									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine' }});
+								} else {
+									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine' }});
+								}
 							}
-						}
-						
+						}			
 					}
 				}
 				ecfg.decorations = ecfg.editor.deltaDecorations(ecfg.decorations, newdecorations);
@@ -786,7 +856,11 @@ require([
 				currentField = res[2];
 				ret[currentStanza][currentField] = '.' + res[1]; 
 			} else if (res[3]) {
-				currentStanza = res[3];
+				if (res[3].substr(0,9) === "[default]") {
+					currentStanza = "";
+				} else {
+					currentStanza = res[3];
+				}				
 				currentField = "";
 				ret[currentStanza] = {"":""} // dont care about stanzas and where they come from
 			} else {
@@ -796,6 +870,7 @@ require([
 		return ret;
 	}
 	
+	// parse the spec file and build a lookup to use for code completion
 	function buildHintingLookup(conf, contents){
 		var rex = /^(?:(\w+).*=|(\[\w+))?.*$/gm,
 			res,								
@@ -812,7 +887,11 @@ require([
 					currentField = res[1];
 					confFiles[conf][currentStanza][currentField] = {t:"", c:""};
 				} else {
-					currentStanza = res[2];
+					if (res[2].substr(0,9) === "[default]") {
+						currentStanza = "";
+					} else {
+						currentStanza = res[2];
+					}
 					currentField = "";
 					confFiles[conf][currentStanza] = {"":{t:"", c:""}};
 				}
@@ -846,7 +925,11 @@ require([
 						if (res[1]) {
 							currentField = res[1];
 						} else if (res[2]) {
-							currentStanza = res[2];
+							if (res[2].substr(0,9) === "[default]") {
+								currentStanza = "";
+							} else {
+								currentStanza = res[2];
+							}							
 							currentField = "";
 						}
 					}
@@ -887,7 +970,11 @@ require([
 					currentStanza = "",
 					found = contents.match(rex);
 				if (found && editors[activeTab].hinting.hasOwnProperty(found[1])) {
-					currentStanza = found[1];
+					if (found[1].substr(0,9) === "[default]") {
+						currentStanza = "";
+					} else {
+						currentStanza = found[1];
+					}		
 				}				
 				for (var key in editors[activeTab].hinting[currentStanza]) {
 					if (editors[activeTab].hinting[currentStanza].hasOwnProperty(key) && key) {
@@ -953,28 +1040,46 @@ require([
 		self.$modal.modal(options);
 	};
 
-	// Lets get this party started
-	service.get('/services/authentication/current-context', null, function(err, r) {
-		if(r.data.entry[0].content.capabilities.indexOf('config_editor_ludicrous_mode') > -1) {
-			$dashboardBody.removeClass('ce_no_write_access');
-		}
-	});
+	function confIsTrue(param) {
+		return (["1", "true", "yes", "t", "y"].indexOf($.trim(conf[param].toLowerCase())) > -1);
+	}
 	
+	function loadPermissionsAndConfList(){
+		// Build the list of config files
+		serverAction('init', undefined, function(data){
+			var rex = /^Checking: .*\/([^\/]+?).conf\s*$/gm,
+				res;
+			conf = data.conf;
+			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ce_no_running_config')
+			if(confIsTrue('write_access')) {
+				$dashboardBody.removeClass('ce_no_write_access');
+			}
+			if(confIsTrue('run_commands')) {
+				$dashboardBody.removeClass('ce_no_run_access');
+			}
+			if(! confIsTrue('lock_config')) {
+				$dashboardBody.removeClass('ce_no_settings_access');
+			}
+			if(confIsTrue('git')) {
+				$dashboardBody.removeClass('ce_no_git_access');
+			}
+			if(confIsTrue('running_config')) {
+				$dashboardBody.removeClass('ce_no_running_config');
+			}			
+			confFiles = {};
+			confFilesSorted = [];
+			while((res = rex.exec(data.files)) !== null) {
+				if (! confFiles.hasOwnProperty(res[1])) {
+					confFiles[res[1]] = null;
+					confFilesSorted.push(res[1]);
+				}
+			}
+			confFilesSorted.sort();
+		});		
+	}
 	// Build the directory structure
     refreshCurrentPath();
-	// Build the list of config files
-	serverAction('btool-quick', undefined, function(contents){
-		var rex = /^Checking: .*\/([^\/]+?).conf\s*$/gm,
-			res;
-		confFilesSorted = [];
-		while((res = rex.exec(contents)) !== null) {
-			if (! confFiles.hasOwnProperty(res[1])) {
-				confFiles[res[1]] = null;
-				confFilesSorted.push(res[1]);
-			}
-		}
-		confFilesSorted.sort();
-	});
+	loadPermissionsAndConfList();
     
 	// Setup the splunk components properly
 	$('header').remove();
