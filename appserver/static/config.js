@@ -332,7 +332,7 @@ require([
 				if (typeof contents === "string") {					
 					var ecfg = openNewTab(path, contents, true);
 					
-					var re = /([^\/]+).conf$/;
+					var re = /([^\/\\]+).conf$/;
 					var found = path.match(re);
 					if (found && confIsTrue('match_conf_against_btool')) {
 						ecfg.attemptBtooling = found[1];
@@ -359,7 +359,7 @@ require([
 						dir.addClass('ce_rtl');
 					}
 					if (path !== ".") {
-						$("<li class='ce_leftnav'><i class='icon-arrow-left'></i> ..</li>").attr("file", path.replace(/\/[^\/]+$/,'')).appendTo($dirlist);
+						$("<li class='ce_leftnav'><i class='icon-arrow-left'></i> ..</li>").attr("file", path.replace(/[\/\\][^\/\\]+$/,'')).appendTo($dirlist);
 					}
 					for (var i = 0; i < contents.length; i++) {
 						var icon = "folder";
@@ -628,6 +628,7 @@ require([
 			glyphMargin: true
 			
 		});
+		ecfg.saving = false;
 		ecfg.decorations = [];
 
 		ecfg.server_content = ecfg.editor.getValue();
@@ -657,17 +658,21 @@ require([
 			],
 			run: function(ed) {
 				if (canBeSaved) {
-					var saved_value = ecfg.editor.getValue();
-					serverAction('save', ecfg.file, function(){
-						showToast('Saved');
-						ecfg.server_content = saved_value;
-						ecfg.tab.find('.icon-alert-circle').remove();
-						ecfg.hasChanges = false;	
-						highlightBadConfig(ecfg);
-						if (ecfg.file === "") {
-							loadPermissionsAndConfList();
-						}
-					}, saved_value);
+					if (! ecfg.saving) {
+						var saved_value = ecfg.editor.getValue();
+						ecfg.saving = true;
+						serverAction('save', ecfg.file, function(){
+							ecfg.saving = false;
+							showToast('Saved');
+							ecfg.server_content = saved_value;
+							ecfg.tab.find('.icon-alert-circle').remove();
+							ecfg.hasChanges = false;	
+							highlightBadConfig(ecfg);
+							if (ecfg.file === "") {
+								loadPermissionsAndConfList();
+							}
+						}, saved_value);
+					}
 					return null;
 				} else {
 					showModal({
@@ -713,7 +718,7 @@ require([
 	
     // TODO replace this with something that comes from the os
 	function dodgyBasename(f) {
-		return f.replace(/.*\//,'');
+		return f.replace(/.*[\/\\]/,'');
 	}
 	
 	// Make a rest call to our backend python script
@@ -772,7 +777,7 @@ require([
 
 	// Try to build a conf file from calling the rest services. turns out this isn't great
 	function formatRunningConfig(contents) {
-		return contents.replace(/^.+?splunk\/etc\/.*?\.conf\s+(?:(.+) = (.*)|(\[.+))\r?\n/mg,function(all, g1, g2, g3){
+		return contents.replace(/^.+?splunk[\/\\]etc[\/\\].*?\.conf\s+(?:(.+) = (.*)|(\[.+))\r?\n/img,function(all, g1, g2, g3){
 			if (g3 !== undefined) { return g3 + "\n"; }
 			if (g2.toLowerCase() == "true") { return g1 + " = 1\n";}
 			if (g2.toLowerCase() == "false") { return g1 + " = 0\n";}
@@ -785,10 +790,10 @@ require([
 		var indent = 80;
 		var ce_btool_default_values = $('.ce_btool_default_values:checked').length;
 		var ce_btool_path = $('.ce_btool_path:checked').length;
-		return contents.replace(/^.+?splunk\/etc\/(.*?\.conf)\s+(.+)(\r?\n)/mg,function(all, g1, g2, g3){
+		return contents.replace(/^.+?splunk[\/\\]etc[\/\\](.*?\.conf)\s+(.+)(\r?\n)/img,function(all, g1, g2, g3){
 			var path = '';
 			// I am pretty sure that stanzas cant be set to default when containing a child that isnt
-			if (! ce_btool_default_values && /\/default\//.test(g1)) {
+			if (! ce_btool_default_values && /[\/\\]default[\/\\]/.test(g1)) {
 				return '';
 			}
 			if (ce_btool_path) {
@@ -850,7 +855,7 @@ require([
 	// from the current editor is being recognised by btool or not.
 	function buildBadCodeLookup(contents){
 		//(conf file path)(property)(stanza)
-		var rex = /^.+?splunk(\/etc\/.*?\.conf)\s+(?:([^=\s]+)\s*=|(\[[^\]]+\]))/gm,
+		var rex = /^.+?splunk([\/\\]etc[\/\\].*?\.conf)\s+(?:([^=\s]+)\s*=|(\[[^\]]+\]))/gim,
 			res,								
 			currentStanza = "",
 			currentField = "",
@@ -1051,7 +1056,7 @@ require([
 	function loadPermissionsAndConfList(){
 		// Build the list of config files
 		serverAction('init', undefined, function(data){
-			var rex = /^Checking: .*\/([^\/]+?).conf\s*$/gm,
+			var rex = /^Checking: .*[\/\\]([^\/\\]+?).conf\s*$/gmi,
 				res;
 			conf = data.conf;
 			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ce_no_running_config')
