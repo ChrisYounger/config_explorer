@@ -46,3 +46,13 @@ Optionally set a scheduled job to add and commit changes that happen outside of 
 !! Running in Docker
 You will probably need to rebuild your container with git support like so:
 `RUN apt-get -qq update && apt-get install --no-install-recommends -qqy curl ca-certificates git`
+
+!! To compile a splunk visualisation
+`cd /opt/splunk/etc/apps/jds-arm/appserver/static/visualizations/blocks  && /opt/splunk/bin/splunk cmd node ./node_modules/webpack/bin/webpack.js`
+
+!! run things
+`./bin/splunk cmd python ./etc/apps/config_editor/bin/run.py`
+
+find /opt/splunk/var/lib/splunk -name "*.tsidx"
+./bin/splunk cmd walklex /opt/splunk/var/lib/splunk/index/db/db_1522759630_1522759390_0/1522759630-1522759390-2256855131967237431.tsidx  ""
+./bin/splunk cmd walklex /opt/splunk/var/lib/splunk/index/db/db_1522759630_1522759390_0/1522759630-1522759390-2256855131967237431.tsidx  "*::*"
