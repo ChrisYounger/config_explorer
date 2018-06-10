@@ -750,6 +750,10 @@ require([
 					
 				} else if (r.data.status === "error") {
 					errText = "<pre>" + htmlEncode(r.data.result) + "</pre>";
+					if (type === "read" && path === localStorage.getItem('ce_current_path')) {
+						// Folder must have been deleted outside of this
+						readFileOrFolderAndUpdate(".")
+					}
 				}
 			}
 			if (errText) {
