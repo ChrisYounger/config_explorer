@@ -2,9 +2,7 @@
 
 import splunk, sys, os, time, json, re, shutil, subprocess, platform, logging, logging.handlers
 
-print "hi"
-
-class ceditor(splunk.rest.BaseRestHandler):
+class req(splunk.rest.BaseRestHandler):
 	def handle_POST(self):
 		sessionKey = self.sessionKey
 		textchars = bytearray({7,8,9,10,12,13,27} | set(range(0x20, 0x100)) - {0x7f})
@@ -13,7 +11,7 @@ class ceditor(splunk.rest.BaseRestHandler):
 		
 		SPLUNK_HOME = os.environ['SPLUNK_HOME']
 	
-		app_name = "config_editor"
+		app_name = "config_explorer"
 		conf = splunk.clilib.cli_common.getMergedConf(app_name)
 		
 		# From here: http://dev.splunk.com/view/logging/SP-CAAAFCN
@@ -51,7 +49,7 @@ class ceditor(splunk.rest.BaseRestHandler):
 		try:
 			result = ""
 			status = ""
-			debug = conf
+			debug = ""
 			action = self.request['form']['action']
 			action_item = self.request['form']['path']
 			param1 = self.request['form']['param1']

@@ -30,7 +30,7 @@ git = <bool>
 
 git_dir = <string>
 * The location of the git repository, relative to SPLUNK_HOME directory.
-  Defaults to etc/apps/config_editor/git
+  Defaults to etc/apps/config_explorer/git
 
 git_work_tree = <string>
 * Root location from where changes are tracked, relative to SPLUNK_HOME directory

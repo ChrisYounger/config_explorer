@@ -1,6 +1,6 @@
 // Copyright (C) 2018 Chris Younger
 
-require.config({ paths: { 'vs': '../app/config_editor/node_modules/monaco-editor/min/vs' }});
+require.config({ paths: { 'vs': '../app/config_explorer/node_modules/monaco-editor/min/vs' }});
 
 require([
 	"splunkjs/mvc",
@@ -515,7 +515,6 @@ require([
 	}
 	
     function activateTab(idx){
-        console.log("activating tab ", editors[idx].file);
         hideAllTabs();
         $container.children().eq(idx).removeClass('ce_hidden');
         $tabs.children().eq(idx).addClass('ce_active');
@@ -577,7 +576,7 @@ require([
 		editors[idx].container.remove();
 		editors.splice(idx, 1);
 		// if there are still tabs open, find the most recently used tab and activate that one
-		if ($tabs.children().length === 0) {
+		if ($tabs.children(".ce_active").length === 0) {
 			activeTab = null;
 		
 		} else if ($tabs.children(".ce_active").length === 0) {
@@ -649,7 +648,7 @@ require([
 				// Turn off the glyphs until next save
 				ecfg.decorations = ecfg.editor.deltaDecorations(ecfg.decorations, []);
 			});
-		}
+		}      
 		ecfg.editor.addAction({
 			id: 'save-file',
 			label: 'Save file',
@@ -683,6 +682,25 @@ require([
 				}
 			}
 		});
+        ecfg.editor.addAction({
+			id: 'word-wrap-on',
+			label: 'Word wrap on',
+			run: function(ed) {
+                ecfg.editor.updateOptions({
+                    wordWrap: "on"
+                });
+			}
+		});  
+        ecfg.editor.addAction({
+			id: 'word-wrap-off',
+			label: 'Word wrap off',
+			run: function(ed) {
+                ecfg.editor.updateOptions({
+                    wordWrap: "off"
+                });
+			}
+		});  
+ 
 		activeTab = editors.length;
 		editors.push(ecfg);	
 		return ecfg;		
@@ -724,10 +742,10 @@ require([
 	// Make a rest call to our backend python script
 	function serverAction(type, path, callback, param1) {
 		$('.ce_saving_icon').removeClass('ce_hidden');
-		service.post('/services/ceditor', {action: type, path: path, param1: param1}, function(err, r) {
+		service.post('/services/config_explorer', {action: type, path: path, param1: param1}, function(err, r) {
 			$('.ce_saving_icon').addClass('ce_hidden');
 			var errText = '';
-			console.log(type, err, r);
+			//console.log(type, err, r);
 			if (err) {
 				if (err.data.hasOwnProperty('messages')) {
 					errText = "<pre>" + htmlEncode(err.data.messages["0"].text) + "</pre>";
@@ -742,16 +760,16 @@ require([
 					errText = "<pre>" + htmlEncode(r.data) + "</pre>";
 					
 				} else if (r.data.status === "missing_perm_read") {
-					errText = "<p>To use this application you must be have the capability \"<strong>admin_all_objects</strong>\" via a <a href='/manager/config_editor/authorization/roles'>role</a>.</p>";
+					errText = "<p>To use this application you must be have the capability \"<strong>admin_all_objects</strong>\" via a <a href='/manager/config_explorer/authorization/roles'>role</a>.</p>";
 
 				} else if (r.data.status === "missing_perm_run") {
-					errText = "<p>You must enable the <code>run_commands</code> setting" + ((confIsTrue('lock_config')) ? " (and set <code>config_locked</code> to false in <code>etc/apps/config_editor/local/config_editor.conf</code>)" : "") + "</p>";
+					errText = "<p>You must enable the <code>run_commands</code> setting" + ((confIsTrue('lock_config')) ? " (and set <code>config_locked</code> to false in <code>etc/apps/config_explorer/local/config_explorer.conf</code>)" : "") + "</p>";
 					
 				} else if (r.data.status === "missing_perm_write") {
-					errText = "<p>You must enable the <code>write_access</code> setting" + ((confIsTrue('lock_config')) ? " (and set <code>config_locked</code> to false in <code>etc/apps/config_editor/local/config_editor.conf</code>)" : "") + "</p>";
+					errText = "<p>You must enable the <code>write_access</code> setting" + ((confIsTrue('lock_config')) ? " (and set <code>config_locked</code> to false in <code>etc/apps/config_explorer/local/config_explorer.conf</code>)" : "") + "</p>";
 					
 				} else if (r.data.status === "config_locked") {
-					errText = "<p>Unable to write to the settings file becuase it is locked and must be edited externally: <code>etc/apps/config_editor/local/config_editor.conf</code></p>";
+					errText = "<p>Unable to write to the settings file becuase it is locked and must be edited externally: <code>etc/apps/config_explorer/local/config_explorer.conf</code></p>";
 					
 				} else if (r.data.status === "error") {
 					errText = "<pre>" + htmlEncode(r.data.result) + "</pre>";
@@ -820,11 +838,13 @@ require([
 				}
 				// Build lookup of btool output
 				var lookup = buildBadCodeLookup(btoolcontents);
+                var seenStanzas = {};
+                var seenProps =  {};
 				// Go through everyline of the editor
 				var contents = ecfg.editor.getValue(),
 					rows = contents.split(/\r?\n/),
 					currentStanza = "",
-					reProps = /^\s*([^=\s]+)\s*=/,
+					reProps = /^\s*((\w+)[^=\s]*)\s*=/,
 					newdecorations = [];
 				for (var i = 0; i < rows.length; i++) {
 					if (rows[i].substr(0,1) === "[") {
@@ -833,12 +853,25 @@ require([
 						} else {
 							currentStanza = rows[i];
 						}
+                        if (seenStanzas.hasOwnProperty(currentStanza)) {
+                            newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine' }});
+                        }
+                        seenStanzas[currentStanza] = 1;
+                        seenProps =  {};
 					} else {
 						var found = rows[i].match(reProps);
 						if (found) {
 							if (found[1].substr(0,1) !== "#") {
+                                if (seenProps.hasOwnProperty(found[1])) {
+                                    newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine' }});
+                                }   
+                                seenProps[found[1]] = 1;
 								if (lookup.hasOwnProperty(currentStanza) && lookup[currentStanza].hasOwnProperty(found[1]) && lookup[currentStanza][found[1]] === ecfg.file) {
-									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine' }});
+                                    if (ecfg.hasOwnProperty('hinting') && found.length > 2 && ! (ecfg.hinting[""].hasOwnProperty(found[2]) || (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2]) ) )) {
+                                        newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine' }});
+                                    } else {
+                                        newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine' }});
+                                    }
 								} else {
 									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine' }});
 								}

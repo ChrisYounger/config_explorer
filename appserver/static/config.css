@@ -175,6 +175,21 @@
     cursor: pointer;
     position: relative;
 }
+.ce_tab_new {
+    width: 30px;
+    position: relative;
+    line-height: 32px;
+    border-right: 1px solid black;
+    text-align: center;
+}
+.ce_tab_new > i {
+    padding: 4px 8px;
+    cursor: pointer;
+    color: #c3cbd4; 
+}
+.ce_tab_new > i:hover {
+    color: #00A4FD;
+}
 .ce_tab.ce_active {
     background-color: #2a2d2e;
 }
@@ -338,7 +353,9 @@
 .ceGreeenLine {
 	border-left: 8px solid green;
 }
-
+.ceOrangeLine {
+	border-left: 8px solid orange;
+}
 
 /* Buttons 
 .hidden { display: none !important;}
