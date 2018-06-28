@@ -193,19 +193,27 @@
 .ce_tab.ce_active {
     background-color: #2a2d2e;
 }
+.ce_clickable_icon {
+	cursor: pointer;
+	color: white;
+	font-size: 16px;
+	padding: 5px;
+}
+.ce_clickable_icon:hover {
+	color: #00A4FD;
+}
 .ce_right_icon {
     position:absolute;
     right: 7px;
-    padding: 2px 6px;
+    padding: 2px 5px;
     margin-top: -2px;
-    cursor: pointer;
     background-color: inherit;
 }
-.ce_right_icon:hover {
-    color: #00A4FD;
-}
 .ce_right_icon.ce_right_two {
-    right: 26px;    
+    right: 28px;    
+}
+.ce_right_icon.ce_right_three {
+    right: 49px;    
 }
 .ce_contents {
     top: 32px;
@@ -219,6 +227,36 @@
 }
 .ce_hidden {
     display:none !important;
+}
+.ce_context_menu_overlap {
+	position:absolute;
+	background-color: rgba(0,0,0,0.2);
+	top: 0;
+	bottom: 0;
+	left: 0;
+	right: 0;
+}
+.ce_context_menu_wrap {
+	position: absolute;
+	opacity: 0;
+	top: -9999px;
+	left: -9999px;
+	right: auto;
+	bottom: auto;
+	transition: opacity 300ms;
+    background-color: #2d2f31;
+    padding: 4px;
+    width: 220px;
+    box-shadow: 0 2px 8px #000;
+    color: #bbb;	
+}
+.ce_context_menu_wrap > div {
+	margin: 2px 2px; 
+	padding: 4px 10px;
+}
+.ce_context_menu_wrap > div:hover {
+	background-color: black;
+	cursor: pointer;
 }
 .ce_toaster {
 	background-color: white;
@@ -356,7 +394,88 @@
 .ceOrangeLine {
 	border-left: 8px solid orange;
 }
+.ce_diff_addition { background-color: rgba(0,255,0,.2); }
+.ce_diff_deletion { background-color: rgba(255,0,0,.2); }
 
+.green {color: #65a637}
+.red { color: #d6563c;}
+
+
+.nobr {
+	white-space: nowrap;
+}
+.ar {
+	text-align:right;
+}
+.ce_changelog {
+    padding: 10px;
+    width: 100%;
+    color: #d4d4d4;
+    height: 100%;
+    overflow-x: auto;
+}
+.ce_changelog table {
+    width: 100%;
+}
+.ce_changelog tr:nth-child(even)  {
+	background: rgba(0, 0, 0, 0.2);
+}
+.ce_changelog td{
+	padding: 4px 12px;
+}
+.ce_changelog_buttons {
+	width: 50px;
+	display: inline-block;
+}
+.ce_changelog_filescol {
+	width: 90%;
+}
+.ce_file_history {
+	width: 100%;
+    color: #d4d4d4;
+    padding: 0 10px 0 30px;
+    height: 100%;
+    overflow-x: auto;
+}
+.ce_file_history h1 {
+	margin-top:50px; 
+	color: white;
+}
+.ce_file_history h1::first-letter {
+    text-transform: uppercase;
+}
+.ce_file_history h1 span {
+	font-size: 16px;
+}
+.ce_file_history p{
+	font-family: Consolas, "Courier New", monospace;
+    font-weight: normal;
+    font-size: 14px;
+    line-height: 19px;
+    letter-spacing: 0px;
+	margin:0;
+	position:relative;
+}
+.ce_diff_change p {
+	padding-left: 20px;
+}
+.ce_diff_addition:before {
+	content: "+";
+    position: absolute;
+    margin-left: -15px;
+    margin-top: -1px;
+}
+.ce_diff_deletion:before {
+	content: "-";
+    position: absolute;
+    margin-left: -15px;
+    margin-top: -1px;
+}
+.ce_diff_change {
+	margin: 6px 0 40px 0;
+	padding: 6px;
+	background-color: rgba(0, 0, 0, 0.2);
+}
 /* Buttons 
 .hidden { display: none !important;}
 .green {color: #65a637}

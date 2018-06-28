@@ -12,11 +12,16 @@ my repo: https://git.cyounger.pw/home/splunk-home
 logging: https://cyounger.pw/en-GB/app/search/search?q=search%20index%3D_internal%20config_explorer%20git%20push&display.page.search.mode=verbose&dispatch.sample_ratio=1&earliest=-24h%40h&latest=now&display.page.search.tab=events&display.general.type=events&display.events.type=list&display.events.fields=%5B%22latency%22%2C%22place.name%22%2C%22upstreamCurrRate%22%2C%22downstreamCurrRate%22%2C%22Status%22%2C%22FriendlyName%22%2C%22IP%22%2C%22Path%22%2C%22Method%22%2C%22process%22%2C%22notes%22%2C%22details%22%2C%22date%22%2C%22insertdate%22%2C%22card%22%2C%22category%22%2C%22value%22%2C%22activities%7B%7D.activity%22%2C%22activities%7B%7D.duration%22%2C%22activities%7B%7D.startTime%22%2C%22startTime%22%2C%22place.location.lat%22%2C%22place.location.lon%22%2C%22from%22%2C%22subject%22%2C%22kc%22%2C%22position%22%2C%22chromosome%22%2C%22genotype%22%2C%22ServiceType%22%2C%22source%22%2C%22sourcetype%22%5D&sid=1528143032.5999
 logging as table: https://cyounger.pw/en-GB/app/search/search?q=search%20index%3D_internal%20config_explorer%20source%3D%22%2Fopt%2Fsplunk%2Fvar%2Flog%2Fsplunk%2Fpython.log%22%20%0A%7C%20%20table%20_time%20user%20action%20path%20param1%20reason&display.page.search.mode=verbose&dispatch.sample_ratio=1&earliest=-24h%40h&latest=now&display.page.search.tab=statistics&display.general.type=statistics&display.events.type=list&display.events.fields=%5B%22latency%22%2C%22place.name%22%2C%22upstreamCurrRate%22%2C%22downstreamCurrRate%22%2C%22Status%22%2C%22FriendlyName%22%2C%22IP%22%2C%22Path%22%2C%22Method%22%2C%22process%22%2C%22notes%22%2C%22details%22%2C%22date%22%2C%22insertdate%22%2C%22card%22%2C%22category%22%2C%22value%22%2C%22activities%7B%7D.activity%22%2C%22activities%7B%7D.duration%22%2C%22activities%7B%7D.startTime%22%2C%22startTime%22%2C%22place.location.lat%22%2C%22place.location.lon%22%2C%22from%22%2C%22subject%22%2C%22kc%22%2C%22position%22%2C%22chromosome%22%2C%22genotype%22%2C%22ServiceType%22%2C%22source%22%2C%22sourcetype%22%5D&sid=1528144874.6091
 
+how to set a gitignore: https://answers.splunk.com/answers/216267/what-do-you-put-in-your-gitignore-file-for-a-syste.html
+
+# run this
+./bin/splunk ftw
+
 # to create repo
 git init
 Set a username and email address for config_explorer to use for commits
 git config user.name config_explorer
-git config user.email config_explorer@splunk.splunk
+git config user.email config_explorer@splunk.splunk  
 Optionally connect to a remote repository:
 
 Optionally create a scheduled job to push changes to remote repository:
@@ -32,6 +37,9 @@ Optionally set a scheduled job to add and commit changes that happen outside of 
 2. create a file: `./etc/apps/config_explorer/local/inputs.conf`
 3. copy contents from `/etc/apps/config_explorer/default/inputs.conf`
 4. set `enable = true`
+
+!! Will my changes be replicated through the cluster.
+no, unless you are editing files on the deployer or whatever
 
 !! where to find logging
 
@@ -52,6 +60,7 @@ You will probably need to rebuild your container with git support like so:
 
 !! run things
 `./bin/splunk cmd python ./etc/apps/config_explorer/bin/run.py`
+some change
 
 find /opt/splunk/var/lib/splunk -name "*.tsidx"
 ./bin/splunk cmd walklex /opt/splunk/var/lib/splunk/index/db/db_1522759630_1522759390_0/1522759630-1522759390-2256855131967237431.tsidx  ""

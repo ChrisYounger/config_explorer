@@ -41,7 +41,7 @@ running_config = <bool>
   running in Splunk.
   Defaults to false
 
-match_conf_against_btool = <bool>
+conf_validate_on_save = <bool>
 * Show a green or red indicator in the code gutter of each line if it appears
   in the btool list output or not
   Defaults to true

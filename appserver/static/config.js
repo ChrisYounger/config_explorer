@@ -38,7 +38,10 @@ require([
 	var confFiles = {};
 	var confFilesSorted = [];
 	var action_mode = 'read';
-    
+	var inFlightRequests = 0;
+	var comparisonLeftFile = null;
+	var comparisonLeftMode = null;
+
 	// Prevent people from navigating away when they have unsaved changes
     $(window).on("beforeunload", function() {
         for (var i = 0; i < editors.length; i++) {
@@ -47,6 +50,7 @@ require([
 			}
 		}
     });
+	
     
 	// Event handlers for the top bar
     $('.ce_app_link a').on('click', function(e){
@@ -66,18 +70,113 @@ require([
 			readFileOrFolderAndUpdate("")
 
 		} else if (p.hasClass('ce_app_changelog')) {
-			showModal({
-				title: "Info",
-				body: "<div class='alert alert-info'><i class='icon-alert'></i>GIT Integration coming soon</div>",
-				size: 300
-			});
+            var table = $("<table></table>");
+            serverAction("git-log", undefined, function(contents){
+                // commit 1, datetime 2 user 3 change 4 files 5 additions 6 deletions 7
+                var rex = /commit\s+(\S+).*?Date:\s+\S+\s+(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+(\S+)(?: +(\S+))?\s+(.+?)\d+\s+files? changed,(?: (\d+) insertions?\(\+\))?(?: (\d+) deletions?\(\-\))?/gs,
+					time,
+                    res, 
+                    type,
+					f,
+					t,
+                    files,
+					item,
+					fileshtml,
+					timediff,
+					mapper = {},
+					changes = [];
+                while(res = rex.exec(contents)) {
+                    if (res.length === 8) {
+						item = {
+							sha: res[1],
+							time: moment(new Date(res[2])),
+							files: [],
+							user: res[3],
+							change: res[4],
+							adds: Number(res[6] || 0),
+							dels: Number(res[7] || 0),
+							duration: 0,
+							last_sha: "",
+							count: 1
+						};
+						// etc/apps/config_explorer/README.md  | 484 ++++++++++++++++++++++++++++++++++++
+						// etc/apps/config_explorer/README.md2 | 484 ------------------------------------
+						if (item.change === "renamed") {
+							var foundadd = res[5].match(/([^\/]+) +\| +\d+ \+/);
+							var founddels = res[5].match(/\s*([^\n]+) +\| +\d+ -/);
+							if (foundadd && founddels) {
+								item.files.push(founddels[1] + " <i class='icon-arrow-right'></i> " + foundadd[1]);
+							}
+						} else {
+							files = res[5].split(/ +\|.+\r?\n */);
+							for (var i = 0; i < files.length; i++) {
+								f = $.trim(files[i]);
+								if (f) {
+									item.files.push(f);
+								}
+							}
+						}
+						if (item.files.length === 1 && item.change === 'save') {
+							if (mapper.hasOwnProperty(item.files[0]) && mapper[item.files[0]].user === item.user) {
+								timediff = mapper[ item.files[0] ].time.diff(item.time, 'minutes');
+								if (timediff < 60) {
+									changes[ mapper[ item.files[0] ].pointer ].count++;
+									changes[ mapper[ item.files[0] ].pointer ].duration += timediff;
+									changes[ mapper[ item.files[0] ].pointer ].last_sha = item.sha;
+									changes[ mapper[ item.files[0] ].pointer ].adds += item.adds;
+									changes[ mapper[ item.files[0] ].pointer ].dels += item.dels;
+									mapper[ item.files[0] ].time = item.time;
+									continue;
+								}
+							}
+							mapper[ item.files[0] ] = {time: item.time, user: item.user, pointer: changes.length};
+						}
+						changes.push(item);
+					}
+				}			
+				for (var i = 0; i < changes.length; i ++) {
+					if (! changes[i].change) {
+						type = "<td colspan='3'></td>";
+					} else if (changes[i].change === "new") {
+						type = "<td class='nobr ar' colspan='3'><i class='icon-report'></i> " + changes[i].change + "</td>";
+					} else if (changes[i].change === "deleted") {
+						type = "<td class='nobr ar' colspan='3'><i class='icon-trash'></i> " + changes[i].change + "</td>";
+					} else if (changes[i].change === "renamed") {
+						type = "<td class='nobr ar' colspan='3'><i class='icon-pencil'></i> " + changes[i].change + "</td>";
+					} else {
+						type = "<td class='nobr ar' title='File was saved " + changes[i].count + " times in " + changes[i].duration + " minutes'>" + (changes[i].count > 1 ? ("[" + (changes[i].count) + "]") : "") + "</td><td class='nobr ar'><i class='icon-plus-circle green'></i> " + changes[i].adds + '</td><td class="nobr ar"><i class="icon-minus-circle red"></i> ' + changes[i].dels + "</td>";
+					}
+					fileshtml = "";
+					for (var j = 0; j < changes[i].files.length; j++) {
+						t = "";
+						if (! changes[i].change || changes[i].change === "save") {
+							t = "<i title='Show changes in this commit' class='icon-speech-bubble ce_clickable_icon'></i> <i title='Compare this version to current' class='icon-number ce_clickable_icon'></i> ";
+						}
+						fileshtml += "<div><span class='ce_changelog_buttons'>" + t + "</span>" + changes[i].files[j] + "</div>";
+					}
+					table.append("<tr commitstart='" + changes[i].sha +"' commitend='" + changes[i].last_sha +"'><td class='nobr'>" + changes[i].time.format("YYYY-MM-DD  h:mma") + "</td><td class='nobr'>" + changes[i].time.fromNow() + "</td>" + type + "<td class='nobr'>" + changes[i].user + "</td><td class='ce_changelog_filescol'>" + fileshtml + "</td></tr>")
+                }
+            });
+			openHTMLTab("Change log", "Change log", $("<div class='ce_changelog'></div>").append(table));
 
-		} else if (p.hasClass('ce_app_refresh')) {
-			showModal({
-				title: "Info",
-				body: "<div class='alert alert-info'><i class='icon-alert'></i>Debug/Refresh coming soon</div>",
-				size: 300
-			});	
+			table.on("click", ".ce_clickable_icon", function(e){
+				var $elem = $(this);
+				if ($elem.hasClass('icon-number')) {
+					var filestr = $.trim($elem.parent().parent().text());
+					var filecommitstr = $elem.parents("tr").attr("commitstart") + ":./" + filestr;
+					
+					serverAction("git-show", filecommitstr, function(contents1){
+						serverAction("read", filestr, function(contents2){
+							openNewDiffTab("Diff: " + dodgyBasename(filestr), "# " + filecommitstr + "\n" + contents1, "# Current HEAD:./" + filestr + "\n" + contents2);		
+						});
+					});				
+				} else if ($elem.hasClass('icon-speech-bubble')) {
+					var filestr = $.trim($elem.parent().parent().text());
+					var filecommitstrstart = $elem.parents("tr").attr("commitstart");
+					var filecommitstrend = $elem.parents("tr").attr("commitend");
+					getFileHistory(filestr, filecommitstrstart, filecommitstrend);
+				}
+			});
 
 		} else {
 			// Clicked a tab that causes the left pane to change
@@ -108,14 +207,62 @@ require([
 		var parentPath = $(this).parent().attr('file');
 		fileSystemCreateNew(parentPath, !$(this).hasClass("ce_add_folder"));
 
-    }).on("click", ".ce_rename_icon", function(e){
-        e.stopPropagation();
-		fileSystemRename($(this).parent().attr('file'));
-		
-    }).on("click", ".ce_delete_icon", function(e){
-        e.stopPropagation();
-		filesystemDelete($(this).parent().attr('file'));
-		
+	}).on("contextmenu", ".ce_leftnav", function (e) {
+		var $t = $(this);
+		thisFile = $t.attr('file');
+		var actions = [];
+		if ($t.hasClass("ce_leftnav_editable")) {
+			// can rename, can trash
+			actions.push($("<div>Rename</div>").on("click", function(){ fileSystemRename(thisFile); }));
+			actions.push($("<div>Delete</div>").on("click", function(){ filesystemDelete(thisFile); }));
+			
+		} else if ($t.hasClass("ce_conf")) {
+			actions.push($("<div>Show without layering</div>").on("click", function(){  }));
+			actions.push($("<div>Show specification</div>").on("click", function(){  }));
+			actions.push($("<div>Show running config</div>").on("click", function(){ }));
+			actions.push($("<div>Compare running with filesystem</div>").on("click", function(){  }));
+			actions.push($("<div>Refresh endpoint</div>").on("click", function(){  }));
+			
+		}
+		// TODO this doesnt work with layered
+		if ($t.hasClass("ce_is_report")) {
+			// can show history
+			actions.push($("<div>View file history</div>").on("click", function(){ getFileHistory(thisFile); }));
+			// can compare
+			actions.push($("<div>Mark for comparison</div>").on("click", function(){ comparisonLeftFile = thisFile; comparisonLeftMode = action_mode; }));
+			if (comparisonLeftFile && !(comparisonLeftFile === thisFile && comparisonLeftMode === action_mode)) {
+				actions.push($("<div>Compare to " + htmlEncode(dodgyBasename(comparisonLeftFile)) + "</div>").on("click", function(){
+					// get both files 
+					Promise.all([
+						getContentsFromMode(comparisonLeftMode, comparisonLeftFile),
+						getContentsFromMode(action_mode, thisFile),
+					]).then(function(contents_left, contents_this){
+						openNewDiffTab("Differ", comparisonLeftFile + "\n" + contents_left, thisFile + "\n" + contents_this);
+					});
+				}));
+			}
+		}
+		if (! actions.length) {
+			return;
+		}
+		var $menu = $(".ce_context_menu_wrap");
+		$menu.empty().append(actions);		
+		e.preventDefault(); // To prevent the default context menu.
+		$t.css("background-color","rgba(0, 99, 153, 1)");
+		var windowHeight = $(window).height();
+		if((e.clientY + 200) > windowHeight) {
+			$menu.css({opacity:1, left:30 + e.clientX, bottom:$(window).height()-e.clientY, right:"auto", top:"auto"});
+		} else {
+			$menu.css({opacity:1, left:30 + e.clientX, bottom:"auto", right:"auto", top: e.clientY - 30});
+		}
+		$(".ce_context_menu_overlap").removeClass("ce_hidden");
+		$(document).on("click", function () {
+			$menu.removeAttr("style");
+			$(".ce_context_menu_overlap").addClass("ce_hidden");
+			$t.css("background-color","");
+			$(document).off("click");           
+		});
+
     }).on("click", ".ce_leftnav", function(){		
 		if (action_mode === 'btool-list') {
 			runBToolList($(this).attr('file'));
@@ -129,15 +276,31 @@ require([
 		} else if (action_mode === 'read') {
 			readFileOrFolderAndUpdate($(this).attr('file'));
 		}
-
-    }).on("mouseenter", ".ce_leftnav_editable", function(){
-        $(this).append("<i title='Rename' class='ce_rename_icon icon-pencil ce_right_icon ce_right_two'></i><i title='Delete' class='ce_delete_icon icon-trash ce_right_icon'></i>");
-        
-    }).on("mouseleave", ".ce_leftnav_editable", function(){
-        $(this).find('.ce_right_icon').remove();
     });
 
-	
+	function getContentsFromMode(mode, path){
+		if (mode === 'running') {
+			return getRunningConfig(path);
+		}
+		return new Promise(function(resolve, reject){
+			if (mode === 'btool-list') {
+				serverAction('btool-list', path, function(contents){
+					resolve($.trim(formatBtoolList(contents)));
+				});
+				
+			} else if (mode === 'spec') {
+				serverAction('spec', path, function(contents){			
+					resolve($.trim(contents));
+				});
+								
+			} else if (mode === 'read') {
+				serverAction('read', path, function(contents){
+					resolve($.trim(contents));
+				});
+			}			
+		});
+	}
+		
 	// Event handlers for the editor tabs
     $tabs.on("click", ".ce_close_tab", function(e){
         var idx = $(this).parent().index();
@@ -148,7 +311,7 @@ require([
         activateTab($(this).index());
         
     }).on("mouseenter", ".ce_tab", function(){
-        $(this).append("<i class='ce_close_tab icon-close  ce_right_icon'></i>");
+        $(this).append("<i class='ce_close_tab icon-close ce_clickable_icon ce_right_icon'></i>");
         
     }).on("mouseleave", ".ce_tab", function(){
         $(this).find('.ce_close_tab').remove();
@@ -202,7 +365,7 @@ require([
 							// save to localstorage
 							localStorage.setItem('ce_run_history', JSON.stringify(run_history));
 							serverAction("run", command, function(contents){
-								openNewTab('$ ' + command, contents, false, 'none');
+								openNewTab('$ ' + command, '$ ' + command, contents, false, 'none');
 							}, command);
 						}
 					}).modal('hide');
@@ -220,7 +383,7 @@ require([
 		serverAction('btool-check', undefined, function(contents){
 			contents = contents.replace(/^(No spec file for|Checking):.*\r?\n/mg,'').replace(/^\t\t/mg,'').replace(/\n{2,}/g,'\n\n');
 			if ($.trim(contents)) {
-				openNewTab('btool-check', contents, false, 'none');
+				openNewTab('Check config', 'btool-check', contents, false, 'none');
 			} else {
 				showModal({
 					title: "Info",
@@ -231,48 +394,59 @@ require([
 		});
 	}
 	
+	function getRunningConfig(path) {
+		return new Promise(function(resolve, reject){
+			service.get('/services/configs/conf-' + path, null, function(err, r) {
+				if (err) {
+					reject(err);
+				}
+				var str = "";
+				if (r && r.data && r.data.entry) {
+					for (var i = 0; i < r.data.entry.length; i++) {
+						str += "[" + r.data.entry[i].name + "]\n";
+						var props = Object.keys(r.data.entry[i].content);
+						props.sort();
+						for (var j = 0; j < props.length; j++) {
+							if (props[j].substr(0,4) !== "eai:" && !(props[j] === "disabled" && ! r.data.entry[i].content[props[j]])) {
+								str += props[j] + " = " + r.data.entry[i].content[props[j]] + "\n";
+							}
+						}
+					}
+					resolve(str);
+				} else {
+					reject();
+				}
+			});							
+		})	
+	}
+	
 	function runningVsLayered(path){
 		var ce_running_diff = $('.ce_running_diff:checked').length;
-		var tab_path = 'RunningDiff: ' + path;
+		var tab_path = 'Running: ' + path;
 		if (ce_running_diff) {
-			tab_path = 'Running: ' + path;
+			tab_path = 'RunningDiff: ' + path;
 		}
 		if (! tabAlreadyOpen(tab_path)) {
 			serverAction('btool-list', path, function(contents){
-				var c = formatBtoolList(contents);
+				var c = formatBtoolList(contents, true);
 				if ($.trim(c)) {
-					// Experimental feature to compare filesystem config against running config
-					service.get('/services/configs/conf-' + path, null, function(err, r) {
-						//console.log(r, err);
-						var str = "";
-						if (r && r.data && r.data.entry) {
-							for (var i = 0; i < r.data.entry.length; i++) {
-								str += "[" + r.data.entry[i].name + "]\n";
-								var props = Object.keys(r.data.entry[i].content);
-								props.sort();
-								for (var j = 0; j < props.length; j++) {
-									if (props[j].substr(0,4) !== "eai:" && !(props[j] === "disabled" && ! r.data.entry[i].content[props[j]])) {
-										str += props[j] + " = " + r.data.entry[i].content[props[j]] + "\n";
-									}
-								}
-							}
-							if (ce_running_diff) {
-								openNewDiffTab(
-									tab_path, 
-									"# Layered (filesystem) config\n" + formatRunningConfig(contents), 
-									"# Running config\n" + str
-								);
-							} else {
-								openNewTab(tab_path, formatRunningConfig(contents));
-							}
+					getRunningConfig(path).then(function(contents_running){
+						if (ce_running_diff) {
+							openNewDiffTab(
+								tab_path, 
+								"# Layered (filesystem) config\n" + formatLikeRunningConfig(contents), //formatLikeRunningConfig(contents), 
+								"# Running config\n" + contents_running
+							);
 						} else {
-							showModal({
-								title: "Warning",
-								body: "<div class='alert alert-warning'><i class='icon-alert'></i>Could not get retreieve running config for " + htmlEncode(path) + "</div>",
-								size: 300
-							});							
-						}
-					});			
+							openNewTab(tab_path, tab_path, contents_running); //formatLikeRunningConfig(contents));
+						}						
+					}).catch(function(){
+						showModal({
+							title: "Warning",
+							body: "<div class='alert alert-warning'><i class='icon-alert'></i>Could not get retreieve running config for " + htmlEncode(path) + "</div>",
+							size: 300
+						});								
+					});	
 				} else {
 					showModal({
 						title: "Error",
@@ -290,7 +464,7 @@ require([
 			serverAction('btool-list', path, function(contents){
 				var c = formatBtoolList(contents);
 				if ($.trim(c)) {
-					var ecfg = openNewTab(tab_path, c, false, 'ini');
+					var ecfg = openNewTab(tab_path, tab_path, c, false, 'ini');
 					ecfg.btoollist = contents;			
 				} else {
 					showModal({
@@ -308,7 +482,7 @@ require([
 		if (! tabAlreadyOpen(tab_path)) {
 			serverAction('spec', path, function(contents){			
 				if ($.trim(contents)) {
-					openNewTab(tab_path, contents, false, 'ini');
+					openNewTab(tab_path, tab_path, contents, false, 'ini');
 				} else {
 					showModal({
 						title: "Error",
@@ -330,11 +504,11 @@ require([
 		if (! tabAlreadyOpen(path)) {
 			serverAction('read', path, function(contents){
 				if (typeof contents === "string") {					
-					var ecfg = openNewTab(path, contents, true);
+					var ecfg = openNewTab(path, dodgyBasename(path), contents, true);
 					
 					var re = /([^\/\\]+).conf$/;
 					var found = path.match(re);
-					if (found && confIsTrue('match_conf_against_btool')) {
+					if (found && confIsTrue('conf_validate_on_save')) {
 						ecfg.attemptBtooling = found[1];
 						highlightBadConfig(ecfg);
 						if (confFiles.hasOwnProperty(found[1])) {
@@ -352,7 +526,8 @@ require([
 						return a.toLowerCase().localeCompare(b.toLowerCase());
 					});
 					$dirlist.empty();
-					var dir = $("<li class='ce_leftnavfolder'><span></span><bdi></bdi><i title='Create new folder' class='ce_add_folder ce_right_icon ce_right_two icon-folder'></i><i title='Create new file' class='ce_add_file ce_right_icon icon-report'></i></li>").attr("file", path).attr("title", path).appendTo($dirlist);
+					var dir = $("<li class='ce_leftnavfolder'><span></span><bdi></bdi><i title='New folder' class='ce_add_folder ce_clickable_icon ce_right_icon ce_right_two icon-folder'></i>" +
+								"<i title='New file' class='ce_add_file ce_clickable_icon ce_right_icon icon-report'></i></li>").attr("file", path).attr("title", path).appendTo($dirlist);
 					var span = dir.find("span").text(path + '/');
 					dir.find("bdi").text(path + '/');
 					if (span.width() > (dir.width() - 50)) {
@@ -366,7 +541,7 @@ require([
 						if (contents[i].substr(0,1) === "F") {
 							icon = "report";
 						}
-						$("<li class='ce_leftnav ce_leftnav_editable'></li>").text(contents[i].substr(1)).attr("file", path + "/" + contents[i].substr(1)).prepend("<i class='icon-" + icon + "'></i> ").appendTo($dirlist);
+						$("<li class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'></li>").text(contents[i].substr(1)).attr("file", path + "/" + contents[i].substr(1)).prepend("<i class='icon-" + icon + "'></i> ").appendTo($dirlist);
 					}
 				}
 			});
@@ -492,12 +667,82 @@ require([
 		});	
 	}
 	
+	function getFileHistory(file, commitstart, commitend){
+		serverAction("git-history", file, function(contents){
+			contents = $.trim(contents);
+			if (! contents) {
+				showModal({
+					title: "Warning",
+					body: "<div class='alert alert-warning'><i class='icon-alert'></i>No change history found for: <br><br><code>" + htmlEncode(file) + "</code></div>",
+					size: 400
+				});				
+				return;
+			}
+			lines = htmlEncode(contents).split(/\r?\n/);
+			var str = "";
+			var firstThree;
+			var time;
+			var hash;
+			var capturing = false;
+			var stopOnNext = false;
+			var closeBlock = false;
+			if (! commitstart) {
+				capturing = true;
+			}
+			for (var i = 0; i < lines.length; i++) {
+				firstThree = lines[i].substr(0,3);
+				if (firstThree === "com") {
+					if (stopOnNext) {
+						break;
+					}
+					hash = lines[i].substr(7);
+					if (commitstart && hash === commitstart) {
+						capturing = true;
+					} else if (capturing && commitend && hash === commitend) {
+						stopOnNext = true;
+					}
+				}
+				//commit 2498c5b83158307ac7210dd1fd77abfda5fe21fb
+				if (! capturing || firstThree === "Aut" || firstThree === "---" || firstThree === "+++"|| firstThree === "ind"|| firstThree === "dif") {
+					continue;
+				}
+				if (lines[i].substr(0,4) === "Date") {
+					if (closeBlock) {
+						str += "</div>";
+						closeBlock = false;
+					}					
+					time = moment(new Date(lines[i].substr(5)));
+					str += "<p><h1>" + time.fromNow() + " <span>(" + time.format("YYYY-MM-DD  h:mma") + ") - " + lines[i+2] + "</span></h1></p>";
+					i+=3;
+				} else if (lines[i].substr(0,2) === "@@") {
+					if (closeBlock) {
+						str += "</div>";
+					}					
+					str += "<p>" + lines[i].replace(/^(.* @@)(.*)$/, "$1</p><div class='ce_diff_change'><p>$2</p>");
+					closeBlock = true;
+				} else if (lines[i].substr(0,1) === "+") {
+					if (lines[i].length > 1) {
+						str += "<p class='ce_diff_addition'>" + lines[i].substr(1) + "</p>";
+					}
+				} else if (lines[i].substr(0,1) === "-"){
+					if (lines[i].length > 1) {
+						str += "<p class='ce_diff_deletion'>" + lines[i].substr(1) + "</p>";
+					}
+				} else {
+					str += "<p>" + lines[i]+ "</p>";
+				}
+			}
+			
+			openHTMLTab("History: " + file, "History: " + dodgyBasename(file), $("<div class='ce_file_history'></div>").html(str));		
+		});
+	}
+	
 	// Might be either the effective config or spec config screen
 	function buildLeftPane() {
 		$dirlist.empty();
 		if (action_mode === 'btool-list') {
-			$("<li class='ce_leftnavfolder'><i class='icon-settings'></i> Show default values <input type='checkbox' checked='checked' class='ce_btool_default_values ce_right_icon ce_right_two'></li>" +
-			  "<li class='ce_leftnavfolder'><i class='icon-settings'></i> Show originating path <input type='checkbox' checked='checked' class='ce_btool_path ce_right_icon ce_right_two'></li>").appendTo($dirlist);
+			$("<li class='ce_leftnavfolder'><i class='icon-settings'></i> Show default values <input type='checkbox' checked='checked' class='ce_btool_default_values ce_clickable_icon ce_right_icon ce_right_two'></li>" +
+			  "<li class='ce_leftnavfolder'><i class='icon-settings'></i> Show originating path <input type='checkbox' checked='checked' class='ce_btool_path ce_clickable_icon ce_right_icon ce_right_two'></li>").appendTo($dirlist);
 			$dirlist.find('input').on('change', function(){
 				for (var i = 0; i < editors.length; i++) {
 					if (editors[i].hasOwnProperty('btoollist')) {
@@ -507,10 +752,10 @@ require([
 			});
 		}
 		if (action_mode === 'running') {
-			$("<li class='ce_leftnavfolder'><i class='icon-settings'></i> Show as diff <input type='checkbox' checked='checked' class='ce_running_diff ce_right_icon'></li>").appendTo($dirlist);
+			$("<li class='ce_leftnavfolder'><i class='icon-settings'></i> Show as diff <input type='checkbox' checked='checked' class='ce_running_diff ce_clickable_icon ce_right_icon'></li>").appendTo($dirlist);
 		}
 		for (var i = 0; i < confFilesSorted.length; i++) {
-			$("<li class='ce_leftnav'></li>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-report'></i> ").appendTo($dirlist);
+			$("<li class='ce_leftnav ce_conf'></li>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-report'></i> ").appendTo($dirlist);
 		}
 	}
 	
@@ -571,14 +816,17 @@ require([
 	}
 	
 	function closeTabNow(idx) {
-		editors[idx].editor.dispose();
+		if (editors[idx].hasOwnProperty("editor")) {
+			editors[idx].editor.dispose();
+		}
 		editors[idx].tab.remove();
 		editors[idx].container.remove();
 		editors.splice(idx, 1);
 		// if there are still tabs open, find the most recently used tab and activate that one
-		if ($tabs.children(".ce_active").length === 0) {
+		if ($tabs.children().length === 0) {
 			activeTab = null;
 		
+        // if there is already a tab selected
 		} else if ($tabs.children(".ce_active").length === 0) {
 			var last_used_idx, 
 				newest;
@@ -592,7 +840,7 @@ require([
 		}		
 	}
 	
-	function openNewTab(filename, contents, canBeSaved, language) {
+	function openNewTab(filename, tab_title, contents, canBeSaved, language) {
 		var ecfg = {};
 		hideAllTabs();
 		if (!language) {
@@ -613,10 +861,10 @@ require([
 		}
 		ecfg.container = $("<div></div>").appendTo($container);
 		ecfg.file = filename;
-		if (filename === "") {
-			filename = "Settings"
+		if (tab_title === "") {
+			tab_title = "Settings"
 		}
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + dodgyBasename(filename) + "</div>").attr("title", filename).appendTo($tabs);
+		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).appendTo($tabs);
 		ecfg.last_opened = Date.now();
 		ecfg.hasChanges = false;
 		ecfg.editor = monaco.editor.create(ecfg.container[0], {
@@ -636,7 +884,7 @@ require([
 				// check against saved copy
 				if (ecfg.editor.getValue() !== ecfg.server_content) {
 					if (!ecfg.hasChanges) {
-						ecfg.tab.append("<i class='ce_right_icon icon-alert-circle'></i>");
+						ecfg.tab.append("<i class='ce_right_icon ce_clickable_icon icon-alert-circle'></i>");
 						ecfg.hasChanges = true;
 					}
 				} else {
@@ -706,6 +954,21 @@ require([
 		return ecfg;		
 	}
 	
+	function openHTMLTab(filename, tab_title, contents) {
+		var ecfg = {};
+		hideAllTabs();
+		ecfg.container = $("<div></div>").appendTo($container);
+		ecfg.container.append(contents);
+		ecfg.file = filename;
+		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).appendTo($tabs);
+		ecfg.last_opened = Date.now();
+		ecfg.hasChanges = false;
+		ecfg.server_content = '';
+		activeTab = editors.length;
+		editors.push(ecfg);	
+		return ecfg;			
+	}
+	
 	function openNewDiffTab(title, right, left) {
 		var ecfg = {};
 		hideAllTabs();
@@ -741,9 +1004,13 @@ require([
 	
 	// Make a rest call to our backend python script
 	function serverAction(type, path, callback, param1) {
+		inFlightRequests++;
 		$('.ce_saving_icon').removeClass('ce_hidden');
 		service.post('/services/config_explorer', {action: type, path: path, param1: param1}, function(err, r) {
-			$('.ce_saving_icon').addClass('ce_hidden');
+			inFlightRequests--;
+			if (inFlightRequests === 0) {
+				$('.ce_saving_icon').addClass('ce_hidden');
+			}
 			var errText = '';
 			//console.log(type, err, r);
 			if (err) {
@@ -785,7 +1052,11 @@ require([
 					body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + errText + "</pre></div>",
 				});
 				return;				
-			}					
+			}
+// temp debugging
+			if (r.data.git) {
+				openNewTab('git output', 'git output', r.data.git, false, 'none');
+			}			
 
 			if (typeof callback === 'function') {
 				callback(r.data.result);	
@@ -794,7 +1065,7 @@ require([
 	}
 
 	// Try to build a conf file from calling the rest services. turns out this isn't great
-	function formatRunningConfig(contents) {
+	function formatLikeRunningConfig(contents) {
 		return contents.replace(/^.+?splunk[\/\\]etc[\/\\].*?\.conf\s+(?:(.+) = (.*)|(\[.+))\r?\n/img,function(all, g1, g2, g3){
 			if (g3 !== undefined) { return g3 + "\n"; }
 			if (g2.toLowerCase() == "true") { return g1 + " = 1\n";}
@@ -804,10 +1075,14 @@ require([
 	}
 	
 	// Formats the output of "btool list" depending on what checkboxes are selected in the left pane
-	function formatBtoolList(contents) {
+	function formatBtoolList(contents, just_get_file) {
 		var indent = 80;
 		var ce_btool_default_values = $('.ce_btool_default_values:checked').length;
 		var ce_btool_path = $('.ce_btool_path:checked').length;
+		if (just_get_file) {
+			ce_btool_default_values = true;
+			ce_btool_path = false;
+		}
 		return contents.replace(/^.+?splunk[\/\\]etc[\/\\](.*?\.conf)\s+(.+)(\r?\n)/img,function(all, g1, g2, g3){
 			var path = '';
 			// I am pretty sure that stanzas cant be set to default when containing a child that isnt
@@ -854,7 +1129,7 @@ require([
 							currentStanza = rows[i];
 						}
                         if (seenStanzas.hasOwnProperty(currentStanza)) {
-                            newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine' }});
+                            newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Stanza already seen in this file"}]  }});
                         }
                         seenStanzas[currentStanza] = 1;
                         seenProps =  {};
@@ -863,17 +1138,17 @@ require([
 						if (found) {
 							if (found[1].substr(0,1) !== "#") {
                                 if (seenProps.hasOwnProperty(found[1])) {
-                                    newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine' }});
+                                    newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Duplicate key in stanza"}]  }});
                                 }   
                                 seenProps[found[1]] = 1;
 								if (lookup.hasOwnProperty(currentStanza) && lookup[currentStanza].hasOwnProperty(found[1]) && lookup[currentStanza][found[1]] === ecfg.file) {
                                     if (ecfg.hasOwnProperty('hinting') && found.length > 2 && ! (ecfg.hinting[""].hasOwnProperty(found[2]) || (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2]) ) )) {
-                                        newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine' }});
+                                        newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Unexpected property"}]  }});
                                     } else {
-                                        newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine' }});
+                                        newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in `btool` output"}]  }});
                                     }
 								} else {
-									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine' }});
+									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine', glyphMarginHoverMessage: [{value:"Not found in `btool` output"}] }});
 								}
 							}
 						}			

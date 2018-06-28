@@ -16,14 +16,15 @@ class req(splunk.rest.BaseRestHandler):
 		
 		# From here: http://dev.splunk.com/view/logging/SP-CAAAFCN
 		def setup_logging():
-			logger = logging.getLogger(app_name)
+			logger = logging.getLogger("a")
 			file_handler = logging.handlers.RotatingFileHandler(os.path.join(SPLUNK_HOME, 'var', 'log', 'splunk', app_name + ".log"), mode='a', maxBytes=25000000, backupCount=2)
-			formatter = logging.Formatter("%(asctime)s %(levelname)s pid=%(process)d tid=%(threadName)s file=%(filename)s:%(funcName)s:%(lineno)d | %(message)s")
+			formatter = logging.Formatter("%(created)f %(levelname)s pid=%(process)d %(message)s")
 			file_handler.setFormatter(formatter)
 			logger.addHandler(file_handler)	
+			logger.setLevel("INFO");
 			return logger
 		logger = setup_logging()
-		
+        
 		def runCommand(cmds, use_shell=False):
 			my_env = os.environ.copy()
 			if confIsTrue("git"):
@@ -34,12 +35,21 @@ class req(splunk.rest.BaseRestHandler):
 			return str(o[0]) + "\n" + str(o[1]) + "\n"
 
 		def git(message, file1, file2=None):
+			git_output = ""
 			if confIsTrue("git"):
 				if file2 == None:
-					runCommand(['git','add', file1])
+					git_output += '$git add ' + file1 + "\n"
+					git_output += runCommand(['git','add', file1])
+					git_output += "\n\n"
 				else:
-					runCommand(['git','add', file1, file2])
-				runCommand(['git','commit','-m', message])		
+					git_output += '$git add ' + file1 + " " + file2 + "\n"
+					git_output += runCommand(['git','add', file1, file2])
+					git_output += "\n\n"
+				git_output += '$git commit -m ' + message + "\n"
+				git_output_tmp = runCommand(['git','commit','-m', message])
+				git_output += re.sub(r"On branch \S*\s*\nUntracked [\s\S]+ but untracked files present", '', git_output_tmp)
+				git_output += "\n\n"
+			return git_output
 
 		def confIsTrue(param):
 			if conf["default"][param].lower().strip() in ("1", "true", "yes", "t", "y"):
@@ -50,6 +60,7 @@ class req(splunk.rest.BaseRestHandler):
 			result = ""
 			status = ""
 			debug = ""
+			git_output = ""
 			action = self.request['form']['action']
 			action_item = self.request['form']['path']
 			param1 = self.request['form']['param1']
@@ -88,7 +99,7 @@ class req(splunk.rest.BaseRestHandler):
 					if not os.path.exists(action_item):
 						shutil.copyfile(os.path.join(os.path.dirname( __file__ ), '..','default', app_name + '.conf'), action_item)
 					
-				if action[:5] == 'btool' or action == 'run' or action == 'init':
+				if action[:5] == 'btool' or action == 'run' or action == 'init' or action[:3] == 'git':
 					system = platform.system()
 					os.chdir(SPLUNK_HOME)
 					if system != "Windows" and system != "Linux":
@@ -105,7 +116,17 @@ class req(splunk.rest.BaseRestHandler):
 							result['files'] = runCommand([cmd, 'btool', 'check', '--debug'])
 							result['conf'] = conf["default"]
 
-						if action == 'btool-check':
+						elif action == 'git-log':
+							result = runCommand(['git', 'log', '--stat', '--max-count=200'])
+
+						elif action == 'git-history':
+							debug = action_item
+							result = runCommand(['git', 'log', '--follow', '-p', '--', action_item])
+
+						elif action == 'git-show':
+							result = runCommand(['git', 'show', action_item])
+							
+						elif action == 'btool-check':
 							result = runCommand([cmd, 'btool', 'check', '--debug'])
 							result = result + runCommand([cmd, 'btool', 'find-dangling'])
 							result = result + runCommand([cmd, 'btool', 'validate-strptime'])
@@ -133,14 +154,15 @@ class req(splunk.rest.BaseRestHandler):
 								with open(spec_path, 'r') as fh:
 									result = result + fh.read()
 						
+						status = "success"
+						
 					else:
-						base_path_abs = os.path.abspath(os.path.join(SPLUNK_HOME))
+						base_path_abs = str(os.path.abspath(os.path.join(SPLUNK_HOME)))
 						file_path = os.path.join(SPLUNK_HOME, action_item)
-						file_path_abs = os.path.abspath(file_path)
-							
-						if (len(str(file_path_abs)) < len(str(base_path_abs))):
+						file_path_abs = str(os.path.abspath(file_path))
+						if file_path_abs.find(base_path_abs) != 0:
 							status = "error" 
-							result = "Unable to access files out of splunk directory"
+							result = "Unable to access path [" + file_path_abs + "] out of splunk directory [" + base_path_abs + "]"
 							
 						else:
 							if action == 'save':
@@ -157,7 +179,7 @@ class req(splunk.rest.BaseRestHandler):
 									with open(file_path, "w") as fh:
 										fh.write(param1)
 									
-									git(user + " save ", file_path)
+									git_output += git(user + " save ", file_path)
 									status = "success" 
 									 
 							elif action == 'read':
@@ -192,7 +214,7 @@ class req(splunk.rest.BaseRestHandler):
 								else:
 									os.remove(file_path)
 									
-								git(user + " deleted ", file_path)
+								git_output += git(user + " deleted ", file_path)
 								status = "success"
 								
 							else:
@@ -209,7 +231,7 @@ class req(splunk.rest.BaseRestHandler):
 									else:
 										git("unknown", file_path)
 										os.rename(file_path, new_path)
-										git(user + " renamed", new_path, file_path)
+										git_output += git(user + " renamed", new_path, file_path)
 										status = "success"
 										
 								else:
@@ -224,15 +246,15 @@ class req(splunk.rest.BaseRestHandler):
 										
 									elif action == 'newfile':
 										open(new_path, 'w').close()
-										git(user + " new", new_path)
+										git_output += git(user + " new", new_path)
 										status = "success"
 									
 			self.response.setHeader('content-type', 'application/json')
-			self.response.write(json.dumps({'result': result, 'status': status, 'debug': debug}, ensure_ascii=False))
+			self.response.write(json.dumps({'result': result, 'status': status, 'debug': debug, 'git': git_output}, ensure_ascii=False))
 			
 			if action == 'save' or param1 == 'undefined':
 				param1 = ""
-			reason = ""			
+			reason = ""		
 			if status == "error":
 				reason = result
 			logger.info('user={} action={} item="{}" param1="{}" status={} reason="{}"'.format(user, action, action_item, status, param1, reason))
