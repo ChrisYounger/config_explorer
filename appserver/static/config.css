@@ -161,7 +161,7 @@
     top: 0;
     display: flex;
     background-color: #1e1e1e;
-    color: #ccc;
+    color: white;
     border-bottom: 1px solid black;
 }
 .ce_tab {
@@ -187,6 +187,7 @@
     cursor: pointer;
     color: #c3cbd4; 
 }
+.ce-dim{ color: #ccc;}
 .ce_tab_new > i:hover {
     color: #00A4FD;
 }
@@ -224,6 +225,9 @@
 }
 .ce_contents > div {
     height: 100%
+}
+.ce_contents p {
+	color: white;
 }
 .ce_hidden {
     display:none !important;

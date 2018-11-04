@@ -188,14 +188,7 @@ require([
 				action_mode = 'read';
 				
 			} else if (p.hasClass('ce_app_effective') || p.hasClass('ce_app_specs') || p.hasClass('ce_app_running')) {
-				// The left pane is exactly the same for effective spec or app specs modes.
-				if (p.hasClass('ce_app_effective')) {
-					action_mode = 'btool-list';
-				} else if (p.hasClass('ce_app_running')) {
-					action_mode = 'running';
-				} else {
-					action_mode = 'spec';
-				}
+				action_mode = 'btool-list';
 				buildLeftPane();
 			}
 		}
@@ -217,11 +210,13 @@ require([
 			actions.push($("<div>Delete</div>").on("click", function(){ filesystemDelete(thisFile); }));
 			
 		} else if ($t.hasClass("ce_conf")) {
-			actions.push($("<div>Show without layering</div>").on("click", function(){  }));
-			actions.push($("<div>Show specification</div>").on("click", function(){  }));
-			actions.push($("<div>Show running config</div>").on("click", function(){ }));
-			actions.push($("<div>Compare running with filesystem</div>").on("click", function(){  }));
-			actions.push($("<div>Refresh endpoint</div>").on("click", function(){  }));
+			
+			actions.push($("<div>Show btool output with originating path</div>").on("click", function(){ runBToolList(thisFile, true, true); })); // runBToolList(path, ce_btool_default_values, ce_btool_path)
+			actions.push($("<div>Show btool output hiding 'default' settings</div>").on("click", function(){ runBToolList(thisFile, false, true); }));
+			actions.push($("<div>Show .spec file</div>").on("click", function(){ displaySpecFile(thisFile); }));
+			actions.push($("<div>Show running config</div>").on("click", function(){ runningVsLayered(thisFile, false); }));
+			actions.push($("<div>Compare running against btool output</div>").on("click", function(){ runningVsLayered(thisFile, true); }));
+			//actions.push($("<div>Refresh endpoint</div>").on("click", function(){  }));
 			
 		}
 		// TODO this doesnt work with layered
@@ -237,7 +232,7 @@ require([
 						getContentsFromMode(comparisonLeftMode, comparisonLeftFile),
 						getContentsFromMode(action_mode, thisFile),
 					]).then(function(contents_left, contents_this){
-						openNewDiffTab("Differ", comparisonLeftFile + "\n" + contents_left, thisFile + "\n" + contents_this);
+						openNewDiffTab("Compare", comparisonLeftFile + "\n" + contents_left, thisFile + "\n" + contents_this);
 					});
 				}));
 			}
@@ -263,16 +258,10 @@ require([
 			$(document).off("click");           
 		});
 
-    }).on("click", ".ce_leftnav", function(){		
+    }).on("click", ".ce_leftnav", function(){	
 		if (action_mode === 'btool-list') {
-			runBToolList($(this).attr('file'));
-			
-		} else if (action_mode === 'spec') {
-			displaySpecFile($(this).attr('file'));
-			
-		} else if (action_mode === 'running') {
-			runningVsLayered($(this).attr('file'));
-			
+			runBToolList($(this).attr('file'), true, false);
+
 		} else if (action_mode === 'read') {
 			readFileOrFolderAndUpdate($(this).attr('file'));
 		}
@@ -285,7 +274,7 @@ require([
 		return new Promise(function(resolve, reject){
 			if (mode === 'btool-list') {
 				serverAction('btool-list', path, function(contents){
-					resolve($.trim(formatBtoolList(contents)));
+					resolve($.trim(formatBtoolList(contents, true, false)));
 				});
 				
 			} else if (mode === 'spec') {
@@ -420,21 +409,21 @@ require([
 		})	
 	}
 	
-	function runningVsLayered(path){
-		var ce_running_diff = $('.ce_running_diff:checked').length;
-		var tab_path = 'Running: ' + path;
-		if (ce_running_diff) {
-			tab_path = 'RunningDiff: ' + path;
+	function runningVsLayered(path, compare){
+		//var ce_running_diff = $('.ce_running_diff:checked').length;
+		var tab_path = '<span class="ce-dim">Running:</span> ' + path;
+		if (compare) {
+			tab_path = '<span class="ce-dim">RunningDiff:<div> ' + path;
 		}
 		if (! tabAlreadyOpen(tab_path)) {
 			serverAction('btool-list', path, function(contents){
-				var c = formatBtoolList(contents, true);
+				var c = formatBtoolList(contents, true, false);
 				if ($.trim(c)) {
 					getRunningConfig(path).then(function(contents_running){
-						if (ce_running_diff) {
+						if (compare) {
 							openNewDiffTab(
 								tab_path, 
-								"# Layered (filesystem) config\n" + formatLikeRunningConfig(contents), //formatLikeRunningConfig(contents), 
+								"# Filesystem (layered) config\n" + formatLikeRunningConfig(contents), //formatLikeRunningConfig(contents), 
 								"# Running config\n" + contents_running
 							);
 						} else {
@@ -458,14 +447,23 @@ require([
 		}	
 	}
 	
-	function runBToolList(path){
-		var tab_path = 'Layered: ' + path;
-		if (! tabAlreadyOpen(tab_path)) {
+	function runBToolList(path, ce_btool_default_values, ce_btool_path){
+		var tab_path = '<span class="ce-dim">Btool:</span> ' + path;
+
+		if (! ce_btool_default_values) { 
+			tab_path += " <span class='ce-dim'>(no defaults)</span>"  
+		} else if (ce_btool_path) { 
+			tab_path += " <span class='ce-dim'>--debug</span>"  
+		}
+		if (! tabAlreadyOpen(tab_path, true, false)) {
 			serverAction('btool-list', path, function(contents){
-				var c = formatBtoolList(contents);
+				var c = formatBtoolList(contents, ce_btool_default_values, ce_btool_path);
 				if ($.trim(c)) {
 					var ecfg = openNewTab(tab_path, tab_path, c, false, 'ini');
-					ecfg.btoollist = contents;			
+					ecfg.btoollist = contents;
+					serverAction('spec-hinting', path, function(c){
+						ecfg.hinting = buildHintingLookup(path, c);
+					});					
 				} else {
 					showModal({
 						title: "Warning",
@@ -477,8 +475,9 @@ require([
 		}	
 	}	
 	
+	
 	function displaySpecFile(path) {
-		var tab_path = 'Spec: ' + path;
+		var tab_path = '<span class="ce-dim">Spec:<span> ' + path;
 		if (! tabAlreadyOpen(tab_path)) {
 			serverAction('spec', path, function(contents){			
 				if ($.trim(contents)) {
@@ -740,20 +739,7 @@ require([
 	// Might be either the effective config or spec config screen
 	function buildLeftPane() {
 		$dirlist.empty();
-		if (action_mode === 'btool-list') {
-			$("<li class='ce_leftnavfolder'><i class='icon-settings'></i> Show default values <input type='checkbox' checked='checked' class='ce_btool_default_values ce_clickable_icon ce_right_icon ce_right_two'></li>" +
-			  "<li class='ce_leftnavfolder'><i class='icon-settings'></i> Show originating path <input type='checkbox' checked='checked' class='ce_btool_path ce_clickable_icon ce_right_icon ce_right_two'></li>").appendTo($dirlist);
-			$dirlist.find('input').on('change', function(){
-				for (var i = 0; i < editors.length; i++) {
-					if (editors[i].hasOwnProperty('btoollist')) {
-						editors[i].editor.setValue(formatBtoolList(editors[i].btoollist));
-					}
-				}
-			});
-		}
-		if (action_mode === 'running') {
-			$("<li class='ce_leftnavfolder'><i class='icon-settings'></i> Show as diff <input type='checkbox' checked='checked' class='ce_running_diff ce_clickable_icon ce_right_icon'></li>").appendTo($dirlist);
-		}
+
 		for (var i = 0; i < confFilesSorted.length; i++) {
 			$("<li class='ce_leftnav ce_conf'></li>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-report'></i> ").appendTo($dirlist);
 		}
@@ -871,6 +857,7 @@ require([
 			automaticLayout: true,
 			value: contents,
 			language: language,
+			readOnly: ! canBeSaved,
 			theme: "vs-dark",
 			glyphMargin: true
 			
@@ -1075,14 +1062,8 @@ require([
 	}
 	
 	// Formats the output of "btool list" depending on what checkboxes are selected in the left pane
-	function formatBtoolList(contents, just_get_file) {
+	function formatBtoolList(contents, ce_btool_default_values, ce_btool_path) {
 		var indent = 80;
-		var ce_btool_default_values = $('.ce_btool_default_values:checked').length;
-		var ce_btool_path = $('.ce_btool_path:checked').length;
-		if (just_get_file) {
-			ce_btool_default_values = true;
-			ce_btool_path = false;
-		}
 		return contents.replace(/^.+?splunk[\/\\]etc[\/\\](.*?\.conf)\s+(.+)(\r?\n)/img,function(all, g1, g2, g3){
 			var path = '';
 			// I am pretty sure that stanzas cant be set to default when containing a child that isnt
@@ -1143,12 +1124,12 @@ require([
                                 seenProps[found[1]] = 1;
 								if (lookup.hasOwnProperty(currentStanza) && lookup[currentStanza].hasOwnProperty(found[1]) && lookup[currentStanza][found[1]] === ecfg.file) {
                                     if (ecfg.hasOwnProperty('hinting') && found.length > 2 && ! (ecfg.hinting[""].hasOwnProperty(found[2]) || (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2]) ) )) {
-                                        newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Unexpected property"}]  }});
+                                        //newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Unexpected property"}]  }});
                                     } else {
                                         newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in `btool` output"}]  }});
                                     }
 								} else {
-									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine', glyphMarginHoverMessage: [{value:"Not found in `btool` output"}] }});
+									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine', glyphMarginHoverMessage: [{value:"Not found in `btool` output (overridden somewhere else?)"}] }});
 								}
 							}
 						}			
