@@ -1359,7 +1359,6 @@ require([
 			var rex = /^Checking: .*[\/\\]([^\/\\]+?).conf\s*$/gmi,
 				res;
 			conf = data.conf;
-			console.log(conf);
 			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ')
 			if(confIsTrue('write_access')) {
 				$dashboardBody.removeClass('ce_no_write_access');
