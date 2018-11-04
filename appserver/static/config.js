@@ -167,7 +167,7 @@ require([
 					
 					serverAction("git-show", filecommitstr, function(contents1){
 						serverAction("read", filestr, function(contents2){
-							openNewDiffTab("Diff: " + dodgyBasename(filestr), "# " + filecommitstr + "\n" + contents1, "# Current HEAD:./" + filestr + "\n" + contents2);		
+							openNewDiffTab("Diff: " + filestr, "Diff: " + dodgyBasename(filestr), "# " + filecommitstr + "\n" + contents1, "# Current HEAD:./" + filestr + "\n" + contents2);		
 						});
 					});				
 				} else if ($elem.hasClass('icon-speech-bubble')) {
@@ -214,15 +214,17 @@ require([
 			actions.push($("<div>Show btool output with originating path</div>").on("click", function(){ runBToolList(thisFile, true, true); })); // runBToolList(path, ce_btool_default_values, ce_btool_path)
 			actions.push($("<div>Show btool output hiding 'default' settings</div>").on("click", function(){ runBToolList(thisFile, false, true); }));
 			actions.push($("<div>Show .spec file</div>").on("click", function(){ displaySpecFile(thisFile); }));
-			actions.push($("<div>Show running config</div>").on("click", function(){ runningVsLayered(thisFile, false); }));
-			actions.push($("<div>Compare running against btool output</div>").on("click", function(){ runningVsLayered(thisFile, true); }));
+			actions.push($("<div>Show live config</div>").on("click", function(){ runningVsLayered(thisFile, false); }));
+			actions.push($("<div>Compare live config against btool output</div>").on("click", function(){ runningVsLayered(thisFile, true); }));
 			//actions.push($("<div>Refresh endpoint</div>").on("click", function(){  }));
 			
 		}
 		// TODO this doesnt work with layered
 		if ($t.hasClass("ce_is_report")) {
-			// can show history
-			actions.push($("<div>View file history</div>").on("click", function(){ getFileHistory(thisFile); }));
+			if (confIsTrue('git')) {
+				// can show history
+				actions.push($("<div>View file history</div>").on("click", function(){ getFileHistory(thisFile); }));
+			}
 			// can compare
 			actions.push($("<div>Mark for comparison</div>").on("click", function(){ comparisonLeftFile = thisFile; comparisonLeftMode = action_mode; }));
 			if (comparisonLeftFile && !(comparisonLeftFile === thisFile && comparisonLeftMode === action_mode)) {
@@ -232,7 +234,7 @@ require([
 						getContentsFromMode(comparisonLeftMode, comparisonLeftFile),
 						getContentsFromMode(action_mode, thisFile),
 					]).then(function(contents_left, contents_this){
-						openNewDiffTab("Compare", comparisonLeftFile + "\n" + contents_left, thisFile + "\n" + contents_this);
+						openNewDiffTab("Compare " + thisFile + " " + comparisonLeftFile, "Compare", comparisonLeftFile + "\n" + contents_left, thisFile + "\n" + contents_this);
 					});
 				}));
 			}
@@ -354,7 +356,7 @@ require([
 							// save to localstorage
 							localStorage.setItem('ce_run_history', JSON.stringify(run_history));
 							serverAction("run", command, function(contents){
-								openNewTab('$ ' + command, '$ ' + command, contents, false, 'none');
+								openNewTab('$ ' + command, '<span class="ce-dim">$</span> ' + command, contents, false, 'none');
 							}, command);
 						}
 					}).modal('hide');
@@ -372,7 +374,7 @@ require([
 		serverAction('btool-check', undefined, function(contents){
 			contents = contents.replace(/^(No spec file for|Checking):.*\r?\n/mg,'').replace(/^\t\t/mg,'').replace(/\n{2,}/g,'\n\n');
 			if ($.trim(contents)) {
-				openNewTab('Check config', 'btool-check', contents, false, 'none');
+				openNewTab('Check config', 'Check config', contents, false, 'none');
 			} else {
 				showModal({
 					title: "Info",
@@ -411,9 +413,11 @@ require([
 	
 	function runningVsLayered(path, compare){
 		//var ce_running_diff = $('.ce_running_diff:checked').length;
-		var tab_path = '<span class="ce-dim">Running:</span> ' + path;
+		var tab_path = 'running config: ' + path;
+		var tab_path_fmt = '<span class="ce-dim">live:</span> ' + path;
 		if (compare) {
-			tab_path = '<span class="ce-dim">RunningDiff:<div> ' + path;
+			tab_path = 'running config vs filesystem: ' + path;
+			tab_path_fmt = '<span class="ce-dim">live/fs:</span> ' + path;
 		}
 		if (! tabAlreadyOpen(tab_path)) {
 			serverAction('btool-list', path, function(contents){
@@ -423,11 +427,12 @@ require([
 						if (compare) {
 							openNewDiffTab(
 								tab_path, 
+								tab_path_fmt, 
 								"# Filesystem (layered) config\n" + formatLikeRunningConfig(contents), //formatLikeRunningConfig(contents), 
 								"# Running config\n" + contents_running
 							);
 						} else {
-							openNewTab(tab_path, tab_path, contents_running); //formatLikeRunningConfig(contents));
+							openNewTab(tab_path, tab_path_fmt, contents_running); //formatLikeRunningConfig(contents));
 						}						
 					}).catch(function(){
 						showModal({
@@ -448,18 +453,20 @@ require([
 	}
 	
 	function runBToolList(path, ce_btool_default_values, ce_btool_path){
-		var tab_path = '<span class="ce-dim">Btool:</span> ' + path;
-
+		var tab_path = 'btool: ' + path;
+		var tab_path_fmt = '<span class="ce-dim">btool:</span> ' + path;
 		if (! ce_btool_default_values) { 
-			tab_path += " <span class='ce-dim'>(no defaults)</span>"  
+			tab_path += " (no defaults)"  
+			tab_path_fmt += " <span class='ce-dim'>(no defaults)</span>"  
 		} else if (ce_btool_path) { 
-			tab_path += " <span class='ce-dim'>--debug</span>"  
+			tab_path += " --debug"  
+			tab_path_fmt += " <span class='ce-dim'>--debug</span>"  
 		}
 		if (! tabAlreadyOpen(tab_path, true, false)) {
 			serverAction('btool-list', path, function(contents){
 				var c = formatBtoolList(contents, ce_btool_default_values, ce_btool_path);
 				if ($.trim(c)) {
-					var ecfg = openNewTab(tab_path, tab_path, c, false, 'ini');
+					var ecfg = openNewTab(tab_path, tab_path_fmt, c, false, 'ini');
 					ecfg.btoollist = contents;
 					serverAction('spec-hinting', path, function(c){
 						ecfg.hinting = buildHintingLookup(path, c);
@@ -477,11 +484,12 @@ require([
 	
 	
 	function displaySpecFile(path) {
-		var tab_path = '<span class="ce-dim">Spec:<span> ' + path;
+		var tab_path = 'spec: ' + path;
+		var tab_path_fmt = '<span class="ce-dim">spec:</span> ' + path;
 		if (! tabAlreadyOpen(tab_path)) {
 			serverAction('spec', path, function(contents){			
 				if ($.trim(contents)) {
-					openNewTab(tab_path, tab_path, contents, false, 'ini');
+					openNewTab(tab_path, tab_path_fmt, contents, false, 'ini');
 				} else {
 					showModal({
 						title: "Error",
@@ -507,9 +515,11 @@ require([
 					
 					var re = /([^\/\\]+).conf$/;
 					var found = path.match(re);
-					if (found && confIsTrue('conf_validate_on_save')) {
-						ecfg.attemptBtooling = found[1];
-						highlightBadConfig(ecfg);
+					if (found) {
+						if (confIsTrue('conf_validate_on_save')) {
+							ecfg.attemptBtooling = found[1];
+							highlightBadConfig(ecfg);
+						}
 						if (confFiles.hasOwnProperty(found[1])) {
 							var conf = found[1];
 							serverAction('spec-hinting', conf, function(c){
@@ -886,6 +896,7 @@ require([
 		}      
 		ecfg.editor.addAction({
 			id: 'save-file',
+			contextMenuGroupId: canBeSaved ? '1_modification' : null,
 			label: 'Save file',
 			keybindings: [
 				monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
@@ -956,12 +967,12 @@ require([
 		return ecfg;			
 	}
 	
-	function openNewDiffTab(title, right, left) {
+	function openNewDiffTab(filename, tab_title, right, left) {
 		var ecfg = {};
 		hideAllTabs();
 		ecfg.container = $("<div></div>").appendTo($container);
-		ecfg.file = title;
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + title + "</div>").attr("title", title).appendTo($tabs);
+		ecfg.file = filename;
+		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).appendTo($tabs);
 		ecfg.last_opened = Date.now();
 		ecfg.hasChanges = false;
 
@@ -1348,7 +1359,8 @@ require([
 			var rex = /^Checking: .*[\/\\]([^\/\\]+?).conf\s*$/gmi,
 				res;
 			conf = data.conf;
-			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ce_no_running_config')
+			console.log(conf);
+			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ')
 			if(confIsTrue('write_access')) {
 				$dashboardBody.removeClass('ce_no_write_access');
 			}
@@ -1361,9 +1373,6 @@ require([
 			if(confIsTrue('git')) {
 				$dashboardBody.removeClass('ce_no_git_access');
 			}
-			if(confIsTrue('running_config')) {
-				$dashboardBody.removeClass('ce_no_running_config');
-			}			
 			confFiles = {};
 			confFilesSorted = [];
 			while((res = rex.exec(data.files)) !== null) {

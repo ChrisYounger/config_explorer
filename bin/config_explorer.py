@@ -37,18 +37,24 @@ class req(splunk.rest.BaseRestHandler):
 		def git(message, file1, file2=None):
 			git_output = ""
 			if confIsTrue("git"):
-				if file2 == None:
-					git_output += '$git add ' + file1 + "\n"
-					git_output += runCommand(['git','add', file1])
+				try:
+					if file2 == None:
+						git_output += '$git add ' + file1 + "\n"
+						git_output += runCommand(['git','add', file1])
+						git_output += "\n\n"
+					else:
+						git_output += '$git add ' + file1 + " " + file2 + "\n"
+						git_output += runCommand(['git','add', file1, file2])
+						git_output += "\n\n"
+					git_output += '$git commit -m ' + message + "\n"
+					git_output_tmp = runCommand(['git','commit','-m', message])
+					git_output += re.sub(r"On branch \S*\s*\nUntracked [\s\S]+ but untracked files present", '', git_output_tmp)
 					git_output += "\n\n"
-				else:
-					git_output += '$git add ' + file1 + " " + file2 + "\n"
-					git_output += runCommand(['git','add', file1, file2])
-					git_output += "\n\n"
-				git_output += '$git commit -m ' + message + "\n"
-				git_output_tmp = runCommand(['git','commit','-m', message])
-				git_output += re.sub(r"On branch \S*\s*\nUntracked [\s\S]+ but untracked files present", '', git_output_tmp)
-				git_output += "\n\n"
+				except Exception as ex:
+					template = "Git failed. Is git installed and configured correctly? {0}: {1!r}"
+					git_output += template.format(type(ex).__name__, ex.args)
+					#self.response.setHeader('content-type', 'application/json')
+					#self.response.write(json.dumps({'result': message, 'status': 'error', 'debug': debug}, ensure_ascii=False))		
 			return git_output
 
 		def confIsTrue(param):
