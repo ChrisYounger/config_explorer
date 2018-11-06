@@ -23,7 +23,6 @@ require([
     SearchManager,
     wat,
 ) {
-
 	// Lovely globals
     var service = mvc.createService({ owner: "nobody" });
     var editors = [];  
@@ -85,6 +84,7 @@ require([
 					timediff,
 					mapper = {},
 					changes = [];
+
                 while(res = rex.exec(contents)) {
                     if (res.length === 8) {
 						item = {
@@ -119,7 +119,7 @@ require([
 						if (item.files.length === 1 && item.change === 'save') {
 							if (mapper.hasOwnProperty(item.files[0]) && mapper[item.files[0]].user === item.user) {
 								timediff = mapper[ item.files[0] ].time.diff(item.time, 'minutes');
-								if (timediff < 60) {
+								if (timediff < conf['git_group_time_mins']) {
 									changes[ mapper[ item.files[0] ].pointer ].count++;
 									changes[ mapper[ item.files[0] ].pointer ].duration += timediff;
 									changes[ mapper[ item.files[0] ].pointer ].last_sha = item.sha;
@@ -167,7 +167,7 @@ require([
 					
 					serverAction("git-show", filecommitstr, function(contents1){
 						serverAction("read", filestr, function(contents2){
-							openNewDiffTab("Diff: " + filestr, "Diff: " + dodgyBasename(filestr), "# " + filecommitstr + "\n" + contents1, "# Current HEAD:./" + filestr + "\n" + contents2);		
+							openNewDiffTab("Diff: " + filestr, "<span class='ce-dim'>diff:</span> " + dodgyBasename(filestr), "# " + filecommitstr + "\n" + contents1, "# Current HEAD:./" + filestr + "\n" + contents2);		
 						});
 					});				
 				} else if ($elem.hasClass('icon-speech-bubble')) {
@@ -211,10 +211,10 @@ require([
 			
 		} else if ($t.hasClass("ce_conf")) {
 			
-			actions.push($("<div>Show btool output with originating path</div>").on("click", function(){ runBToolList(thisFile, true, true); })); // runBToolList(path, ce_btool_default_values, ce_btool_path)
-			actions.push($("<div>Show btool output hiding 'default' settings</div>").on("click", function(){ runBToolList(thisFile, false, true); }));
+			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ runBToolList(thisFile, true, false); })); // runBToolList(path, ce_btool_default_values, ce_btool_path)
+			actions.push($("<div>Show btool (hide 'default' settings)</div>").on("click", function(){ runBToolList(thisFile, false, true); }));
 			actions.push($("<div>Show .spec file</div>").on("click", function(){ displaySpecFile(thisFile); }));
-			actions.push($("<div>Show live config</div>").on("click", function(){ runningVsLayered(thisFile, false); }));
+			actions.push($("<div>Show live (running) config</div>").on("click", function(){ runningVsLayered(thisFile, false); }));
 			actions.push($("<div>Compare live config against btool output</div>").on("click", function(){ runningVsLayered(thisFile, true); }));
 			//actions.push($("<div>Refresh endpoint</div>").on("click", function(){  }));
 			
@@ -262,7 +262,7 @@ require([
 
     }).on("click", ".ce_leftnav", function(){	
 		if (action_mode === 'btool-list') {
-			runBToolList($(this).attr('file'), true, false);
+			runBToolList($(this).attr('file'), true, true);
 
 		} else if (action_mode === 'read') {
 			readFileOrFolderAndUpdate($(this).attr('file'));
@@ -742,7 +742,7 @@ require([
 				}
 			}
 			
-			openHTMLTab("History: " + file, "History: " + dodgyBasename(file), $("<div class='ce_file_history'></div>").html(str));		
+			openHTMLTab("history: " + file, "<span class='ce-dim'>history:</span> " + dodgyBasename(file), $("<div class='ce_file_history'></div>").html(str));		
 		});
 	}
 	
@@ -1051,8 +1051,8 @@ require([
 				});
 				return;				
 			}
-// temp debugging
-			if (r.data.git) {
+
+			if (r.data.git && r.data.git_status !== 0) {
 				openNewTab('git output', 'git output', r.data.git, false, 'none');
 			}			
 
@@ -1371,6 +1371,12 @@ require([
 			}
 			if(confIsTrue('git')) {
 				$dashboardBody.removeClass('ce_no_git_access');
+			}
+			if (conf.hasOwnProperty('git_group_time_mins')) {
+				conf['git_group_time_mins'] = parseFloat($.trim(conf['git_group_time_mins']));
+			}
+			if (! conf.hasOwnProperty('git_group_time_mins') || ! Number.isInteger(conf['git_group_time_mins'])) {
+				conf['git_group_time_mins'] = 60;
 			}
 			confFiles = {};
 			confFilesSorted = [];

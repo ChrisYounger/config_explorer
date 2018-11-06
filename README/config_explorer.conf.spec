@@ -17,7 +17,7 @@ lock_config = <bool>
   also set enable_write to false. 
   Defaults to false
 
-max_file_size = 10
+max_file_size = <non-negative integer>
 * The maximum file size in megabytes that can be opened. 
 
 ############################################################################
@@ -36,10 +36,9 @@ git_work_tree = <string>
 * Root location from where changes are tracked, relative to SPLUNK_HOME directory
   Defaults to .
 
-running_config = <bool>
-* Enable diffing of the effective btool configuration against what is currently
-  running in Splunk.
-  Defaults to false
+git_group_time_mins = <non-negative integer>
+* In the "Change Log" view, changes to the same file by the same user within this
+  time limit will be grouped together into one line entry for display purposes.
 
 conf_validate_on_save = <bool>
 * Show a green or red indicator in the code gutter of each line if it appears

@@ -125,7 +125,7 @@
     background-color:#2a2d2e;
 }
 .ce_file_list .ce_leftnavfolder {
-    background-color:black;
+    background-color: #171d21;
 	padding-right: 50px;
 	line-height: 26px;
 }
@@ -151,28 +151,43 @@
     background-color: #1e1e1e;
 }
 .ce_tabs {
-    height: 32px;
+    height: 40px;
     width: 100%;
     position:absolute;
     left: 0;
     right: 0;
     top: 0;
     display: flex;
-    background-color: #1e1e1e;
+    background-color: #262626;
     color: white;
-    border-bottom: 1px solid black;
+    /*border-bottom: 1px solid black;*/
+	overflow: hidden; /* prevent shadow from overlapping */
+	box-shadow: inset 0px -4px 4px rgba(0, 0, 0, 0.51)
 }
 .ce_tab {
-    width: 160px;
+    width: 220px;
     white-space:nowrap;
     overflow: hidden;
     padding: 0 2px 0 8px;
-    line-height: 32px;
-    border-right: 1px solid black;
-    background-color: #1e1e1e; 
+    line-height: 36px;
+    /*border-right: 1px solid black;*/
+    background-color: #262626; 
     cursor: pointer;
     position: relative;
+	box-shadow: inset 0px -4px 4px rgba(0, 0, 0, 0.51)
 }
+.ce_tab:not(.ce_active):before {
+	content: "";
+    position: absolute;
+    right: 0px;
+    margin-top: 8px;
+    border-right: 1px solid #404040;
+    /* border-left: 1px solid #3d424d; */
+    height: 21px;
+    width: 0px;
+    z-index: 2;
+}
+
 .ce_tab_new {
     width: 30px;
     position: relative;
@@ -190,12 +205,15 @@
     color: #00A4FD;
 }
 .ce_tab.ce_active {
-    background-color: #2a2d2e;
+	background-color: #1d1d1d;
+    border-right: 1px solid black;
+    border-left: 1px solid black;
+	box-shadow: none;
 }
 .ce_clickable_icon {
 	cursor: pointer;
 	color: white;
-	font-size: 16px;
+	font-size: 18px;
 	padding: 5px;
 }
 .ce_clickable_icon:hover {
@@ -207,6 +225,7 @@
     padding: 2px 5px;
     margin-top: -2px;
     background-color: inherit;
+	height: 34px;
 }
 .ce_right_icon.ce_right_two {
     right: 28px;    
@@ -215,7 +234,7 @@
     right: 49px;    
 }
 .ce_contents {
-    top: 32px;
+    top: 50px;
     bottom: 0;
     left: 0;
     right: 0;

@@ -10,7 +10,7 @@ class req(splunk.rest.BaseRestHandler):
 		is_binary_string = lambda bytes: bool(bytes.translate(None, textchars))
 		
 		SPLUNK_HOME = os.environ['SPLUNK_HOME']
-	
+		
 		app_name = "config_explorer"
 		conf = splunk.clilib.cli_common.getMergedConf(app_name)
 		
@@ -25,29 +25,30 @@ class req(splunk.rest.BaseRestHandler):
 			return logger
 		logger = setup_logging()
         
-		def runCommand(cmds, use_shell=False):
+		def runCommand(cmds, use_shell=False, status_codes=[]):
 			my_env = os.environ.copy()
 			if confIsTrue("git"):
 				my_env["GIT_DIR"] = os.path.join(SPLUNK_HOME, conf["default"]["git_dir"].strip("\""))
 				my_env["GIT_WORK_TREE"] = os.path.join(SPLUNK_HOME, conf["default"]["git_work_tree"].strip("\""))
 			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=use_shell, env=my_env)
 			o = p.communicate()
+			status_codes.append(p.returncode)
 			return str(o[0]) + "\n" + str(o[1]) + "\n"
 
-		def git(message, file1, file2=None):
+		def git(message, git_status_codes, file1, file2=None):
 			git_output = ""
 			if confIsTrue("git"):
 				try:
 					if file2 == None:
 						git_output += '$git add ' + file1 + "\n"
-						git_output += runCommand(['git','add', file1])
+						git_output += runCommand(['git','add', file1], False, git_status_codes)
 						git_output += "\n\n"
 					else:
 						git_output += '$git add ' + file1 + " " + file2 + "\n"
-						git_output += runCommand(['git','add', file1, file2])
+						git_output += runCommand(['git','add', file1, file2], False, git_status_codes)
 						git_output += "\n\n"
 					git_output += '$git commit -m ' + message + "\n"
-					git_output_tmp = runCommand(['git','commit','-m', message])
+					git_output_tmp = runCommand(['git','commit','-m', message], False, git_status_codes)
 					git_output += re.sub(r"On branch \S*\s*\nUntracked [\s\S]+ but untracked files present", '', git_output_tmp)
 					git_output += "\n\n"
 				except Exception as ex:
@@ -67,6 +68,7 @@ class req(splunk.rest.BaseRestHandler):
 			status = ""
 			debug = ""
 			git_output = ""
+			git_status_codes = [0]
 			action = self.request['form']['action']
 			action_item = self.request['form']['path']
 			param1 = self.request['form']['param1']
@@ -181,11 +183,11 @@ class req(splunk.rest.BaseRestHandler):
 									result = "Cannot save to a file that does not exist"
 								
 								else:
-									git("unknown", file_path)
+									git("unknown", git_status_codes, file_path)
 									with open(file_path, "w") as fh:
 										fh.write(param1)
 									
-									git_output += git(user + " save ", file_path)
+									git_output += git(user + " save ", git_status_codes, file_path)
 									status = "success" 
 									 
 							elif action == 'read':
@@ -213,14 +215,14 @@ class req(splunk.rest.BaseRestHandler):
 										status = "error"
 										
 							elif action == 'delete':
-								git("unknown", file_path)
+								git("unknown", git_status_codes, file_path)
 								if os.path.isdir(file_path):
 									shutil.rmtree(file_path)
 									
 								else:
 									os.remove(file_path)
 									
-								git_output += git(user + " deleted ", file_path)
+								git_output += git(user + " deleted ", git_status_codes, file_path)
 								status = "success"
 								
 							else:
@@ -235,9 +237,9 @@ class req(splunk.rest.BaseRestHandler):
 										status = "error"
 										
 									else:
-										git("unknown", file_path)
+										git("unknown", git_status_codes, file_path)
 										os.rename(file_path, new_path)
-										git_output += git(user + " renamed", new_path, file_path)
+										git_output += git(user + " renamed", git_status_codes, new_path, file_path)
 										status = "success"
 										
 								else:
@@ -252,11 +254,11 @@ class req(splunk.rest.BaseRestHandler):
 										
 									elif action == 'newfile':
 										open(new_path, 'w').close()
-										git_output += git(user + " new", new_path)
+										git_output += git(user + " new", git_status_codes, new_path)
 										status = "success"
 									
 			self.response.setHeader('content-type', 'application/json')
-			self.response.write(json.dumps({'result': result, 'status': status, 'debug': debug, 'git': git_output}, ensure_ascii=False))
+			self.response.write(json.dumps({'result': result, 'status': status, 'debug': debug, 'git': git_output, 'git_status': max(git_status_codes)}, ensure_ascii=False))
 			
 			if action == 'save' or param1 == 'undefined':
 				param1 = ""
