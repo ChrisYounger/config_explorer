@@ -1,6 +1,10 @@
 // Copyright (C) 2018 Chris Younger
 
-require.config({ paths: { 'vs': '../app/config_explorer/node_modules/monaco-editor/min/vs' }});
+require.config({ 
+	paths: {
+		'vs': '../app/config_explorer/node_modules/monaco-editor/min/vs', 
+	}
+});
 
 require([
 	"splunkjs/mvc",
@@ -12,6 +16,7 @@ require([
 	"splunkjs/mvc/simplexml/dashboardview",
     "splunkjs/mvc/searchmanager",
     "vs/editor/editor.main",
+	//"app/config_explorer/node_modules/simplebar/dist/simplebar"
 ], function(
 	mvc,
 	$,
@@ -22,12 +27,14 @@ require([
 	Dashboard,
     SearchManager,
     wat,
+	//SimpleBar
 ) {
 	// Lovely globals
     var service = mvc.createService({ owner: "nobody" });
     var editors = [];  
 	var inFolder = (localStorage.getItem('ce_current_path') || './etc/apps');
 	var run_history = (JSON.parse(localStorage.getItem('ce_run_history')) || []);
+	var closed_tabs = (JSON.parse(localStorage.getItem('ce_closed_tabs')) || []);
 	var $dashboardBody = $('.dashboard-body');
     var $dirlist = $(".ce_file_list");
     var $container = $(".ce_contents");
@@ -298,8 +305,14 @@ require([
         e.stopPropagation();
 		closeTabWithConfirmation(idx);
         
-    }).on("click", ".ce_tab", function(){
-        activateTab($(this).index());
+    }).on("auxclick", ".ce_tab", function(e){
+		var idx = $(this).index();
+		e.stopPropagation();
+		closeTabWithConfirmation(idx);	
+		
+	}).on("click", ".ce_tab", function(e){
+		activateTab($(this).index());
+		
         
     }).on("mouseenter", ".ce_tab", function(){
         $(this).append("<i class='ce_close_tab icon-close ce_clickable_icon ce_right_icon'></i>");
@@ -512,18 +525,11 @@ require([
 			serverAction('read', path, function(contents){
 				if (typeof contents === "string") {					
 					var ecfg = openNewTab(path, dodgyBasename(path), contents, true);
-					
-					var re = /([^\/\\]+).conf$/;
-					var found = path.match(re);
-					if (found) {
-						if (confIsTrue('conf_validate_on_save')) {
-							ecfg.attemptBtooling = found[1];
-							highlightBadConfig(ecfg);
-						}
-						if (confFiles.hasOwnProperty(found[1])) {
-							var conf = found[1];
-							serverAction('spec-hinting', conf, function(c){
-								ecfg.hinting = buildHintingLookup(conf, c);
+					if (ecfg.hasOwnProperty('matchedConf')) {
+						highlightBadConfig(ecfg);
+						if (confFiles.hasOwnProperty(ecfg.matchedConf)) {
+							serverAction('spec-hinting', ecfg.matchedConf, function(c){
+								ecfg.hinting = buildHintingLookup(ecfg.matchedConf, c);
 							});
 						}						
 					} 
@@ -758,7 +764,13 @@ require([
     function activateTab(idx){
         hideAllTabs();
         $container.children().eq(idx).removeClass('ce_hidden');
-        $tabs.children().eq(idx).addClass('ce_active');
+		$tabs.children().each(function(i,elem){
+			if (idx === i) {
+				$(this).addClass('ce_active');
+			} else if ((idx - 1) !== i) {
+				$(this).append('<span class="ce_pipe"></span>');
+			}
+		});
         editors[idx].last_opened = Date.now();        
 		activeTab = idx;
     }
@@ -766,6 +778,7 @@ require([
     function hideAllTabs() {
         $container.children().addClass("ce_hidden");
         $tabs.children().removeClass("ce_active");
+		$(".ce_pipe").remove();
     }
 
 	function closeTabByName(path) {
@@ -812,6 +825,10 @@ require([
 	}
 	
 	function closeTabNow(idx) {
+		closed_tabs.push({label: editors[idx].file, type: "test", argv: ""});
+		if (closed_tabs.length > 30) {
+			closed_tabs.shift();
+		}
 		if (editors[idx].hasOwnProperty("editor")) {
 			editors[idx].editor.dispose();
 		}
@@ -838,7 +855,7 @@ require([
 	
 	function openNewTab(filename, tab_title, contents, canBeSaved, language) {
 		var ecfg = {};
-		hideAllTabs();
+		editors.push(ecfg);
 		if (!language) {
 			language = "ini"; // .conf, .meta, spec
 			if (/.js$/.test(filename)) {
@@ -855,19 +872,27 @@ require([
 				language = "markdown";
 			}
 		}
+		var re = /([^\/\\]+).conf$/;
+		var found = tab_title.match(re);
+		if (found) {
+			ecfg.matchedConf = found[1];
+		}
+					
 		ecfg.container = $("<div></div>").appendTo($container);
 		ecfg.file = filename;
 		if (tab_title === "") {
 			tab_title = "Settings"
 		}
 		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).appendTo($tabs);
+		activateTab(editors.length-1);
 		ecfg.last_opened = Date.now();
 		ecfg.hasChanges = false;
+		ecfg.canBeSaved = canBeSaved;
 		ecfg.editor = monaco.editor.create(ecfg.container[0], {
 			automaticLayout: true,
 			value: contents,
 			language: language,
-			readOnly: ! canBeSaved,
+			readOnly: ! ecfg.canBeSaved,
 			theme: "vs-dark",
 			glyphMargin: true
 			
@@ -876,7 +901,7 @@ require([
 		ecfg.decorations = [];
 
 		ecfg.server_content = ecfg.editor.getValue();
-		if (canBeSaved) {
+		if (ecfg.canBeSaved) {
 			ecfg.editor.onDidChangeModelContent(function (e) {
 				// check against saved copy
 				if (ecfg.editor.getValue() !== ecfg.server_content) {
@@ -894,40 +919,39 @@ require([
 				ecfg.decorations = ecfg.editor.deltaDecorations(ecfg.decorations, []);
 			});
 		}      
+	
 		ecfg.editor.addAction({
 			id: 'save-file',
-			contextMenuGroupId: canBeSaved ? '1_modification' : null,
+			contextMenuOrder: 1,
+			contextMenuGroupId: ecfg.canBeSaved ? '1_modification' : null,
 			label: 'Save file',
-			keybindings: [
-				monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
-			],
-			run: function(ed) {
-				if (canBeSaved) {
-					if (! ecfg.saving) {
-						var saved_value = ecfg.editor.getValue();
-						ecfg.saving = true;
-						serverAction('save', ecfg.file, function(){
-							ecfg.saving = false;
-							showToast('Saved');
-							ecfg.server_content = saved_value;
-							ecfg.tab.find('.icon-alert-circle').remove();
-							ecfg.hasChanges = false;	
-							highlightBadConfig(ecfg);
-							if (ecfg.file === "") {
-								loadPermissionsAndConfList();
-							}
-						}, saved_value);
-					}
-					return null;
-				} else {
-					showModal({
-						title: "Warning",
-						body: "<div class='alert alert-warning'><i class='icon-alert'></i>This file cannot be saved</div>",
-						size: 300
-					});	
-				}
+			//keybindings: [
+			//	monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
+			//],
+			run: function() {
+				saveActiveTab();
 			}
 		});
+		if (ecfg.hasOwnProperty('matchedConf')) {
+			ecfg.editor.addAction({
+				id: 'btool-file',
+				contextMenuOrder: 1.1,
+				contextMenuGroupId: '1_modification',
+				label: 'Run btool on ' + ecfg.matchedConf + '.conf',
+				run: function(ed) {
+					runBToolList(ecfg.matchedConf, true, true);
+				}
+			});	
+			ecfg.editor.addAction({
+				id: 'spec-file',
+				contextMenuOrder: 1.12,
+				contextMenuGroupId: '1_modification',
+				label: 'Open ' + ecfg.matchedConf + '.conf.spec',
+				run: function(ed) {
+					 displaySpecFile(ecfg.matchedConf);
+				}
+			});	
+		}	
         ecfg.editor.addAction({
 			id: 'word-wrap-on',
 			label: 'Word wrap on',
@@ -946,34 +970,61 @@ require([
                 });
 			}
 		});  
- 
-		activeTab = editors.length;
-		editors.push(ecfg);	
 		return ecfg;		
 	}
 	
+	function saveActiveTab(){
+		if (activeTab === null) {
+			return;
+		}
+		ecfg = editors[activeTab];
+		if (ecfg.canBeSaved) {
+			if (! ecfg.saving) {
+				var saved_value = ecfg.editor.getValue();
+				ecfg.saving = true;
+				serverAction('save', ecfg.file, function(){
+					ecfg.saving = false;
+					showToast('Saved');
+					ecfg.server_content = saved_value;
+					ecfg.tab.find('.icon-alert-circle').remove();
+					ecfg.hasChanges = false;	
+					highlightBadConfig(ecfg);
+					
+					if (ecfg.file === "") {
+						loadPermissionsAndConfList();
+					}
+				}, saved_value);
+			}
+			return null;
+		} else {
+			showModal({
+				title: "Warning",
+				body: "<div class='alert alert-warning'><i class='icon-alert'></i>This file cannot be saved</div>",
+				size: 300
+			});	
+		}		
+		
+	}
 	function openHTMLTab(filename, tab_title, contents) {
 		var ecfg = {};
-		hideAllTabs();
+		editors.push(ecfg);	
 		ecfg.container = $("<div></div>").appendTo($container);
 		ecfg.container.append(contents);
 		ecfg.file = filename;
 		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).appendTo($tabs);
-		ecfg.last_opened = Date.now();
+		activateTab(editors.length-1);
 		ecfg.hasChanges = false;
 		ecfg.server_content = '';
-		activeTab = editors.length;
-		editors.push(ecfg);	
 		return ecfg;			
 	}
 	
 	function openNewDiffTab(filename, tab_title, right, left) {
 		var ecfg = {};
-		hideAllTabs();
+		editors.push(ecfg);
 		ecfg.container = $("<div></div>").appendTo($container);
 		ecfg.file = filename;
 		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).appendTo($tabs);
-		ecfg.last_opened = Date.now();
+		activateTab(editors.length-1);
 		ecfg.hasChanges = false;
 
 		var originalModel = monaco.editor.createModel(left, "ini");
@@ -988,10 +1039,7 @@ require([
 			original: originalModel,
 			modified: modifiedModel
 		});	
-
 		ecfg.server_content = '';
-		activeTab = editors.length;
-		editors.push(ecfg);	
 		return ecfg;	
 	}	
 	
@@ -1096,11 +1144,14 @@ require([
 	
 	// After loading a .conf file or after saving and before any changes are made, red or green colour will
 	// be shown in the gutter about if the current line can be found in the output of btool list.
-	function highlightBadConfig(ecfg){	
-		if (ecfg.hasOwnProperty('attemptBtooling')) {
-			serverAction('btool-list', ecfg.attemptBtooling, function(btoolcontents){
+	function highlightBadConfig(ecfg){
+		if (!confIsTrue('conf_validate_on_save')) {
+			return;
+		}
+		if (ecfg.hasOwnProperty('matchedConf')) {
+			serverAction('btool-list', ecfg.matchedConf, function(btoolcontents){
 				if (! $.trim(btoolcontents)) {
-					delete ecfg.attemptBtooling;
+					delete ecfg.matchedConf;
 					return;
 				}
 				// Build lookup of btool output
@@ -1393,6 +1444,22 @@ require([
     refreshCurrentPath();
 	loadPermissionsAndConfList();
     
+	$(window).bind('keydown', function(event) {
+		if (event.ctrlKey || event.metaKey) {
+			switch (String.fromCharCode(event.which).toLowerCase()) {
+			case 's':
+				event.preventDefault();
+				saveActiveTab();
+				break;
+			}
+		}
+	});
+	/*setTimeout(function(){
+	console.log(SimpleBar);
+	new SimpleBar($dirlist[0]);		
+	},1000)*/
+
+
 	// Setup the splunk components properly
 	$('header').remove();
 	new LayoutView({ "hideAppBar": true, "hideChrome": false, "hideFooter": false, "hideSplunkBar": false, layout: "fixed" })

@@ -176,8 +176,7 @@
     position: relative;
 	box-shadow: inset 0px -4px 4px rgba(0, 0, 0, 0.51)
 }
-.ce_tab:not(.ce_active):before {
-	content: "";
+.ce_pipe {
     position: absolute;
     right: 0px;
     margin-top: 8px;
