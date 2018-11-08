@@ -37,6 +37,7 @@ require([
 	var closed_tabs = (JSON.parse(localStorage.getItem('ce_closed_tabs')) || []);
 	var $dashboardBody = $('.dashboard-body');
     var $dirlist = $(".ce_file_list");
+	var $filePath = $(".ce_file_path");
     var $container = $(".ce_contents");
     var $tabs = $(".ce_tabs");
 	var activeTab = null;
@@ -192,22 +193,27 @@ require([
 			// Clicking one of the top links
 			if (p.hasClass('ce_app_filesystem')) {
 				refreshCurrentPath();
+				$filePath.css({"display":""});
+				$dirlist.css({"margin-top":"", "padding-top":""});
 				action_mode = 'read';
 				
-			} else if (p.hasClass('ce_app_effective') || p.hasClass('ce_app_specs') || p.hasClass('ce_app_running')) {
+			} else if (p.hasClass('ce_app_effective')) {
 				action_mode = 'btool-list';
+				$filePath.css({"display":"none"});
+				$dirlist.css({"margin-top":"0px", "padding-top":"14px"});
 				buildLeftPane();
 			}
 		}
 	});
 	
 	// Click handlers for stuff in the left pane
-    $dirlist.on("click", ".ce_add_file,.ce_add_folder", function(e){
+    $filePath.on("click", ".ce_add_file,.ce_add_folder", function(e){
         e.stopPropagation();
-		var parentPath = $(this).parent().attr('file');
+		var parentPath = $(this).attr('file');
 		fileSystemCreateNew(parentPath, !$(this).hasClass("ce_add_folder"));
 
-	}).on("contextmenu", ".ce_leftnav", function (e) {
+	});
+	$dirlist.on("contextmenu", ".ce_leftnav", function (e) {
 		var $t = $(this);
 		thisFile = $t.attr('file');
 		var actions = [];
@@ -217,9 +223,9 @@ require([
 			actions.push($("<div>Delete</div>").on("click", function(){ filesystemDelete(thisFile); }));
 			
 		} else if ($t.hasClass("ce_conf")) {
-			
-			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ runBToolList(thisFile, true, false); })); // runBToolList(path, ce_btool_default_values, ce_btool_path)
-			actions.push($("<div>Show btool (hide 'default' settings)</div>").on("click", function(){ runBToolList(thisFile, false, true); }));
+
+			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ runBToolList(thisFile, 'btool-hidepaths'); }));
+			actions.push($("<div>Show btool (hide 'default' settings)</div>").on("click", function(){ runBToolList(thisFile, 'btool-hidedefaults'); }));
 			actions.push($("<div>Show .spec file</div>").on("click", function(){ displaySpecFile(thisFile); }));
 			actions.push($("<div>Show live (running) config</div>").on("click", function(){ runningVsLayered(thisFile, false); }));
 			actions.push($("<div>Compare live config against btool output</div>").on("click", function(){ runningVsLayered(thisFile, true); }));
@@ -269,13 +275,76 @@ require([
 
     }).on("click", ".ce_leftnav", function(){	
 		if (action_mode === 'btool-list') {
-			runBToolList($(this).attr('file'), true, true);
-
+			runBToolList($(this).attr('file'), 'btool');			
 		} else if (action_mode === 'read') {
 			readFileOrFolderAndUpdate($(this).attr('file'));
 		}
     });
+	
+	$(".ce_recent_files").on("click", function(e){
+		e.stopPropagation();
+		var recent = $("<ul class='ce_recent_list'></ul>");
+		var counter = 0;
+		var openlabels = [];
+		for (var j = 0; j < editors.length; j++) {
+			openlabels.push(editors[j].label);
+		}
+		for (var i = 0; i < closed_tabs.length; i++) {
+			if (counter > 15) {
+				break;
+			}
+			// hide item if they are actually open at the moment
+			if (openlabels.indexOf(closed_tabs[i].label) === -1) {
+				counter++;
+				$("<li class='ce_selectable'></li>").text(closed_tabs[i].label).data(closed_tabs[i]).prependTo(recent);
+			}
+		}
+		$("<li>Recently closed</li>").prependTo(recent)
+		//closed_tabs.push({label: file: type: read|btool|btool-hidepaths|btool-hidedefaults|spec|running});
+		$(".ce_wrap").append(recent);
 
+		recent.on("click auxclick", ".ce_selectable", function(){
+			var d = $(this).data();
+			console.log(d);
+			if (d.type === 'btool-hidepaths') {
+				runBToolList(d.file, 'btool-hidepaths');
+			} else if (d.type === 'btool-hidedefaults') {
+				runBToolList(d.file, 'btool-hidedefaults');
+			} else if (d.type === 'spec') {
+				displaySpecFile(d.file);
+			} else if (d.type === 'running') {
+				runningVsLayered(d.file, false);
+			} else if (d.type === 'btool') {
+				runBToolList(d.file, 'btool');
+			} else if (d.type === 'read') {
+				readFileOrFolderAndUpdate(d.file);
+			}			
+		});
+			
+		$(document).one("click", function(){
+			recent.remove();
+		});
+	});
+
+	function openTabsListChanged(){
+		var t = [];
+		for (var i = 0; i < editors.length; i++){
+			// skip diff tabs, "run" tabs, git output, and html tabs
+			if (editors[i].type !== 'git' && editors[i].type !== 'run' && editors[i].type !== 'diff' && editors[i].type !== 'html') {
+				t.push({label: editors[i].label, type: editors[i].type, file: editors[i].file});
+			}
+		}
+		localStorage.setItem('ce_open_tabs', JSON.stringify(t));
+	}
+	
+	// on page load, log that tabs that were open previously
+	(function(){
+		var t = (JSON.parse(localStorage.getItem('ce_open_tabs')) || []);
+		for (var i = 0; i < t.length; i++){
+			logClosedTab(t[i]);
+		}
+	})();
+		
 	function getContentsFromMode(mode, path){
 		if (mode === 'running') {
 			return getRunningConfig(path);
@@ -369,7 +438,7 @@ require([
 							// save to localstorage
 							localStorage.setItem('ce_run_history', JSON.stringify(run_history));
 							serverAction("run", command, function(contents){
-								openNewTab('$ ' + command, '<span class="ce-dim">$</span> ' + command, contents, false, 'none');
+								openNewTab("run",undefined,'$ ' + command, '<span class="ce-dim">$</span> ' + command, contents, false, 'none');
 							}, command);
 						}
 					}).modal('hide');
@@ -387,7 +456,7 @@ require([
 		serverAction('btool-check', undefined, function(contents){
 			contents = contents.replace(/^(No spec file for|Checking):.*\r?\n/mg,'').replace(/^\t\t/mg,'').replace(/\n{2,}/g,'\n\n');
 			if ($.trim(contents)) {
-				openNewTab('Check config', 'Check config', contents, false, 'none');
+				openNewTab('check',undefined,'Check config', 'Check config', contents, false, 'none');
 			} else {
 				showModal({
 					title: "Info",
@@ -445,7 +514,7 @@ require([
 								"# Running config\n" + contents_running
 							);
 						} else {
-							openNewTab(tab_path, tab_path_fmt, contents_running); //formatLikeRunningConfig(contents));
+							openNewTab('running', path, tab_path, tab_path_fmt, contents_running); //formatLikeRunningConfig(contents));
 						}						
 					}).catch(function(){
 						showModal({
@@ -465,8 +534,17 @@ require([
 		}	
 	}
 	
-	function runBToolList(path, ce_btool_default_values, ce_btool_path){
+	function runBToolList(path, type){
 		var tab_path = 'btool: ' + path;
+		var ce_btool_default_values = true;
+		var ce_btool_path = true;
+		if (type === 'btool-hidepaths') {
+			ce_btool_default_values = true;
+			ce_btool_path = false;
+		} else if (type === 'btool-hidedefaults') {
+			ce_btool_default_values = false;
+			ce_btool_path = true;
+		}
 		var tab_path_fmt = '<span class="ce-dim">btool:</span> ' + path;
 		if (! ce_btool_default_values) { 
 			tab_path += " (no defaults)"  
@@ -479,7 +557,7 @@ require([
 			serverAction('btool-list', path, function(contents){
 				var c = formatBtoolList(contents, ce_btool_default_values, ce_btool_path);
 				if ($.trim(c)) {
-					var ecfg = openNewTab(tab_path, tab_path_fmt, c, false, 'ini');
+					var ecfg = openNewTab(type, path, tab_path, tab_path_fmt, c, false, 'ini');
 					ecfg.btoollist = contents;
 					serverAction('spec-hinting', path, function(c){
 						ecfg.hinting = buildHintingLookup(path, c);
@@ -502,7 +580,7 @@ require([
 		if (! tabAlreadyOpen(tab_path)) {
 			serverAction('spec', path, function(contents){			
 				if ($.trim(contents)) {
-					openNewTab(tab_path, tab_path_fmt, contents, false, 'ini');
+					openNewTab("spec", path, tab_path, tab_path_fmt, contents, false, 'ini');
 				} else {
 					showModal({
 						title: "Error",
@@ -524,7 +602,7 @@ require([
 		if (! tabAlreadyOpen(path)) {
 			serverAction('read', path, function(contents){
 				if (typeof contents === "string") {					
-					var ecfg = openNewTab(path, dodgyBasename(path), contents, true);
+					var ecfg = openNewTab("read", path, path, dodgyBasename(path), contents, true);
 					if (ecfg.hasOwnProperty('matchedConf')) {
 						highlightBadConfig(ecfg);
 						if (confFiles.hasOwnProperty(ecfg.matchedConf)) {
@@ -541,12 +619,15 @@ require([
 						return a.toLowerCase().localeCompare(b.toLowerCase());
 					});
 					$dirlist.empty();
-					var dir = $("<li class='ce_leftnavfolder'><span></span><bdi></bdi><i title='New folder' class='ce_add_folder ce_clickable_icon ce_right_icon ce_right_two icon-folder'></i>" +
-								"<i title='New file' class='ce_add_file ce_clickable_icon ce_right_icon icon-report'></i></li>").attr("file", path).attr("title", path).appendTo($dirlist);
-					var span = dir.find("span").text(path + '/');
-					dir.find("bdi").text(path + '/');
-					if (span.width() > (dir.width() - 50)) {
-						dir.addClass('ce_rtl');
+					$filePath.empty();
+					$("<span></span><bdi></bdi><i title='New folder' class='ce_add_folder ce_clickable_icon ce_right_icon ce_right_two icon-folder'></i>" +
+								"<i title='New file' class='ce_add_file ce_clickable_icon ce_right_icon icon-report'></i>").appendTo($filePath).attr("file", path).attr("title", path);
+					var span = $filePath.find("span").text(path + '/');
+					$filePath.find("bdi").text(path + '/');
+					if (span.width() > $filePath.width()) {
+						$filePath.addClass('ce_rtl');
+					} else {
+						$filePath.removeClass('ce_rtl');
 					}
 					if (path !== ".") {
 						$("<li class='ce_leftnav'><i class='icon-arrow-left'></i> ..</li>").attr("file", path.replace(/[\/\\][^\/\\]+$/,'')).appendTo($dirlist);
@@ -824,17 +905,39 @@ require([
 		}
 	}
 	
-	function closeTabNow(idx) {
-		closed_tabs.push({label: editors[idx].file, type: "test", argv: ""});
+	function logClosedTab(ecfg){ 
+		// make sure unique items only appear once
+		var splicy = -1;
+		for (var j = 0; j < closed_tabs.length; j++) {
+			//console.log(ecfg.label, closed_tabs[j].label);
+			if (ecfg.label === closed_tabs[j].label) {
+				splicy = j;
+			}
+		}
+		if (splicy > -1){
+			closed_tabs.splice(splicy, 1);
+		}
+		//closed_tabs.push({label: file: type: read|btool|btool-hidepaths|btool-hidedefaults|spec|running});
+		if (ecfg.type !== 'git' && ecfg.type !== 'run' && ecfg.type !== 'diff' && ecfg.type !== 'html') {
+			closed_tabs.push({label: ecfg.label, type: ecfg.type, file: ecfg.file});
+		}
+		// trim length
 		if (closed_tabs.length > 30) {
 			closed_tabs.shift();
 		}
+		//persist to localstorage
+		localStorage.setItem('ce_closed_tabs', JSON.stringify(closed_tabs));		
+	}
+	
+	function closeTabNow(idx) {
+		logClosedTab(editors[idx]);
 		if (editors[idx].hasOwnProperty("editor")) {
 			editors[idx].editor.dispose();
 		}
 		editors[idx].tab.remove();
 		editors[idx].container.remove();
 		editors.splice(idx, 1);
+		openTabsListChanged();
 		// if there are still tabs open, find the most recently used tab and activate that one
 		if ($tabs.children().length === 0) {
 			activeTab = null;
@@ -853,7 +956,7 @@ require([
 		}		
 	}
 	
-	function openNewTab(filename, tab_title, contents, canBeSaved, language) {
+	function openNewTab(type, filename, label, tab_title, contents, canBeSaved, language) {
 		var ecfg = {};
 		editors.push(ecfg);
 		if (!language) {
@@ -879,11 +982,13 @@ require([
 		}
 					
 		ecfg.container = $("<div></div>").appendTo($container);
+		ecfg.label = label;
 		ecfg.file = filename;
+		ecfg.type = type;
 		if (tab_title === "") {
 			tab_title = "Settings"
 		}
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).appendTo($tabs);
+		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", label).appendTo($tabs);
 		activateTab(editors.length-1);
 		ecfg.last_opened = Date.now();
 		ecfg.hasChanges = false;
@@ -939,7 +1044,7 @@ require([
 				contextMenuGroupId: '1_modification',
 				label: 'Run btool on ' + ecfg.matchedConf + '.conf',
 				run: function(ed) {
-					runBToolList(ecfg.matchedConf, true, true);
+					runBToolList(ecfg.matchedConf, "btool");
 				}
 			});	
 			ecfg.editor.addAction({
@@ -969,7 +1074,8 @@ require([
                     wordWrap: "off"
                 });
 			}
-		});  
+		}); 
+		openTabsListChanged();
 		return ecfg;		
 	}
 	
@@ -1011,10 +1117,12 @@ require([
 		ecfg.container = $("<div></div>").appendTo($container);
 		ecfg.container.append(contents);
 		ecfg.file = filename;
+		ecfg.type = "html";
 		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).appendTo($tabs);
 		activateTab(editors.length-1);
 		ecfg.hasChanges = false;
 		ecfg.server_content = '';
+		openTabsListChanged();
 		return ecfg;			
 	}
 	
@@ -1022,9 +1130,11 @@ require([
 		var ecfg = {};
 		editors.push(ecfg);
 		ecfg.container = $("<div></div>").appendTo($container);
+		ecfg.type = "diff";
 		ecfg.file = filename;
 		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).appendTo($tabs);
 		activateTab(editors.length-1);
+		openTabsListChanged();
 		ecfg.hasChanges = false;
 
 		var originalModel = monaco.editor.createModel(left, "ini");
@@ -1101,7 +1211,7 @@ require([
 			}
 
 			if (r.data.git && r.data.git_status !== 0) {
-				openNewTab('git output', 'git output', r.data.git, false, 'none');
+				openNewTab('git',undefined,'git output', 'git output', r.data.git, false, 'none');
 			}			
 
 			if (typeof callback === 'function') {

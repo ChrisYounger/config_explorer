@@ -100,14 +100,15 @@
 
 .ce_file_list {
     list-style-type: none;
-    background-color: #262626;
+    background-color: #1e1e1e;
     color: #ccc;
     position:absolute;
     width: 280px;
-    margin: 0;
-    padding: 20px 0; 
+    margin: 37px 0 0 0;
+    padding: 0 0 20px 0; 
     overflow-x: auto;
     height: 100%;
+	box-shadow: inset -4px 0px 4px rgba(0, 0, 0, 0.28);
 }
 .ce_file_list li {
     white-space:nowrap;
@@ -124,22 +125,33 @@
 .ce_leftnav:hover {
     background-color:#2a2d2e;
 }
-.ce_file_list .ce_leftnavfolder {
-    background-color: #171d21;
-	padding-right: 50px;
-	line-height: 26px;
+.ce_file_path {
+	position:absolute;
+	width: 280px;
+    border-bottom: 1px solid #171d21;
+    line-height: 35px;
+    background-color: #262626;
+    box-shadow: inset 0px -4px 4px rgba(0, 0, 0, 0.28), inset 0px 4px 4px rgba(0, 0, 0, 0.28);
+	white-space: nowrap;
+    padding: 2px 58px 2px 22px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+	color: #ccc;
 }
 .ce_rtl{
 	direction:rtl;
 }
-.ce_leftnavfolder > bdi {
+.ce_file_path > bdi {
 	display: none;
 }
-.ce_leftnavfolder.ce_rtl > bdi {
+.ce_file_path.ce_rtl > bdi {
 	display: inline;
 }
-.ce_leftnavfolder.ce_rtl > span {
+.ce_file_path.ce_rtl > span {
 	display: none;
+}
+.ce_file_path .ce_right_icon {
+	background-color: transparent;
 }
 .ce_container {
     position: absolute;
@@ -147,8 +159,9 @@
     right: 0;
     top: 0;
     bottom: 0;
-    border-left: 1px solid black;
+    border-left: 3px solid #404040;
     background-color: #1e1e1e;
+    padding-left: 6px;
 }
 .ce_tabs {
     height: 40px;
@@ -159,32 +172,32 @@
     top: 0;
     display: flex;
     background-color: #262626;
-    color: white;
+    color: #ccc;
     /*border-bottom: 1px solid black;*/
-	overflow: hidden; /* prevent shadow from overlapping */
-	box-shadow: inset 0px -4px 4px rgba(0, 0, 0, 0.51)
+	/*overflow: hidden;  prevent shadow from overlapping */
+	box-shadow: inset 0px -4px 4px rgba(0, 0, 0, 0.28), inset 0px 4px 4px rgba(0, 0, 0, 0.28);
+	padding-right: 40px;
 }
 .ce_tab {
+    position: relative;
     width: 220px;
-    white-space:nowrap;
+    line-height: 36px;
+    white-space: nowrap;
     overflow: hidden;
     padding: 0 2px 0 8px;
-    line-height: 36px;
-    /*border-right: 1px solid black;*/
-    background-color: #262626; 
     cursor: pointer;
-    position: relative;
-	box-shadow: inset 0px -4px 4px rgba(0, 0, 0, 0.51)
+    margin-top:4px;
 }
-.ce_pipe {
+.ce_pipe  {
     position: absolute;
     right: 0px;
-    margin-top: 8px;
+    margin-top: 6px;
     border-right: 1px solid #404040;
     /* border-left: 1px solid #3d424d; */
     height: 21px;
     width: 0px;
     z-index: 2;
+    margin-right: 0px;
 }
 
 .ce_tab_new {
@@ -199,15 +212,23 @@
     cursor: pointer;
     color: #c3cbd4; 
 }
-.ce-dim{ color: #aaa;}
+.ce-dim{ 
+    color: #aaa;
+}
 .ce_tab_new > i:hover {
     color: #00A4FD;
 }
+.ce_tab:hover {
+    color: white;
+}
 .ce_tab.ce_active {
 	background-color: #1d1d1d;
-    border-right: 1px solid black;
-    border-left: 1px solid black;
-	box-shadow: none;
+    border-right: 1px solid #171d21;
+    border-left: 1px solid #171d21;
+	box-shadow: 0px -2px 2px rgba(0, 0, 0, 0.7);
+    border-top-right-radius: 8px;
+    border-top-left-radius: 8px;
+    color: white;
 }
 .ce_clickable_icon {
 	cursor: pointer;
@@ -226,6 +247,35 @@
     background-color: inherit;
 	height: 34px;
 }
+.ce_recent_files {
+    top: 10px;
+    background-color: transparent;
+    right: 10px;
+}
+.ce_recent_list {
+	background-color: #3d424d;
+    color: white;
+    position: absolute;
+    max-width: 600px;
+    max-height: 600px;
+	overflow: hidden;
+    right: 10px;
+    top: 50px;
+	list-style-type: none;
+    padding: 10px;
+	box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+}
+.ce_recent_list li {
+	padding: 3px 6px;
+    margin: 1px 0 2px 0;
+}
+.ce_recent_list li.ce_selectable {
+    cursor: pointer;
+	color: #ccc;
+}
+.ce_recent_list li.ce_selectable:hover {
+	background-color: #262626
+}
 .ce_right_icon.ce_right_two {
     right: 28px;    
 }
@@ -233,11 +283,12 @@
     right: 49px;    
 }
 .ce_contents {
-    top: 50px;
+    top: 48px;
     bottom: 0;
     left: 0;
     right: 0;
     position: absolute;
+	box-shadow: inset 4px 0px 4px rgba(0, 0, 0, 0.28);
 }
 .ce_contents > div {
     height: 100%
@@ -256,6 +307,10 @@
 }
 .monaco-menu .monaco-action-bar.vertical .action-item:not(.disabled):hover {
 	background-color: #3c3c3c;
+}
+.monaco-editor .scroll-decoration{
+    /* disable the scroll shadow at the top */
+    box-shadow: none !important;
 }
 
 .ce_hidden {
@@ -336,7 +391,6 @@
     border: 1px solid #e2e2e2;
 	width: 700px;
 }
-
 
 .btn.btn-danger {
     color: #fff;
