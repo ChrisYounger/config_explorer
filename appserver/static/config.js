@@ -4,8 +4,8 @@ require.config({
 	paths: {
 		'vs': '../app/config_explorer/node_modules/monaco-editor/min/vs', 
 	}
-});
-
+});  
+  
 require([
 	"splunkjs/mvc",
 	"jquery",
@@ -16,6 +16,9 @@ require([
 	"splunkjs/mvc/simplexml/dashboardview",
     "splunkjs/mvc/searchmanager",
     "vs/editor/editor.main",
+	"app/config_explorer/jquery.transit.min",
+	"app/config_explorer/sortable.min",
+	
 	//"app/config_explorer/node_modules/simplebar/dist/simplebar"
 ], function(
 	mvc,
@@ -27,8 +30,11 @@ require([
 	Dashboard,
     SearchManager,
     wat,
+	transit,
+	Sortable
 	//SimpleBar
 ) {
+
 	// Lovely globals
     var service = mvc.createService({ owner: "nobody" });
     var editors = [];  
@@ -43,6 +49,7 @@ require([
 	var activeTab = null;
 	var conf = {};
 	var confFiles = {};
+	var tabsNotStoredInRecent = ['git', 'run', 'diff', 'html', 'check'];
 	var confFilesSorted = [];
 	var action_mode = 'read';
 	var inFlightRequests = 0;
@@ -277,7 +284,14 @@ require([
 		if (action_mode === 'btool-list') {
 			runBToolList($(this).attr('file'), 'btool');			
 		} else if (action_mode === 'read') {
-			readFileOrFolderAndUpdate($(this).attr('file'));
+			var elem = $(this);
+			if (elem.hasClass("ce_is_folder")) {
+				// uptohere
+				$dirlist.children().transition({ x: '-200px', opacity: 0 });
+			} else if (! elem.hasClass("ce_is_report")) {
+				$dirlist.children().transition({ x: '200px', opacity: 0 });
+			}
+			readFileOrFolderAndUpdate(elem.attr('file'));
 		}
     });
 	
@@ -289,17 +303,17 @@ require([
 		for (var j = 0; j < editors.length; j++) {
 			openlabels.push(editors[j].label);
 		}
-		for (var i = 0; i < closed_tabs.length; i++) {
+		$("<li>Recently closed</li>").appendTo(recent);
+		for (var i = closed_tabs.length - 1; i >= 0 ; i--) {
 			if (counter > 15) {
 				break;
 			}
 			// hide item if they are actually open at the moment
 			if (openlabels.indexOf(closed_tabs[i].label) === -1) {
 				counter++;
-				$("<li class='ce_selectable'></li>").text(closed_tabs[i].label).data(closed_tabs[i]).prependTo(recent);
+				$("<li class='ce_selectable'></li>").text(closed_tabs[i].label).data(closed_tabs[i]).appendTo(recent);
 			}
 		}
-		$("<li>Recently closed</li>").prependTo(recent)
 		//closed_tabs.push({label: file: type: read|btool|btool-hidepaths|btool-hidedefaults|spec|running});
 		$(".ce_wrap").append(recent);
 
@@ -326,11 +340,20 @@ require([
 		});
 	});
 
+	
 	function openTabsListChanged(){
 		var t = [];
+		$tabs.children().each(function(i,elem){
+			$(elem).data().tab.position = i;
+		});
+		
+		editors.sort((a,b) => (a.position > b.position) ? 1 : ((b.position > a.position) ? -1 : 0)); 
+		
+		activeTab = $tabs.children(".ce_active").index();
+		
 		for (var i = 0; i < editors.length; i++){
 			// skip diff tabs, "run" tabs, git output, and html tabs
-			if (editors[i].type !== 'git' && editors[i].type !== 'run' && editors[i].type !== 'diff' && editors[i].type !== 'html') {
+			if (tabsNotStoredInRecent.indexOf(editors[i].type) === -1 && editors[i].label !== "") {
 				t.push({label: editors[i].label, type: editors[i].type, file: editors[i].file});
 			}
 		}
@@ -619,9 +642,9 @@ require([
 						return a.toLowerCase().localeCompare(b.toLowerCase());
 					});
 					$dirlist.empty();
-					$filePath.empty();
+					$filePath.empty().attr("title", path);
 					$("<span></span><bdi></bdi><i title='New folder' class='ce_add_folder ce_clickable_icon ce_right_icon ce_right_two icon-folder'></i>" +
-								"<i title='New file' class='ce_add_file ce_clickable_icon ce_right_icon icon-report'></i>").appendTo($filePath).attr("file", path).attr("title", path);
+								"<i title='New file' class='ce_add_file ce_clickable_icon ce_right_icon icon-report'></i>").attr("file", path).appendTo($filePath);
 					var span = $filePath.find("span").text(path + '/');
 					$filePath.find("bdi").text(path + '/');
 					if (span.width() > $filePath.width()) {
@@ -639,6 +662,7 @@ require([
 						}
 						$("<li class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'></li>").text(contents[i].substr(1)).attr("file", path + "/" + contents[i].substr(1)).prepend("<i class='icon-" + icon + "'></i> ").appendTo($dirlist);
 					}
+					$dirlist.children().transition({"opacity":1})
 				}
 			});
 		}			
@@ -836,31 +860,34 @@ require([
 	// Might be either the effective config or spec config screen
 	function buildLeftPane() {
 		$dirlist.empty();
-
 		for (var i = 0; i < confFilesSorted.length; i++) {
-			$("<li class='ce_leftnav ce_conf'></li>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-report'></i> ").appendTo($dirlist);
+			$("<li class='ce_leftnav ce_conf'></li>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-gear'></i> ").appendTo($dirlist);
 		}
+		$dirlist.children().transition({"opacity":1})
 	}
 	
     function activateTab(idx){
         hideAllTabs();
-        $container.children().eq(idx).removeClass('ce_hidden');
-		$tabs.children().each(function(i,elem){
-			if (idx === i) {
-				$(this).addClass('ce_active');
-			} else if ((idx - 1) !== i) {
-				$(this).append('<span class="ce_pipe"></span>');
-			}
-		});
-        editors[idx].last_opened = Date.now();        
 		activeTab = idx;
+		$tabs.children().eq(idx).addClass('ce_active');
+        editors[idx].container.removeClass('ce_hidden');
+        editors[idx].last_opened = Date.now();  
+		doPipeTabSeperators();
     }
 	
     function hideAllTabs() {
         $container.children().addClass("ce_hidden");
         $tabs.children().removeClass("ce_active");
-		$(".ce_pipe").remove();
     }
+	
+	function doPipeTabSeperators(){
+		$(".ce_pipe").remove();
+		$tabs.children().each(function(i,elem){
+			if ((activeTab - 1) !== i && activeTab !== i) {
+				$(this).append('<span class="ce_pipe"></span>');
+			}
+		});		
+	}
 
 	function closeTabByName(path) {
 		for (var i = 0; i < editors.length; i++) {
@@ -918,7 +945,7 @@ require([
 			closed_tabs.splice(splicy, 1);
 		}
 		//closed_tabs.push({label: file: type: read|btool|btool-hidepaths|btool-hidedefaults|spec|running});
-		if (ecfg.type !== 'git' && ecfg.type !== 'run' && ecfg.type !== 'diff' && ecfg.type !== 'html') {
+		if (tabsNotStoredInRecent.indexOf(ecfg.type) === -1 && ecfg.label !== "") {
 			closed_tabs.push({label: ecfg.label, type: ecfg.type, file: ecfg.file});
 		}
 		// trim length
@@ -988,7 +1015,7 @@ require([
 		if (tab_title === "") {
 			tab_title = "Settings"
 		}
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", label).appendTo($tabs);
+		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", label).data({"tab":ecfg}).appendTo($tabs);
 		activateTab(editors.length-1);
 		ecfg.last_opened = Date.now();
 		ecfg.hasChanges = false;
@@ -1099,7 +1126,9 @@ require([
 					if (ecfg.file === "") {
 						loadPermissionsAndConfList();
 					}
-				}, saved_value);
+				}, saved_value, function(){
+					ecfg.saving = false;
+				});
 			}
 			return null;
 		} else {
@@ -1118,7 +1147,7 @@ require([
 		ecfg.container.append(contents);
 		ecfg.file = filename;
 		ecfg.type = "html";
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).appendTo($tabs);
+		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).data({"tab":ecfg}).appendTo($tabs);
 		activateTab(editors.length-1);
 		ecfg.hasChanges = false;
 		ecfg.server_content = '';
@@ -1132,7 +1161,7 @@ require([
 		ecfg.container = $("<div></div>").appendTo($container);
 		ecfg.type = "diff";
 		ecfg.file = filename;
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).appendTo($tabs);
+		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).data({"tab":ecfg}).appendTo($tabs);
 		activateTab(editors.length-1);
 		openTabsListChanged();
 		ecfg.hasChanges = false;
@@ -1159,7 +1188,7 @@ require([
 	}
 	
 	// Make a rest call to our backend python script
-	function serverAction(type, path, callback, param1) {
+	function serverAction(type, path, callback, param1, fail_cb) {
 		inFlightRequests++;
 		$('.ce_saving_icon').removeClass('ce_hidden');
 		service.post('/services/config_explorer', {action: type, path: path, param1: param1}, function(err, r) {
@@ -1207,7 +1236,10 @@ require([
 					title: "Error",
 					body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + errText + "</pre></div>",
 				});
-				return;				
+				if (typeof fail_cb === 'function') {
+					fail_cb();	
+				}					
+				return;
 			}
 
 			if (r.data.git && r.data.git_status !== 0) {
@@ -1548,6 +1580,18 @@ require([
 				}
 			}
 			confFilesSorted.sort();
+			
+			$(".sk-cube-grid").remove();
+			$(".dashboard-body").removeClass("ce_loading");
+
+			var x = Sortable.create($(".ce_tabs")[0], {
+				animation: 150,
+				onEnd: function () {
+					// uptohere figure out how things moved and reorder list					
+					openTabsListChanged();
+					doPipeTabSeperators();		
+				}
+			});
 		});		
 	}
 	// Build the directory structure
