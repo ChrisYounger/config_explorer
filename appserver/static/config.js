@@ -45,16 +45,16 @@ require([
     var $dirlist = $(".ce_file_list");
 	var $filePath = $(".ce_file_path");
     var $container = $(".ce_contents");
+	var spinner = $(".sk-cube-grid");
     var $tabs = $(".ce_tabs");
 	var activeTab = null;
 	var conf = {};
 	var confFiles = {};
-	var tabsNotStoredInRecent = ['git', 'run', 'diff', 'html', 'check'];
 	var confFilesSorted = [];
 	var action_mode = 'read';
 	var inFlightRequests = 0;
 	var comparisonLeftFile = null;
-	var comparisonLeftMode = null;
+	var tabid = 0;
 
 	// Prevent people from navigating away when they have unsaved changes
     $(window).on("beforeunload", function() {
@@ -81,11 +81,12 @@ require([
 			runShellCommand();
 			
 		} else if (p.hasClass('ce_app_settings')) {
-			readFileOrFolderAndUpdate("")
+			readFile("")
 
 		} else if (p.hasClass('ce_app_changelog')) {
+			var ecfg = createTab('change-log', "", "Change log", false);
             var table = $("<table></table>");
-            serverAction("git-log", undefined, function(contents){
+            serverAction("git-log").then(function(contents){
                 // commit 1, datetime 2 user 3 change 4 files 5 additions 6 deletions 7
                 var rex = /commit\s+(\S+).*?Date:\s+\S+\s+(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+(\S+)(?: +(\S+))?\s+(.+?)\d+\s+files? changed,(?: (\d+) insertions?\(\+\))?(?: (\d+) deletions?\(\-\))?/gs,
 					time,
@@ -172,18 +173,17 @@ require([
 					table.append("<tr commitstart='" + changes[i].sha +"' commitend='" + changes[i].last_sha +"'><td class='nobr'>" + changes[i].time.format("YYYY-MM-DD  h:mma") + "</td><td class='nobr'>" + changes[i].time.fromNow() + "</td>" + type + "<td class='nobr'>" + changes[i].user + "</td><td class='ce_changelog_filescol'>" + fileshtml + "</td></tr>")
                 }
             });
-			openHTMLTab("Change log", "Change log", $("<div class='ce_changelog'></div>").append(table));
+			
+			updateTabHTML(ecfg, $("<div class='ce_changelog'></div>").append(table));
 
 			table.on("click", ".ce_clickable_icon", function(e){
 				var $elem = $(this);
 				if ($elem.hasClass('icon-number')) {
 					var filestr = $.trim($elem.parent().parent().text());
 					var filecommitstr = $elem.parents("tr").attr("commitstart") + ":./" + filestr;
-					
-					serverAction("git-show", filecommitstr, function(contents1){
-						serverAction("read", filestr, function(contents2){
-							openNewDiffTab("Diff: " + filestr, "<span class='ce-dim'>diff:</span> " + dodgyBasename(filestr), "# " + filecommitstr + "\n" + contents1, "# Current HEAD:./" + filestr + "\n" + contents2);		
-						});
+					var ecfg = createTab('diff', filestr, "<span class='ce-dim'>diff:</span> " + dodgyBasename(filestr), false);
+					Promise.all([serverAction("read", filestr), serverAction("git-show", filecommitstr)]).then(function(results) {						
+						updateTabAsDiffer(ecfg, "# " + filecommitstr + "\n" + results[0], "# Current HEAD:./" + filestr + "\n" + results[1])
 					});				
 				} else if ($elem.hasClass('icon-speech-bubble')) {
 					var filestr = $.trim($elem.parent().parent().text());
@@ -230,31 +230,33 @@ require([
 			actions.push($("<div>Delete</div>").on("click", function(){ filesystemDelete(thisFile); }));
 			
 		} else if ($t.hasClass("ce_conf")) {
-
 			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ runBToolList(thisFile, 'btool-hidepaths'); }));
 			actions.push($("<div>Show btool (hide 'default' settings)</div>").on("click", function(){ runBToolList(thisFile, 'btool-hidedefaults'); }));
 			actions.push($("<div>Show .spec file</div>").on("click", function(){ displaySpecFile(thisFile); }));
 			actions.push($("<div>Show live (running) config</div>").on("click", function(){ runningVsLayered(thisFile, false); }));
 			actions.push($("<div>Compare live config against btool output</div>").on("click", function(){ runningVsLayered(thisFile, true); }));
 			//actions.push($("<div>Refresh endpoint</div>").on("click", function(){  }));
-			
 		}
-		// TODO this doesnt work with layered
+
 		if ($t.hasClass("ce_is_report")) {
 			if (confIsTrue('git')) {
 				// can show history
 				actions.push($("<div>View file history</div>").on("click", function(){ getFileHistory(thisFile); }));
 			}
 			// can compare
-			actions.push($("<div>Mark for comparison</div>").on("click", function(){ comparisonLeftFile = thisFile; comparisonLeftMode = action_mode; }));
-			if (comparisonLeftFile && !(comparisonLeftFile === thisFile && comparisonLeftMode === action_mode)) {
+			actions.push($("<div>Mark for comparison</div>").on("click", function(){ 
+				comparisonLeftFile = thisFile; 
+			}));
+			
+			if (comparisonLeftFile && comparisonLeftFile !== thisFile) {
 				actions.push($("<div>Compare to " + htmlEncode(dodgyBasename(comparisonLeftFile)) + "</div>").on("click", function(){
+					var ecfg = createTab('compare', thisFile + " " + comparisonLeftFile, "<span class='ce-dim'>compare:</span> " + thisFile + " " + comparisonLeftFile, false);
 					// get both files 
 					Promise.all([
-						getContentsFromMode(comparisonLeftMode, comparisonLeftFile),
-						getContentsFromMode(action_mode, thisFile),
-					]).then(function(contents_left, contents_this){
-						openNewDiffTab("Compare " + thisFile + " " + comparisonLeftFile, "Compare", comparisonLeftFile + "\n" + contents_left, thisFile + "\n" + contents_this);
+						serverAction('read', comparisonLeftFile),
+						serverAction('read', thisFile),
+					]).then(function(contents){
+						updateTabAsDiffer(ecfg, comparisonLeftFile + "\n" + contents[0], thisFile + "\n" + contents[1])
 					});
 				}));
 			}
@@ -286,12 +288,14 @@ require([
 		} else if (action_mode === 'read') {
 			var elem = $(this);
 			if (elem.hasClass("ce_is_folder")) {
-				// uptohere
 				$dirlist.children().transition({ x: '-200px', opacity: 0 });
+				readFolder(elem.attr('file'));
 			} else if (! elem.hasClass("ce_is_report")) {
 				$dirlist.children().transition({ x: '200px', opacity: 0 });
+				readFolder(elem.attr('file'));
+			} else {
+				readFile(elem.attr('file'));
 			}
-			readFileOrFolderAndUpdate(elem.attr('file'));
 		}
     });
 	
@@ -331,7 +335,7 @@ require([
 			} else if (d.type === 'btool') {
 				runBToolList(d.file, 'btool');
 			} else if (d.type === 'read') {
-				readFileOrFolderAndUpdate(d.file);
+				readFile(d.file);
 			}			
 		});
 			
@@ -352,8 +356,7 @@ require([
 		activeTab = $tabs.children(".ce_active").index();
 		
 		for (var i = 0; i < editors.length; i++){
-			// skip diff tabs, "run" tabs, git output, and html tabs
-			if (tabsNotStoredInRecent.indexOf(editors[i].type) === -1 && editors[i].label !== "") {
+			if (editors[i].can_reopen) {
 				t.push({label: editors[i].label, type: editors[i].type, file: editors[i].file});
 			}
 		}
@@ -367,30 +370,7 @@ require([
 			logClosedTab(t[i]);
 		}
 	})();
-		
-	function getContentsFromMode(mode, path){
-		if (mode === 'running') {
-			return getRunningConfig(path);
-		}
-		return new Promise(function(resolve, reject){
-			if (mode === 'btool-list') {
-				serverAction('btool-list', path, function(contents){
-					resolve($.trim(formatBtoolList(contents, true, false)));
-				});
-				
-			} else if (mode === 'spec') {
-				serverAction('spec', path, function(contents){			
-					resolve($.trim(contents));
-				});
-								
-			} else if (mode === 'read') {
-				serverAction('read', path, function(contents){
-					resolve($.trim(contents));
-				});
-			}			
-		});
-	}
-		
+
 	// Event handlers for the editor tabs
     $tabs.on("click", ".ce_close_tab", function(e){
         var idx = $(this).parent().index();
@@ -450,18 +430,19 @@ require([
 					$('.modal').one('hidden.bs.modal', function (e) {
 						var command = $input.val();
 						if (command) {
-							// trim length
-							if (run_history.length > 50) {
-								run_history.shift();
-							}
-							// only save if the command is different to what was last run
-							if (command !== run_history[(run_history.length - 1)]) {
-								run_history.push(command);
-							}
 							// save to localstorage
-							localStorage.setItem('ce_run_history', JSON.stringify(run_history));
-							serverAction("run", command, function(contents){
-								openNewTab("run",undefined,'$ ' + command, '<span class="ce-dim">$</span> ' + command, contents, false, 'none');
+							var ecfg = createTab('run', '', '<span class="ce-dim">$</span> ' + command, false);
+							serverAction("run", command).then(function(contents){
+								// trim length
+								if (run_history.length > 50) {
+									run_history.shift();
+								}
+								// only save if the command is different to what was last run
+								if (command !== run_history[(run_history.length - 1)]) {
+									run_history.push(command);
+								}								
+								localStorage.setItem('ce_run_history', JSON.stringify(run_history));
+								updateTabAsEditor(ecfg, contents, false, 'none');
 							}, command);
 						}
 					}).modal('hide');
@@ -476,11 +457,13 @@ require([
 	}
 	
 	function runBToolCheck() {
-		serverAction('btool-check', undefined, function(contents){
+		var ecfg = createTab('btool-check', "", 'Check config', false);
+		serverAction('btool-check').then(function(contents){
 			contents = contents.replace(/^(No spec file for|Checking):.*\r?\n/mg,'').replace(/^\t\t/mg,'').replace(/\n{2,}/g,'\n\n');
 			if ($.trim(contents)) {
-				openNewTab('check',undefined,'Check config', 'Check config', contents, false, 'none');
+				updateTabAsEditor(ecfg, contents, false, 'none');
 			} else {
+				closeEmptyTab(ecfg);
 				showModal({
 					title: "Info",
 					body: "<div class='alert alert-info'><i class='icon-alert'></i>No configuration errors found</div>",
@@ -508,7 +491,12 @@ require([
 							}
 						}
 					}
-					resolve(str);
+					if (str) {
+						resolve(str);
+					} else {
+						reject();
+					}
+					
 				} else {
 					reject();
 				}
@@ -517,29 +505,29 @@ require([
 	}
 	
 	function runningVsLayered(path, compare){
-		//var ce_running_diff = $('.ce_running_diff:checked').length;
-		var tab_path = 'running config: ' + path;
+		var type = 'live';
 		var tab_path_fmt = '<span class="ce-dim">live:</span> ' + path;
 		if (compare) {
-			tab_path = 'running config vs filesystem: ' + path;
+			type = 'live-diff';
 			tab_path_fmt = '<span class="ce-dim">live/fs:</span> ' + path;
 		}
-		if (! tabAlreadyOpen(tab_path)) {
-			serverAction('btool-list', path, function(contents){
+		if (! tabAlreadyOpen(type, path)) {
+			var ecfg = createTab(type, path, tab_path_fmt, false);
+			serverAction('btool-list', path).then(function(contents){
 				var c = formatBtoolList(contents, true, false);
 				if ($.trim(c)) {
 					getRunningConfig(path).then(function(contents_running){
 						if (compare) {
-							openNewDiffTab(
-								tab_path, 
-								tab_path_fmt, 
-								"# Filesystem (layered) config\n" + formatLikeRunningConfig(contents), //formatLikeRunningConfig(contents), 
+							updateTabAsDiffer(
+								ecfg, 
+								"# Filesystem config\n" + formatLikeRunningConfig(contents),
 								"# Running config\n" + contents_running
 							);
 						} else {
-							openNewTab('running', path, tab_path, tab_path_fmt, contents_running); //formatLikeRunningConfig(contents));
+							updateTabAsEditor(ecfg, contents_running, false, 'ini');
 						}						
 					}).catch(function(){
+						closeEmptyTab(ecfg);
 						showModal({
 							title: "Warning",
 							body: "<div class='alert alert-warning'><i class='icon-alert'></i>Could not get retreieve running config for " + htmlEncode(path) + "</div>",
@@ -547,9 +535,10 @@ require([
 						});								
 					});	
 				} else {
+					closeEmptyTab(ecfg);
 					showModal({
 						title: "Error",
-						body: "<div class='alert alert-error'><i class='icon-alert'></i>Unable to get config for " + htmlEncode(path) + "</div>",
+						body: "<div class='alert alert-error'><i class='icon-alert'></i>No btool data returned for " + htmlEncode(path) + "</div>",
 						size: 300
 					});							
 				}							
@@ -558,7 +547,6 @@ require([
 	}
 	
 	function runBToolList(path, type){
-		var tab_path = 'btool: ' + path;
 		var ce_btool_default_values = true;
 		var ce_btool_path = true;
 		if (type === 'btool-hidepaths') {
@@ -570,25 +558,25 @@ require([
 		}
 		var tab_path_fmt = '<span class="ce-dim">btool:</span> ' + path;
 		if (! ce_btool_default_values) { 
-			tab_path += " (no defaults)"  
 			tab_path_fmt += " <span class='ce-dim'>(no defaults)</span>"  
 		} else if (ce_btool_path) { 
-			tab_path += " --debug"  
 			tab_path_fmt += " <span class='ce-dim'>--debug</span>"  
 		}
-		if (! tabAlreadyOpen(tab_path, true, false)) {
-			serverAction('btool-list', path, function(contents){
+		if (! tabAlreadyOpen(type, path)) {
+			var ecfg = createTab(type, path, tab_path_fmt, true);
+			serverAction('btool-list', path).then(function(contents){
 				var c = formatBtoolList(contents, ce_btool_default_values, ce_btool_path);
 				if ($.trim(c)) {
-					var ecfg = openNewTab(type, path, tab_path, tab_path_fmt, c, false, 'ini');
+					updateTabAsEditor(ecfg, c, false, 'ini');
 					ecfg.btoollist = contents;
-					serverAction('spec-hinting', path, function(c){
-						ecfg.hinting = buildHintingLookup(path, c);
+					serverAction('spec-hinting', path).then(function(h){
+						ecfg.hinting = buildHintingLookup(path, h);
 					});					
 				} else {
+					closeEmptyTab(ecfg);
 					showModal({
 						title: "Warning",
-						body: "<div class='alert alert-warning'><i class='icon-alert'></i>No contents</div>",
+						body: "<div class='alert alert-warning'><i class='icon-alert'></i>No contents for \"<strong>" + tab_path_fmt + "</strong>\"</div>",
 						size: 300
 					});							
 				}							
@@ -596,15 +584,16 @@ require([
 		}	
 	}	
 	
-	
 	function displaySpecFile(path) {
 		var tab_path = 'spec: ' + path;
 		var tab_path_fmt = '<span class="ce-dim">spec:</span> ' + path;
-		if (! tabAlreadyOpen(tab_path)) {
-			serverAction('spec', path, function(contents){			
+		if (! tabAlreadyOpen('spec', path)) {
+			var ecfg = createTab('spec', path, tab_path_fmt, true);
+			serverAction('spec', path).then(function(contents) {
 				if ($.trim(contents)) {
-					openNewTab("spec", path, tab_path, tab_path_fmt, contents, false, 'ini');
+					updateTabAsEditor(ecfg, contents, false, 'ini');
 				} else {
+					closeEmptyTab(ecfg);
 					showModal({
 						title: "Error",
 						body: "<div class='alert alert-error'><i class='icon-alert'></i>No spec file found!</div>",
@@ -617,53 +606,62 @@ require([
 
 	// Update and display the left pane in filesystem mode
 	function refreshCurrentPath() {
-		readFileOrFolderAndUpdate(inFolder);
+		readFolder(inFolder);
 	}
+
+	function readFolder(path){
+		serverAction('read', path).then(function(contents){
+			inFolder = path;
+			localStorage.setItem('ce_current_path', inFolder);
+			contents.sort(function (a, b) {
+				return a.toLowerCase().localeCompare(b.toLowerCase());
+			});
+			$dirlist.empty();
+			$filePath.empty().attr("title", path);
+			$("<span></span><bdi></bdi><i title='New folder' class='ce_add_folder ce_clickable_icon ce_right_icon ce_right_two icon-folder'></i>" +
+						"<i title='New file' class='ce_add_file ce_clickable_icon ce_right_icon icon-report'></i>").attr("file", path).appendTo($filePath);
+			var span = $filePath.find("span").text(path + '/');
+			$filePath.find("bdi").text(path + '/');
+			if (span.width() > $filePath.width()) {
+				$filePath.addClass('ce_rtl');
+			} else {
+				$filePath.removeClass('ce_rtl');
+			}
+			if (path !== ".") {
+				$("<li class='ce_leftnav'><i class='icon-arrow-left'></i> ..</li>").attr("file", path.replace(/[\/\\][^\/\\]+$/,'')).appendTo($dirlist);
+			}
+			for (var i = 0; i < contents.length; i++) {
+				var icon = "folder";
+				if (contents[i].substr(0,1) === "F") {
+					icon = "report";
+				}
+				$("<li class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'></li>").text(contents[i].substr(1)).attr("file", path + "/" + contents[i].substr(1)).prepend("<i class='icon-" + icon + "'></i> ").appendTo($dirlist);
+			}
+			$dirlist.children().transition({"opacity":1});
+		});
+	}
+
 	
 	// Handle clicking an file or folder in the left pane
-	function readFileOrFolderAndUpdate(path){
-		if (! tabAlreadyOpen(path)) {
-			serverAction('read', path, function(contents){
-				if (typeof contents === "string") {					
-					var ecfg = openNewTab("read", path, path, dodgyBasename(path), contents, true);
-					if (ecfg.hasOwnProperty('matchedConf')) {
-						highlightBadConfig(ecfg);
-						if (confFiles.hasOwnProperty(ecfg.matchedConf)) {
-							serverAction('spec-hinting', ecfg.matchedConf, function(c){
-								ecfg.hinting = buildHintingLookup(ecfg.matchedConf, c);
-							});
-						}						
-					} 
-					
-				} else {
-					inFolder = path;
-					localStorage.setItem('ce_current_path', inFolder);
-					contents.sort(function (a, b) {
-						return a.toLowerCase().localeCompare(b.toLowerCase());
-					});
-					$dirlist.empty();
-					$filePath.empty().attr("title", path);
-					$("<span></span><bdi></bdi><i title='New folder' class='ce_add_folder ce_clickable_icon ce_right_icon ce_right_two icon-folder'></i>" +
-								"<i title='New file' class='ce_add_file ce_clickable_icon ce_right_icon icon-report'></i>").attr("file", path).appendTo($filePath);
-					var span = $filePath.find("span").text(path + '/');
-					$filePath.find("bdi").text(path + '/');
-					if (span.width() > $filePath.width()) {
-						$filePath.addClass('ce_rtl');
-					} else {
-						$filePath.removeClass('ce_rtl');
-					}
-					if (path !== ".") {
-						$("<li class='ce_leftnav'><i class='icon-arrow-left'></i> ..</li>").attr("file", path.replace(/[\/\\][^\/\\]+$/,'')).appendTo($dirlist);
-					}
-					for (var i = 0; i < contents.length; i++) {
-						var icon = "folder";
-						if (contents[i].substr(0,1) === "F") {
-							icon = "report";
-						}
-						$("<li class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'></li>").text(contents[i].substr(1)).attr("file", path + "/" + contents[i].substr(1)).prepend("<i class='icon-" + icon + "'></i> ").appendTo($dirlist);
-					}
-					$dirlist.children().transition({"opacity":1})
-				}
+	function readFile(path){
+		if (! tabAlreadyOpen('read', path)) {
+			var label = dodgyBasename(path);
+			var can_reopen = true;
+			if (path === "") {
+				label = "Settings";
+				can_reopen = false;
+			}
+			var ecfg = createTab('read', path, label, can_reopen)
+			serverAction('read', path).then(function(contents){
+				updateTabAsEditor(ecfg, contents, true);
+				if (ecfg.hasOwnProperty('matchedConf')) {
+					highlightBadConfig(ecfg);
+					if (confFiles.hasOwnProperty(ecfg.matchedConf)) {
+						serverAction('spec-hinting', ecfg.matchedConf).then(function(c){
+							ecfg.hinting = buildHintingLookup(ecfg.matchedConf, c);
+						});
+					}						
+				} 
 			});
 		}			
 	}
@@ -675,6 +673,7 @@ require([
 		} else {
 			type = "folder";
 		}
+		console.log(type, parentPath);
 		showModal({
 			title: "New " + type,
 			size: 300,
@@ -691,10 +690,10 @@ require([
 					$('.modal').one('hidden.bs.modal', function (e) {
 						var fname = $('.ce_prompt_input').val();
 						if (fname) {
-							serverAction("new" + type, parentPath, function(){
+							serverAction("new" + type, parentPath, fname).then(function(){
 								refreshCurrentPath();
 								showToast('Success');
-							}, fname);
+							});
 						}
 					}).modal('hide');
 				},
@@ -726,13 +725,13 @@ require([
 					$('.modal').one('hidden.bs.modal', function (e) {
 						var newname = $('.ce_prompt_input').val();
 						if (newname) {
-							serverAction("rename", parentPath, function(){
+							serverAction("rename", parentPath, newname).then(function(){
 								refreshCurrentPath();
 								showToast('Success');
 								// if "path" is open in an editor, it needs to be closed without warning
 								closeTabByName(parentPath);
 						
-							}, newname);
+							});
 						}
 					}).modal('hide');
 				},
@@ -770,7 +769,7 @@ require([
 						return;
 					}
 					$('.modal').one('hidden.bs.modal', function (e) {
-						serverAction("delete", file, function(){
+						serverAction("delete", file).then(function(){
 							refreshCurrentPath();
 							showToast('Success');
 							// if "path" is open in an editor, it needs to be closed without warning
@@ -788,14 +787,16 @@ require([
 	}
 	
 	function getFileHistory(file, commitstart, commitend){
-		serverAction("git-history", file, function(contents){
+		var ecfg = createTab('history', file, "<span class='ce-dim'>history:</span> " + dodgyBasename(file), false);
+		serverAction("git-history", file).then(function(contents){
 			contents = $.trim(contents);
 			if (! contents) {
 				showModal({
 					title: "Warning",
 					body: "<div class='alert alert-warning'><i class='icon-alert'></i>No change history found for: <br><br><code>" + htmlEncode(file) + "</code></div>",
 					size: 400
-				});				
+				});
+				closeEmptyTab(ecfg);
 				return;
 			}
 			lines = htmlEncode(contents).split(/\r?\n/);
@@ -853,7 +854,7 @@ require([
 				}
 			}
 			
-			openHTMLTab("history: " + file, "<span class='ce-dim'>history:</span> " + dodgyBasename(file), $("<div class='ce_file_history'></div>").html(str));		
+			updateTabHTML(ecfg, $("<div class='ce_file_history'></div>").html(str))
 		});
 	}
 	
@@ -888,20 +889,29 @@ require([
 			}
 		});		
 	}
-
-	function closeTabByName(path) {
+	
+	function closeEmptyTab(ecfg) {
 		for (var i = 0; i < editors.length; i++) {
-			if (editors[i].file === path) {
+			if (editors[i].id === ecfg.id) {
+				closeTabNow(i);
+				return;
+			}
+		}		
+	}
+
+	function closeTabByName(file) {
+		for (var i = 0; i < editors.length; i++) {
+			if (editors[i].file === file) {
 				closeTabNow(i);
 				return;
 			}
 		}
 	}
 	
-	function tabAlreadyOpen(tab_path) {
+	function tabAlreadyOpen(type, file) {
 		// check if file is already open
 		for (var i = 0; i < editors.length; i++) {
-			if (editors[i].file === tab_path) {
+			if (editors[i].type === type && editors[i].file === file) {
 				activateTab(i);
 				return true;
 			}
@@ -944,8 +954,7 @@ require([
 		if (splicy > -1){
 			closed_tabs.splice(splicy, 1);
 		}
-		//closed_tabs.push({label: file: type: read|btool|btool-hidepaths|btool-hidedefaults|spec|running});
-		if (tabsNotStoredInRecent.indexOf(ecfg.type) === -1 && ecfg.label !== "") {
+		if (ecfg.can_reopen) {
 			closed_tabs.push({label: ecfg.label, type: ecfg.type, file: ecfg.file});
 		}
 		// trim length
@@ -982,44 +991,32 @@ require([
 			activateTab(last_used_idx);
 		}		
 	}
-	
-	function openNewTab(type, filename, label, tab_title, contents, canBeSaved, language) {
-		var ecfg = {};
-		editors.push(ecfg);
+	function updateTabAsEditor(ecfg, contents, canBeSaved, language) {
 		if (!language) {
 			language = "ini"; // .conf, .meta, spec
-			if (/.js$/.test(filename)) {
+			if (/.js$/.test(ecfg.file)) {
 				language = "javascript";
-			} else if (/.xml$/.test(filename)) {
+			} else if (/.xml$/.test(ecfg.file)) {
 				language = "xml";
-			} else if (/.html$/.test(filename)) {
+			} else if (/.html$/.test(ecfg.file)) {
 				language = "html";
-			} else if (/.css$/.test(filename)) {
+			} else if (/.css$/.test(ecfg.file)) {
 				language = "css";
-			} else if (/.py$/.test(filename)) {
+			} else if (/.py$/.test(ecfg.file)) {
 				language = "python";
-			} else if (/.md$/.test(filename)) {
+			} else if (/.md$/.test(ecfg.file)) {
 				language = "markdown";
 			}
 		}
 		var re = /([^\/\\]+).conf$/;
-		var found = tab_title.match(re);
-		if (found) {
+		var found = ecfg.file.match(re);
+		if (found && ecfg.type === 'read') {
 			ecfg.matchedConf = found[1];
-		}
-					
-		ecfg.container = $("<div></div>").appendTo($container);
-		ecfg.label = label;
-		ecfg.file = filename;
-		ecfg.type = type;
-		if (tab_title === "") {
-			tab_title = "Settings"
-		}
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", label).data({"tab":ecfg}).appendTo($tabs);
-		activateTab(editors.length-1);
-		ecfg.last_opened = Date.now();
-		ecfg.hasChanges = false;
+		}					
 		ecfg.canBeSaved = canBeSaved;
+		ecfg.saving = false;
+		ecfg.decorations = [];
+		ecfg.container.empty();
 		ecfg.editor = monaco.editor.create(ecfg.container[0], {
 			automaticLayout: true,
 			value: contents,
@@ -1029,9 +1026,6 @@ require([
 			glyphMargin: true
 			
 		});
-		ecfg.saving = false;
-		ecfg.decorations = [];
-
 		ecfg.server_content = ecfg.editor.getValue();
 		if (ecfg.canBeSaved) {
 			ecfg.editor.onDidChangeModelContent(function (e) {
@@ -1057,9 +1051,6 @@ require([
 			contextMenuOrder: 1,
 			contextMenuGroupId: ecfg.canBeSaved ? '1_modification' : null,
 			label: 'Save file',
-			//keybindings: [
-			//	monaco.KeyMod.CtrlCmd | monaco.KeyCode.KEY_S,
-			//],
 			run: function() {
 				saveActiveTab();
 			}
@@ -1083,7 +1074,7 @@ require([
 					 displaySpecFile(ecfg.matchedConf);
 				}
 			});	
-		}	
+		}
         ecfg.editor.addAction({
 			id: 'word-wrap-on',
 			label: 'Word wrap on',
@@ -1103,7 +1094,6 @@ require([
 			}
 		}); 
 		openTabsListChanged();
-		return ecfg;		
 	}
 	
 	function saveActiveTab(){
@@ -1115,7 +1105,7 @@ require([
 			if (! ecfg.saving) {
 				var saved_value = ecfg.editor.getValue();
 				ecfg.saving = true;
-				serverAction('save', ecfg.file, function(){
+				serverAction('save', ecfg.file, saved_value).then(function(){
 					ecfg.saving = false;
 					showToast('Saved');
 					ecfg.server_content = saved_value;
@@ -1126,7 +1116,7 @@ require([
 					if (ecfg.file === "") {
 						loadPermissionsAndConfList();
 					}
-				}, saved_value, function(){
+				}, function(){
 					ecfg.saving = false;
 				});
 			}
@@ -1137,38 +1127,45 @@ require([
 				body: "<div class='alert alert-warning'><i class='icon-alert'></i>This file cannot be saved</div>",
 				size: 300
 			});	
-		}		
-		
+		}			
 	}
-	function openHTMLTab(filename, tab_title, contents) {
-		var ecfg = {};
+
+	function createLabel(type, file) {
+		if (type === "read"){ 
+			return file; 
+		}
+		return type + ": " + file;
+	}
+	
+	function createTab(type, file, label, can_reopen, contents){
+		var ecfg = {
+			type: type, 
+			file: file,
+			can_reopen: can_reopen,
+			id: tabid++
+		};
 		editors.push(ecfg);	
 		ecfg.container = $("<div></div>").appendTo($container);
+		if (contents === undefined) {
+			contents = spinner.clone();
+		}
 		ecfg.container.append(contents);
-		ecfg.file = filename;
-		ecfg.type = "html";
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).data({"tab":ecfg}).appendTo($tabs);
-		activateTab(editors.length-1);
+		ecfg.tab = $("<div class='ce_tab ce_active'>" + label + "<div class='ce_tab_shadow'></div></div>").attr("title", createLabel(type, file)).data({"tab": ecfg}).appendTo($tabs);
 		ecfg.hasChanges = false;
 		ecfg.server_content = '';
+		activateTab(editors.length-1);
 		openTabsListChanged();
 		return ecfg;			
 	}
 	
-	function openNewDiffTab(filename, tab_title, right, left) {
-		var ecfg = {};
-		editors.push(ecfg);
-		ecfg.container = $("<div></div>").appendTo($container);
-		ecfg.type = "diff";
-		ecfg.file = filename;
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + tab_title + "</div>").attr("title", filename).data({"tab":ecfg}).appendTo($tabs);
-		activateTab(editors.length-1);
-		openTabsListChanged();
-		ecfg.hasChanges = false;
-
+	function updateTabHTML(ecfg, contents) {
+		ecfg.container.html(contents);			
+	}
+	
+	function updateTabAsDiffer(ecfg, left, right) {
 		var originalModel = monaco.editor.createModel(left, "ini");
 		var modifiedModel = monaco.editor.createModel(right, "ini");
-
+		ecfg.container.empty();
 		ecfg.editor = monaco.editor.createDiffEditor(ecfg.container[0],{
 			automaticLayout: true,
 			theme: "vs-dark",
@@ -1178,8 +1175,6 @@ require([
 			original: originalModel,
 			modified: modifiedModel
 		});	
-		ecfg.server_content = '';
-		return ecfg;	
 	}	
 	
     // TODO replace this with something that comes from the os
@@ -1188,68 +1183,66 @@ require([
 	}
 	
 	// Make a rest call to our backend python script
-	function serverAction(type, path, callback, param1, fail_cb) {
-		inFlightRequests++;
-		$('.ce_saving_icon').removeClass('ce_hidden');
-		service.post('/services/config_explorer', {action: type, path: path, param1: param1}, function(err, r) {
-			inFlightRequests--;
-			if (inFlightRequests === 0) {
-				$('.ce_saving_icon').addClass('ce_hidden');
-			}
-			var errText = '';
-			//console.log(type, err, r);
-			if (err) {
-				if (err.data.hasOwnProperty('messages')) {
-					errText = "<pre>" + htmlEncode(err.data.messages["0"].text) + "</pre>";
-				} else {
-					errText = "<pre>" + htmlEncode(JSON.stringify(err)) + "</pre>";
+	function serverAction(type, path, param1) {
+		return new Promise(function(resolve, reject) {
+			inFlightRequests++;
+			$('.ce_saving_icon').removeClass('ce_hidden');
+			service.post('/services/config_explorer', {action: type, path: path, param1: param1}, function(err, r) {
+				inFlightRequests--;
+				if (inFlightRequests === 0) {
+					$('.ce_saving_icon').addClass('ce_hidden');
 				}
-			} else {
-				if (! r.data) {
-					errText = "<pre>Error communicating with Splunk</pre>";
-					
-				} else if (! r.data.hasOwnProperty('status')) {
-					errText = "<pre>" + htmlEncode(r.data) + "</pre>";
-					
-				} else if (r.data.status === "missing_perm_read") {
-					errText = "<p>To use this application you must be have the capability \"<strong>admin_all_objects</strong>\" via a <a href='/manager/config_explorer/authorization/roles'>role</a>.</p>";
+				var errText = '';
+				console.log(type, err, r);
+				if (err) {
+					if (err.data.hasOwnProperty('messages')) {
+						errText = "<pre>" + htmlEncode(err.data.messages["0"].text) + "</pre>";
+					} else {
+						errText = "<pre>" + htmlEncode(JSON.stringify(err)) + "</pre>";
+					}
+				} else {
+					if (! r.data) {
+						errText = "<pre>Error communicating with Splunk</pre>";
+						
+					} else if (! r.data.hasOwnProperty('status')) {
+						errText = "<pre>" + htmlEncode(r.data) + "</pre>";
+						
+					} else if (r.data.status === "missing_perm_read") {
+						errText = "<p>To use this application you must be have the capability \"<strong>admin_all_objects</strong>\" via a <a href='/manager/config_explorer/authorization/roles'>role</a>.</p>";
 
-				} else if (r.data.status === "missing_perm_run") {
-					errText = "<p>You must enable the <code>run_commands</code> setting" + ((confIsTrue('lock_config')) ? " (and set <code>config_locked</code> to false in <code>etc/apps/config_explorer/local/config_explorer.conf</code>)" : "") + "</p>";
-					
-				} else if (r.data.status === "missing_perm_write") {
-					errText = "<p>You must enable the <code>write_access</code> setting" + ((confIsTrue('lock_config')) ? " (and set <code>config_locked</code> to false in <code>etc/apps/config_explorer/local/config_explorer.conf</code>)" : "") + "</p>";
-					
-				} else if (r.data.status === "config_locked") {
-					errText = "<p>Unable to write to the settings file becuase it is locked and must be edited externally: <code>etc/apps/config_explorer/local/config_explorer.conf</code></p>";
-					
-				} else if (r.data.status === "error") {
-					errText = "<pre>" + htmlEncode(r.data.result) + "</pre>";
-					if (type === "read" && path === localStorage.getItem('ce_current_path')) {
-						// Folder must have been deleted outside of this
-						readFileOrFolderAndUpdate(".")
+					} else if (r.data.status === "missing_perm_run") {
+						errText = "<p>You must enable the <code>run_commands</code> setting" + ((confIsTrue('lock_config')) ? " (and set <code>config_locked</code> to false in <code>etc/apps/config_explorer/local/config_explorer.conf</code>)" : "") + "</p>";
+						
+					} else if (r.data.status === "missing_perm_write") {
+						errText = "<p>You must enable the <code>write_access</code> setting" + ((confIsTrue('lock_config')) ? " (and set <code>config_locked</code> to false in <code>etc/apps/config_explorer/local/config_explorer.conf</code>)" : "") + "</p>";
+						
+					} else if (r.data.status === "config_locked") {
+						errText = "<p>Unable to write to the settings file becuase it is locked and must be edited externally: <code>etc/apps/config_explorer/local/config_explorer.conf</code></p>";
+						
+					} else if (r.data.status === "error") {
+						errText = "<pre>" + htmlEncode(r.data.result) + "</pre>";
+						if (type === "read" && path === localStorage.getItem('ce_current_path')) {
+							// Folder must have been deleted outside of this
+							readFolder(".")
+						}
 					}
 				}
-			}
-			if (errText) {
-				showModal({
-					title: "Error",
-					body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + errText + "</pre></div>",
-				});
-				if (typeof fail_cb === 'function') {
-					fail_cb();	
-				}					
-				return;
-			}
-
-			if (r.data.git && r.data.git_status !== 0) {
-				openNewTab('git',undefined,'git output', 'git output', r.data.git, false, 'none');
-			}			
-
-			if (typeof callback === 'function') {
-				callback(r.data.result);	
-			}	
-		});		
+				if (errText) {
+					showModal({
+						title: "Error",
+						body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + errText + "</pre></div>",
+					});
+					reject(Error("derp"));
+				} else {
+					// if there was some unexpected git output, then open a window to display it
+					if (r.data.git && r.data.git_status !== 0) {
+						var ecfg = createTab('git', '', 'git output', false);
+						updateTabAsEditor(ecfg, r.data.git, false, "none");
+					}			
+					resolve(r.data.result);					
+				}
+			});	
+		});			
 	}
 
 	// Try to build a conf file from calling the rest services. turns out this isn't great
@@ -1291,7 +1284,7 @@ require([
 			return;
 		}
 		if (ecfg.hasOwnProperty('matchedConf')) {
-			serverAction('btool-list', ecfg.matchedConf, function(btoolcontents){
+			serverAction('btool-list', ecfg.matchedConf).then(function(btoolcontents){
 				if (! $.trim(btoolcontents)) {
 					delete ecfg.matchedConf;
 					return;
@@ -1548,7 +1541,8 @@ require([
 	
 	function loadPermissionsAndConfList(){
 		// Build the list of config files
-		serverAction('init', undefined, function(data){
+		
+		serverAction('init').then(function(data) {
 			var rex = /^Checking: .*[\/\\]([^\/\\]+?).conf\s*$/gmi,
 				res;
 			conf = data.conf;
@@ -1581,7 +1575,7 @@ require([
 			}
 			confFilesSorted.sort();
 			
-			$(".sk-cube-grid").remove();
+			spinner.detach();
 			$(".dashboard-body").removeClass("ce_loading");
 
 			var x = Sortable.create($(".ce_tabs")[0], {

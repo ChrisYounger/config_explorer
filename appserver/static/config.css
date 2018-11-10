@@ -209,10 +209,24 @@
     /* border-left: 1px solid #3d424d; */
     height: 21px;
     width: 0px;
-    z-index: 2;
+    z-index: 4;
     margin-right: 0px;
 }
-
+.ce_tab_shadow{
+	position: absolute;
+    right: 0px;
+    box-shadow: -2px 0 4px #262626, -4px 0 8px #262626;
+    height: 25px;
+    width: 6px;
+    z-index: 3;
+    margin-top: 0px;
+    background-color: #262626;
+    top: 0;
+}
+.ce_active .ce_tab_shadow{
+    box-shadow: -2px 0 4px #1d1d1d, -4px 0 8px #1d1d1d;
+    background-color: #1d1d1d;
+}
 .ce_tab_new {
     width: 30px;
     position: relative;
@@ -257,8 +271,13 @@
     right: 7px;
     padding: 2px 5px;
     margin-top: -2px;
-    background-color: inherit;
+    background-color: #262626;
+	box-shadow: 0 0 4px #262626;
 	height: 34px;
+}
+.ce_active .ce_right_icon {
+    background-color: #1d1d1d;
+	box-shadow: 0 0 4px #1d1d1d;
 }
 .ce_recent_files {
     top: 10px;
