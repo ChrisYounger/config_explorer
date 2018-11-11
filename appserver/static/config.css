@@ -279,6 +279,25 @@
     background-color: #1d1d1d;
 	box-shadow: 0 0 4px #1d1d1d;
 }
+.ce_restore_session {
+    color: #c3cbd4;
+    margin: 10px 30px;
+    cursor: pointer;
+    position: relative;
+}
+.ce_restore_session i  {
+    font-size: 20px;
+    color: white;
+    position: absolute;
+    left: -16px;
+    top: 0px;
+}
+.ce_restore_session:hover i {
+	color: #00A4FD;
+}
+.ce_restore_session:hover span  {
+	text-decoration: underline;
+}
 .ce_recent_files {
     top: 10px;
     background-color: transparent;

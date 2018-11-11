@@ -77,12 +77,7 @@ class req(splunk.rest.BaseRestHandler):
 			transforms_content = json.loads(server_content)
 			user = transforms_content['entry'][0]['content']['username']
 			capabilities = transforms_content['entry'][0]['content']['capabilities']
-			
-			# when config is locked, we automatically disable run and write access otherwise someone could just reverse it.
-			if confIsTrue("lock_config"):
-				conf["default"]["run_commands"] = "false"
-				conf["default"]["write_access"] = "false"
-			
+					
 			# dont allow write or run access unless the user makes the effort to set the capability
 			if action == 'run' and not confIsTrue("run_commands"):
 				status = "missing_perm_run"
@@ -90,7 +85,7 @@ class req(splunk.rest.BaseRestHandler):
 			elif ((action in ['delete', 'rename', 'newfolder', 'newfile']) or (action == "save" and action_item != "")) and not confIsTrue("write_access"):
 				status = "missing_perm_write"
 			
-			elif action == "save" and action_item == "" and confIsTrue("lock_config"):
+			elif action == "save" and action_item == "" and confIsTrue("hide_settings"):
 				status = "config_locked"
 			
 			# we need to prevent even read access to admins so that people don't call our api and read the .secrets file

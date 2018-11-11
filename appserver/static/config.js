@@ -324,19 +324,7 @@ require([
 		recent.on("click auxclick", ".ce_selectable", function(){
 			var d = $(this).data();
 			console.log(d);
-			if (d.type === 'btool-hidepaths') {
-				runBToolList(d.file, 'btool-hidepaths');
-			} else if (d.type === 'btool-hidedefaults') {
-				runBToolList(d.file, 'btool-hidedefaults');
-			} else if (d.type === 'spec') {
-				displaySpecFile(d.file);
-			} else if (d.type === 'running') {
-				runningVsLayered(d.file, false);
-			} else if (d.type === 'btool') {
-				runBToolList(d.file, 'btool');
-			} else if (d.type === 'read') {
-				readFile(d.file);
-			}			
+			restoreTab(d.type, d.file);
 		});
 			
 		$(document).one("click", function(){
@@ -344,6 +332,21 @@ require([
 		});
 	});
 
+	function restoreTab(type, file) {
+		if (type === 'btool-hidepaths') {
+			runBToolList(file, 'btool-hidepaths');
+		} else if (type === 'btool-hidedefaults') {
+			runBToolList(file, 'btool-hidedefaults');
+		} else if (type === 'spec') {
+			displaySpecFile(file);
+		} else if (type === 'running') {
+			runningVsLayered(file, false);
+		} else if (type === 'btool') {
+			runBToolList(file, 'btool');
+		} else if (type === 'read') {
+			readFile(file);
+		}		
+	}
 	
 	function openTabsListChanged(){
 		var t = [];
@@ -362,14 +365,6 @@ require([
 		}
 		localStorage.setItem('ce_open_tabs', JSON.stringify(t));
 	}
-	
-	// on page load, log that tabs that were open previously
-	(function(){
-		var t = (JSON.parse(localStorage.getItem('ce_open_tabs')) || []);
-		for (var i = 0; i < t.length; i++){
-			logClosedTab(t[i]);
-		}
-	})();
 
 	// Event handlers for the editor tabs
     $tabs.on("click", ".ce_close_tab", function(e){
@@ -1150,6 +1145,8 @@ require([
 			contents = spinner.clone();
 		}
 		ecfg.container.append(contents);
+		// Remove the "restore session" link
+		$(".ce_restore_session").remove();		
 		ecfg.tab = $("<div class='ce_tab ce_active'>" + label + "<div class='ce_tab_shadow'></div></div>").attr("title", createLabel(type, file)).data({"tab": ecfg}).appendTo($tabs);
 		ecfg.hasChanges = false;
 		ecfg.server_content = '';
@@ -1193,7 +1190,7 @@ require([
 					$('.ce_saving_icon').addClass('ce_hidden');
 				}
 				var errText = '';
-				console.log(type, err, r);
+				//console.log(type, err, r);
 				if (err) {
 					if (err.data.hasOwnProperty('messages')) {
 						errText = "<pre>" + htmlEncode(err.data.messages["0"].text) + "</pre>";
@@ -1211,10 +1208,10 @@ require([
 						errText = "<p>To use this application you must be have the capability \"<strong>admin_all_objects</strong>\" via a <a href='/manager/config_explorer/authorization/roles'>role</a>.</p>";
 
 					} else if (r.data.status === "missing_perm_run") {
-						errText = "<p>You must enable the <code>run_commands</code> setting" + ((confIsTrue('lock_config')) ? " (and set <code>config_locked</code> to false in <code>etc/apps/config_explorer/local/config_explorer.conf</code>)" : "") + "</p>";
+						errText = "<p>You must enable the <code>run_commands</code> setting</p>";
 						
 					} else if (r.data.status === "missing_perm_write") {
-						errText = "<p>You must enable the <code>write_access</code> setting" + ((confIsTrue('lock_config')) ? " (and set <code>config_locked</code> to false in <code>etc/apps/config_explorer/local/config_explorer.conf</code>)" : "") + "</p>";
+						errText = "<p>You must enable the <code>write_access</code> setting</p>";
 						
 					} else if (r.data.status === "config_locked") {
 						errText = "<p>Unable to write to the settings file becuase it is locked and must be edited externally: <code>etc/apps/config_explorer/local/config_explorer.conf</code></p>";
@@ -1553,7 +1550,7 @@ require([
 			if(confIsTrue('run_commands')) {
 				$dashboardBody.removeClass('ce_no_run_access');
 			}
-			if(! confIsTrue('lock_config')) {
+			if(! confIsTrue('hide_settings')) {
 				$dashboardBody.removeClass('ce_no_settings_access');
 			}
 			if(confIsTrue('git')) {
@@ -1578,7 +1575,20 @@ require([
 			spinner.detach();
 			$(".dashboard-body").removeClass("ce_loading");
 
-			var x = Sortable.create($(".ce_tabs")[0], {
+			// on page load, log that tabs that were open previously
+			var ce_open_tabs = (JSON.parse(localStorage.getItem('ce_open_tabs')) || []);
+			if (ce_open_tabs.length) {
+				for (var i = 0; i < ce_open_tabs.length; i++){
+					logClosedTab(ce_open_tabs[i]);
+				}
+				var $restore = $("<span class='ce_restore_session'><i class='icon-lightning'></i> <span>Restore " + (ce_open_tabs.length === 1 ? "1 tab" : ce_open_tabs.length + " tabs") + "</span></span>").appendTo($tabs);
+				$restore.on("click", function(){
+					for (var j = 0; j < ce_open_tabs.length; j++) {
+						restoreTab(ce_open_tabs[j].type, ce_open_tabs[j].file);
+					}
+				});
+			}
+			Sortable.create($(".ce_tabs")[0], {
 				animation: 150,
 				onEnd: function () {
 					// uptohere figure out how things moved and reorder list					
