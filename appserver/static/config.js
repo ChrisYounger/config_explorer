@@ -704,6 +704,7 @@ require([
 	
 	// Rename a file or folder with a prompt window
 	function fileSystemRename(parentPath) {
+		if (fileIsOpenAndHasChanges(parentPath)) { return; }
 		var bn = dodgyBasename(parentPath);
 		showModal({
 			title: "Rename",
@@ -711,6 +712,7 @@ require([
 			body: "<div>Enter new name for <code>" + bn + "</code><br><br><input type='text' value='" + bn + "' class='ce_prompt_input input input-text' style='width: 100%; background-color: #3d424d; color: #cccccc;'/></div>",
 			onShow: function(){ 
 				$('.ce_prompt_input').focus().on('keydown', function(e) {
+					// submit form on enter key
 					if (e.which == 13) {
 						$('.modal').find('button:first-child').click();
 					}
@@ -720,7 +722,7 @@ require([
 				onClick: function(){
 					$('.modal').one('hidden.bs.modal', function (e) {
 						var newname = $('.ce_prompt_input').val();
-						if (newname) {
+						if (newname && newname !== bn) {
 							serverAction("rename", parentPath, newname).then(function(){
 								refreshCurrentPath();
 								showToast('Success');
@@ -742,6 +744,7 @@ require([
 	
 	// Delete a file or folder with a popup windows
 	function filesystemDelete(file) {
+		if (fileIsOpenAndHasChanges(file)) { return; }
 		showModal({
 			title: "Delete",
 			size: 550,
@@ -896,6 +899,21 @@ require([
 		}		
 	}
 
+	function fileIsOpenAndHasChanges(file) {
+		for (var i = 0; i < editors.length; i++) {
+			if (editors[i].file === file) {
+				if (editors[i].hasChanges) {
+					showModal({
+						title: "Warning",
+						body: "<div class='alert alert-warning'><i class='icon-alert'></i> Cannot rename or delete file becuase it is currently open with unsaved changes.</div>",
+						size: 350
+					});	
+					return true;
+				}
+			}
+		}
+		return false;
+	}
 	function closeTabByName(file) {
 		for (var i = 0; i < editors.length; i++) {
 			if (editors[i].file === file) {
