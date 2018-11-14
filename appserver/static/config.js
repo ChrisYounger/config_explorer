@@ -4,37 +4,36 @@ require.config({
 	paths: {
 		'vs': '../app/config_explorer/node_modules/monaco-editor/min/vs', 
 	}
-});  
+});
   
 require([
 	"splunkjs/mvc",
 	"jquery",
-    "underscore",
+	"underscore",
 	"moment",
 	"splunkjs/mvc/simplexml",
 	"splunkjs/mvc/layoutview",
 	"splunkjs/mvc/simplexml/dashboardview",
-    "splunkjs/mvc/searchmanager",
-    "vs/editor/editor.main",
+	"splunkjs/mvc/searchmanager",
+	"vs/editor/editor.main",
 	"app/config_explorer/jquery.transit.min",
 	"app/config_explorer/sortable.min"
 ], function(
 	mvc,
 	$,
-    _,
+	_,
 	moment,
 	DashboardController,
 	LayoutView,
 	Dashboard,
-    SearchManager,
-    wat,
+	SearchManager,
+	wat,
 	transit,
 	Sortable
 ) {
-
-	// Lovely globals
-    var service = mvc.createService({ owner: "nobody" });
-    var editors = [];  
+	// globals
+	var service = mvc.createService({ owner: "nobody" });
+	var editors = [];  
 	var inFolder = (localStorage.getItem('ce_current_path') || './etc/apps');
 	var run_history = (JSON.parse(localStorage.getItem('ce_run_history')) || []);
 	var closed_tabs = (JSON.parse(localStorage.getItem('ce_closed_tabs')) || []);
@@ -43,7 +42,7 @@ require([
 	var $filelist = $(".ce_file_wrap");
 	var $filePath = $(".ce_file_path");
     var $container = $(".ce_contents");
-	var spinner = $(".sk-cube-grid");
+	var $spinner = $(".sk-cube-grid");
     var $tabs = $(".ce_tabs");
 	var activeTab = null;
 	var conf = {};
@@ -55,18 +54,28 @@ require([
 	var tabid = 0;
 	var scrollbar;
 
+	// Set the "save" hotkey at a global level instnead of on the editor, this way the editor doesnt need to have focus.
+	$(window).on('keydown', function(event) {
+		if (event.ctrlKey || event.metaKey) {
+			switch (String.fromCharCode(event.which).toLowerCase()) {
+			case 's':
+				event.preventDefault();
+				saveActiveTab();
+				break;
+			}
+		}
+
 	// Prevent people from navigating away when they have unsaved changes
-    $(window).on("beforeunload", function() {
+    }).on("beforeunload", function() {
         for (var i = 0; i < editors.length; i++) {
 			if (editors[i].hasChanges) {
 				return "Unsaved changes will be lost.";
 			}
 		}
     });
-	
-    
+
 	// Event handlers for the top bar
-    $('.ce_app_link a').on('click', function(e){
+	$('.ce_app_link a').on('click', function(e){
 		e.preventDefault();
 		var p = $(this).parent();
 		
@@ -80,118 +89,11 @@ require([
 			runShellCommand();
 			
 		} else if (p.hasClass('ce_app_settings')) {			
-			readFile("")
+			readFile("");
 
 		} else if (p.hasClass('ce_app_changelog')) {
-			var ecfg = createTab('change-log', "", "Change log", false);
-            var table = $("<table></table>");
-            serverAction("git-log").then(function(contents){
-                // commit 1, datetime 2 user 3 change 4 files 5 additions 6 deletions 7
-                var rex = /commit\s+(\S+).*?Date:\s+\S+\s+(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+(\S+)(?: +(\S+))?\s+(.+?)\d+\s+files? changed,(?: (\d+) insertions?\(\+\))?(?: (\d+) deletions?\(\-\))?/gs,
-					time,
-                    res, 
-                    type,
-					f,
-					t,
-                    files,
-					item,
-					fileshtml,
-					timediff,
-					mapper = {},
-					changes = [];
-
-                while(res = rex.exec(contents)) {
-                    if (res.length === 8) {
-						item = {
-							sha: res[1],
-							time: moment(new Date(res[2])),
-							files: [],
-							user: res[3],
-							change: res[4],
-							adds: Number(res[6] || 0),
-							dels: Number(res[7] || 0),
-							duration: 0,
-							last_sha: "",
-							count: 1
-						};
-						// etc/apps/config_explorer/README.md  | 484 ++++++++++++++++++++++++++++++++++++
-						// etc/apps/config_explorer/README.md2 | 484 ------------------------------------
-						if (item.change === "renamed") {
-							var foundadd = res[5].match(/([^\/]+) +\| +\d+ \+/);
-							var founddels = res[5].match(/\s*([^\n]+) +\| +\d+ -/);
-							if (foundadd && founddels) {
-								item.files.push(founddels[1] + " <i class='icon-arrow-right'></i> " + foundadd[1]);
-							}
-						} else {
-							files = res[5].split(/ +\|.+\r?\n */);
-							for (var i = 0; i < files.length; i++) {
-								f = $.trim(files[i]);
-								if (f) {
-									item.files.push(f);
-								}
-							}
-						}
-						if (item.files.length === 1 && item.change === 'save') {
-							if (mapper.hasOwnProperty(item.files[0]) && mapper[item.files[0]].user === item.user) {
-								timediff = mapper[ item.files[0] ].time.diff(item.time, 'minutes');
-								if (timediff < conf['git_group_time_mins']) {
-									changes[ mapper[ item.files[0] ].pointer ].count++;
-									changes[ mapper[ item.files[0] ].pointer ].duration += timediff;
-									changes[ mapper[ item.files[0] ].pointer ].last_sha = item.sha;
-									changes[ mapper[ item.files[0] ].pointer ].adds += item.adds;
-									changes[ mapper[ item.files[0] ].pointer ].dels += item.dels;
-									mapper[ item.files[0] ].time = item.time;
-									continue;
-								}
-							}
-							mapper[ item.files[0] ] = {time: item.time, user: item.user, pointer: changes.length};
-						}
-						changes.push(item);
-					}
-				}			
-				for (var i = 0; i < changes.length; i ++) {
-					if (! changes[i].change) {
-						type = "<td colspan='3'></td>";
-					} else if (changes[i].change === "new") {
-						type = "<td class='nobr ar' colspan='3'><i class='icon-report'></i> " + changes[i].change + "</td>";
-					} else if (changes[i].change === "deleted") {
-						type = "<td class='nobr ar' colspan='3'><i class='icon-trash'></i> " + changes[i].change + "</td>";
-					} else if (changes[i].change === "renamed") {
-						type = "<td class='nobr ar' colspan='3'><i class='icon-pencil'></i> " + changes[i].change + "</td>";
-					} else {
-						type = "<td class='nobr ar' title='File was saved " + changes[i].count + " times in " + changes[i].duration + " minutes'>" + (changes[i].count > 1 ? ("[" + (changes[i].count) + "]") : "") + "</td><td class='nobr ar'><i class='icon-plus-circle green'></i> " + changes[i].adds + '</td><td class="nobr ar"><i class="icon-minus-circle red"></i> ' + changes[i].dels + "</td>";
-					}
-					fileshtml = "";
-					for (var j = 0; j < changes[i].files.length; j++) {
-						t = "";
-						if (! changes[i].change || changes[i].change === "save") {
-							t = "<i title='Show changes in this commit' class='icon-speech-bubble ce_clickable_icon'></i> <i title='Compare this version to current' class='icon-number ce_clickable_icon'></i> ";
-						}
-						fileshtml += "<div><span class='ce_changelog_buttons'>" + t + "</span>" + changes[i].files[j] + "</div>";
-					}
-					table.append("<tr commitstart='" + changes[i].sha +"' commitend='" + changes[i].last_sha +"'><td class='nobr'>" + changes[i].time.format("YYYY-MM-DD  h:mma") + "</td><td class='nobr'>" + changes[i].time.fromNow() + "</td>" + type + "<td class='nobr'>" + changes[i].user + "</td><td class='ce_changelog_filescol'>" + fileshtml + "</td></tr>")
-                }
-            });
+			showChangeLog();
 			
-			updateTabHTML(ecfg, $("<div class='ce_changelog'></div>").append(table));
-
-			table.on("click", ".ce_clickable_icon", function(e){
-				var $elem = $(this);
-				if ($elem.hasClass('icon-number')) {
-					var filestr = $.trim($elem.parent().parent().text());
-					var filecommitstr = $elem.parents("tr").attr("commitstart") + ":./" + filestr;
-					var ecfg = createTab('diff', filestr, "<span class='ce-dim'>diff:</span> " + dodgyBasename(filestr), false);
-					Promise.all([serverAction("read", filestr), serverAction("git-show", filecommitstr)]).then(function(results) {						
-						updateTabAsDiffer(ecfg, "# " + filecommitstr + "\n" + results[0], "# Current HEAD:./" + filestr + "\n" + results[1])
-					});				
-				} else if ($elem.hasClass('icon-speech-bubble')) {
-					var filestr = $.trim($elem.parent().parent().text());
-					var filecommitstrstart = $elem.parents("tr").attr("commitstart");
-					var filecommitstrend = $elem.parents("tr").attr("commitend");
-					getFileHistory(filestr, filecommitstrstart, filecommitstrend);
-				}
-			});
-
 		} else {
 			// Clicked a tab that causes the left pane to change
 			$('.ce_app_link.ce_active').removeClass('ce_active');
@@ -208,21 +110,38 @@ require([
 				action_mode = 'btool-list';
 				$filePath.css({"display":"none"});
 				$dirlist.css({"top":"0"});
-				buildLeftPane();
+				leftPaneConfFilesList();
 			}
 		}
 	});
 	
-	// Click handlers for stuff in the left pane
-    $filePath.on("click", ".ce_add_file,.ce_add_folder", function(e){
-        e.stopPropagation();
+	// Click handlers for New File/New Folder buttons
+	$filePath.on("click", ".ce_add_file,.ce_add_folder", function(e){
+		e.stopPropagation();
 		var parentPath = $(this).attr('file');
 		fileSystemCreateNew(parentPath, !$(this).hasClass("ce_add_folder"));
-
 	});
-	$dirlist.on("contextmenu", ".ce_leftnav", function (e) {
+	
+	// Click handler for left pane items
+	$dirlist.on("click", ".ce_leftnav", function(){	
+		if (action_mode === 'btool-list') {
+			runBToolList($(this).attr('file'), 'btool');			
+		} else if (action_mode === 'read') {
+			var elem = $(this);
+			if (elem.hasClass("ce_is_folder")) {
+				$filelist.transition({ x: '-200px', opacity: 0 });
+				readFolder(elem.attr('file'));
+			} else if (! elem.hasClass("ce_is_report")) {
+				$filelist.transition({ x: '200px', opacity: 0 });
+				readFolder(elem.attr('file'));
+			} else {
+				readFile(elem.attr('file'));
+			}
+		}
+	// Right click menu for left pane
+	}).on("contextmenu", ".ce_leftnav", function (e) {
 		var $t = $(this);
-		thisFile = $t.attr('file');
+		var thisFile = $t.attr('file');
 		var actions = [];
 		if ($t.hasClass("ce_leftnav_editable")) {
 			// can rename, can trash
@@ -256,7 +175,7 @@ require([
 						serverAction('read', comparisonLeftFile),
 						serverAction('read', thisFile),
 					]).then(function(contents){
-						updateTabAsDiffer(ecfg, comparisonLeftFile + "\n" + contents[0], thisFile + "\n" + contents[1])
+						updateTabAsDiffer(ecfg, comparisonLeftFile + "\n" + contents[0], thisFile + "\n" + contents[1]);
 					});
 				}));
 			}
@@ -281,24 +200,9 @@ require([
 			$t.css("background-color","");
 			$(document).off("click");           
 		});
-
-    }).on("click", ".ce_leftnav", function(){	
-		if (action_mode === 'btool-list') {
-			runBToolList($(this).attr('file'), 'btool');			
-		} else if (action_mode === 'read') {
-			var elem = $(this);
-			if (elem.hasClass("ce_is_folder")) {
-				$filelist.transition({ x: '-200px', opacity: 0 });
-				readFolder(elem.attr('file'));
-			} else if (! elem.hasClass("ce_is_report")) {
-				$filelist.transition({ x: '200px', opacity: 0 });
-				readFolder(elem.attr('file'));
-			} else {
-				readFile(elem.attr('file'));
-			}
-		}
-    });
+	});
 	
+	// Click handler for Recent Files button in top right
 	$(".ce_recent_files").on("click", function(e){
 		e.stopPropagation();
 		var recent = $("<ul class='ce_recent_list'></ul>");
@@ -323,7 +227,6 @@ require([
 
 		recent.on("click auxclick", ".ce_selectable", function(){
 			var d = $(this).data();
-			console.log(d);
 			restoreTab(d.type, d.file);
 		});
 			
@@ -332,6 +235,30 @@ require([
 		});
 	});
 
+	// Event handlers for the editor tabs
+	$tabs.on("click", ".ce_close_tab", function(e){
+		var idx = $(this).parent().index();
+		e.stopPropagation();
+		closeTabWithConfirmation(idx);
+	
+	// Middle click to close tab
+	}).on("auxclick", ".ce_tab", function(e){
+		var idx = $(this).index();
+		e.stopPropagation();
+		closeTabWithConfirmation(idx);	
+	
+	// Clicking tab
+	}).on("click", ".ce_tab", function(){
+		activateTab($(this).index());
+		
+	// On hover show the cross
+	}).on("mouseenter", ".ce_tab", function(){
+		$(this).append("<i class='ce_close_tab icon-close ce_clickable_icon ce_right_icon'></i>");
+	}).on("mouseleave", ".ce_tab", function(){
+		$(this).find('.ce_close_tab').remove();
+	});
+	
+	// Used by recent files functionality
 	function restoreTab(type, file) {
 		if (type === 'btool-hidepaths') {
 			runBToolList(file, 'btool-hidepaths');
@@ -348,13 +275,22 @@ require([
 		}		
 	}
 	
+	// Keep track of what tabs are open in local storage. 
 	function openTabsListChanged(){
 		var t = [];
 		$tabs.children().each(function(i,elem){
 			$(elem).data().tab.position = i;
 		});
 		
-		editors.sort((a,b) => (a.position > b.position) ? 1 : ((b.position > a.position) ? -1 : 0)); 
+		editors.sort(function(a,b){
+			if (a.position > b.position) { 
+				return 1; 
+			} else if (b.position > a.position) { 
+				return -1;
+			} else {
+				return 0;
+			}
+		}); 
 		
 		activeTab = $tabs.children(".ce_active").index();
 		
@@ -366,28 +302,7 @@ require([
 		localStorage.setItem('ce_open_tabs', JSON.stringify(t));
 	}
 
-	// Event handlers for the editor tabs
-    $tabs.on("click", ".ce_close_tab", function(e){
-        var idx = $(this).parent().index();
-        e.stopPropagation();
-		closeTabWithConfirmation(idx);
-        
-    }).on("auxclick", ".ce_tab", function(e){
-		var idx = $(this).index();
-		e.stopPropagation();
-		closeTabWithConfirmation(idx);	
-		
-	}).on("click", ".ce_tab", function(e){
-		activateTab($(this).index());
-		
-        
-    }).on("mouseenter", ".ce_tab", function(){
-        $(this).append("<i class='ce_close_tab icon-close ce_clickable_icon ce_right_icon'></i>");
-        
-    }).on("mouseleave", ".ce_tab", function(){
-        $(this).find('.ce_close_tab').remove();
-    });
-	
+	// Run button
 	function runShellCommand() {
 		var history_idx = run_history.length,
 			in_progress_cmd = '',
@@ -422,7 +337,7 @@ require([
 			},
 			actions: [{
 				onClick: function(){
-					$('.modal').one('hidden.bs.modal', function (e) {
+					$('.modal').one('hidden.bs.modal', function() {
 						var command = $input.val();
 						if (command) {
 							// save to localstorage
@@ -435,7 +350,7 @@ require([
 								// only save if the command is different to what was last run
 								if (command !== run_history[(run_history.length - 1)]) {
 									run_history.push(command);
-								}								
+								}
 								localStorage.setItem('ce_run_history', JSON.stringify(run_history));
 								updateTabAsEditor(ecfg, contents, false, 'none');
 							}, command);
@@ -451,6 +366,7 @@ require([
 		});
 	}
 	
+	// Check config
 	function runBToolCheck() {
 		var ecfg = createTab('btool-check', "", 'Check config', false);
 		serverAction('btool-check').then(function(contents){
@@ -464,7 +380,7 @@ require([
 					body: "<div class='alert alert-info'><i class='icon-alert'></i>No configuration errors found</div>",
 					size: 300
 				});	
-			}				
+			}
 		});
 	}
 	
@@ -495,8 +411,8 @@ require([
 				} else {
 					reject();
 				}
-			});							
-		})	
+			});
+		});
 	}
 	
 	function runningVsLayered(path, compare){
@@ -520,14 +436,14 @@ require([
 							);
 						} else {
 							updateTabAsEditor(ecfg, contents_running, false, 'ini');
-						}						
+						}
 					}).catch(function(){
 						closeEmptyTab(ecfg);
 						showModal({
 							title: "Warning",
 							body: "<div class='alert alert-warning'><i class='icon-alert'></i>Could not get retreieve running config for " + htmlEncode(path) + "</div>",
 							size: 300
-						});								
+						});
 					});	
 				} else {
 					closeEmptyTab(ecfg);
@@ -535,8 +451,8 @@ require([
 						title: "Error",
 						body: "<div class='alert alert-error'><i class='icon-alert'></i>No btool data returned for " + htmlEncode(path) + "</div>",
 						size: 300
-					});							
-				}							
+					});
+				}
 			});
 		}	
 	}
@@ -553,9 +469,9 @@ require([
 		}
 		var tab_path_fmt = '<span class="ce-dim">btool:</span> ' + path;
 		if (! ce_btool_default_values) { 
-			tab_path_fmt += " <span class='ce-dim'>(no defaults)</span>"  
+			tab_path_fmt += " <span class='ce-dim'>(no defaults)</span>"; 
 		} else if (ce_btool_path) { 
-			tab_path_fmt += " <span class='ce-dim'>--debug</span>"  
+			tab_path_fmt += " <span class='ce-dim'>--debug</span>"; 
 		}
 		if (! tabAlreadyOpen(type, path)) {
 			var ecfg = createTab(type, path, tab_path_fmt, true);
@@ -566,21 +482,20 @@ require([
 					ecfg.btoollist = contents;
 					serverAction('spec-hinting', path).then(function(h){
 						ecfg.hinting = buildHintingLookup(path, h);
-					});					
+					});
 				} else {
 					closeEmptyTab(ecfg);
 					showModal({
 						title: "Warning",
 						body: "<div class='alert alert-warning'><i class='icon-alert'></i>No contents for \"<strong>" + tab_path_fmt + "</strong>\"</div>",
 						size: 300
-					});							
-				}							
+					});
+				}
 			});
 		}	
 	}	
 	
 	function displaySpecFile(path) {
-		var tab_path = 'spec: ' + path;
 		var tab_path_fmt = '<span class="ce-dim">spec:</span> ' + path;
 		if (! tabAlreadyOpen('spec', path)) {
 			var ecfg = createTab('spec', path, tab_path_fmt, true);
@@ -593,10 +508,10 @@ require([
 						title: "Error",
 						body: "<div class='alert alert-error'><i class='icon-alert'></i>No spec file found!</div>",
 						size: 300
-					});							
+					});
 				}
 			});
-		}			
+		}
 	}
 
 	// Update and display the left pane in filesystem mode
@@ -604,6 +519,7 @@ require([
 		readFolder(inFolder);
 	}
 
+	// Run server action to load a file or folder
 	function readFolder(path){
 		serverAction('read', path).then(function(contents){
 			inFolder = path;
@@ -636,7 +552,6 @@ require([
 			leftPathChanged();
 		});
 	}
-
 	
 	// Handle clicking an file or folder in the left pane
 	function readFile(path){
@@ -647,7 +562,7 @@ require([
 				label = "Settings";
 				can_reopen = false;
 			}
-			var ecfg = createTab('read', path, label, can_reopen)
+			var ecfg = createTab('read', path, label, can_reopen);
 			serverAction('read', path).then(function(contents){
 				updateTabAsEditor(ecfg, contents, true);
 				if (ecfg.hasOwnProperty('matchedConf')) {
@@ -656,10 +571,10 @@ require([
 						serverAction('spec-hinting', ecfg.matchedConf).then(function(c){
 							ecfg.hinting = buildHintingLookup(ecfg.matchedConf, c);
 						});
-					}						
+					}
 				} 
 			});
-		}			
+		}
 	}
 
 	// Create new file or folder with a prompt window
@@ -669,7 +584,6 @@ require([
 		} else {
 			type = "folder";
 		}
-		console.log(type, parentPath);
 		showModal({
 			title: "New " + type,
 			size: 300,
@@ -683,7 +597,7 @@ require([
 			},
 			actions: [{
 				onClick: function(){
-					$('.modal').one('hidden.bs.modal', function (e) {
+					$('.modal').one('hidden.bs.modal', function() {
 						var fname = $('.ce_prompt_input').val();
 						if (fname) {
 							serverAction("new" + type, parentPath, fname).then(function(){
@@ -699,7 +613,7 @@ require([
 				onClick: function(){ $(".modal").modal('hide'); },
 				label: "Cancel"
 			}]
-		});			
+		});
 	}
 	
 	// Rename a file or folder with a prompt window
@@ -720,7 +634,7 @@ require([
 			},
 			actions: [{
 				onClick: function(){
-					$('.modal').one('hidden.bs.modal', function (e) {
+					$('.modal').one('hidden.bs.modal', function() {
 						var newname = $('.ce_prompt_input').val();
 						if (newname && newname !== bn) {
 							serverAction("rename", parentPath, newname).then(function(){
@@ -767,7 +681,7 @@ require([
 					if ($('.ce_prompt_input').val().toLowerCase() !== "yes") {
 						return;
 					}
-					$('.modal').one('hidden.bs.modal', function (e) {
+					$('.modal').one('hidden.bs.modal', function() {
 						serverAction("delete", file).then(function(){
 							refreshCurrentPath();
 							showToast('Success');
@@ -784,7 +698,118 @@ require([
 			}]
 		});	
 	}
+
+	function showChangeLog() {
+		var ecfg = createTab('change-log', "", "Change log", false);
+		var table = $("<table></table>");
+		serverAction("git-log").then(function(contents){
+			// commit 1, datetime 2 user 3 change 4 files 5 additions 6 deletions 7
+			var rex = /commit\s+(\S+)[\s\S]*?Date:\s+\S+\s+(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+(\S+)(?: +(\S+))?\s+([\s\S]+?)\d+\s+files? changed,(?: (\d+) insertions?\(\+\))?(?: (\d+) deletions?\(\-\))?/g,
+				res, 
+				type,
+				f,
+				t,
+				files,
+				item,
+				fileshtml,
+				timediff,
+				mapper = {},
+				changes = [];
+
+			while(res = rex.exec(contents)) {
+				if (res.length === 8) {
+					item = {
+						sha: res[1],
+						time: moment(new Date(res[2])),
+						files: [],
+						user: res[3],
+						change: res[4],
+						adds: Number(res[6] || 0),
+						dels: Number(res[7] || 0),
+						duration: 0,
+						last_sha: "",
+						count: 1
+					};
+					// etc/apps/config_explorer/README.md  | 484 ++++++++++++++++++++++++++++++++++++
+					// etc/apps/config_explorer/README.md2 | 484 ------------------------------------
+					if (item.change === "renamed") {
+						var foundadd = res[5].match(/([^\/]+) +\| +\d+ \+/);
+						var founddels = res[5].match(/\s*([^\n]+) +\| +\d+ -/);
+						if (foundadd && founddels) {
+							item.files.push(founddels[1] + " <i class='icon-arrow-right'></i> " + foundadd[1]);
+						}
+					} else {
+						files = res[5].split(/ +\|.+\r?\n */);
+						for (var k = 0; k < files.length; k++) {
+							f = $.trim(files[k]);
+							if (f) {
+								item.files.push(f);
+							}
+						}
+					}
+					if (item.files.length === 1 && item.change === 'save') {
+						if (mapper.hasOwnProperty(item.files[0]) && mapper[item.files[0]].user === item.user) {
+							timediff = mapper[ item.files[0] ].time.diff(item.time, 'minutes');
+							if (timediff < conf.git_group_time_mins) {
+								changes[ mapper[ item.files[0] ].pointer ].count++;
+								changes[ mapper[ item.files[0] ].pointer ].duration += timediff;
+								changes[ mapper[ item.files[0] ].pointer ].last_sha = item.sha;
+								changes[ mapper[ item.files[0] ].pointer ].adds += item.adds;
+								changes[ mapper[ item.files[0] ].pointer ].dels += item.dels;
+								mapper[ item.files[0] ].time = item.time;
+								continue;
+							}
+						}
+						mapper[ item.files[0] ] = {time: item.time, user: item.user, pointer: changes.length};
+					}
+					changes.push(item);
+				}
+			}			
+			for (var i = 0; i < changes.length; i ++) {
+				if (! changes[i].change) {
+					type = "<td colspan='3'></td>";
+				} else if (changes[i].change === "new") {
+					type = "<td class='nobr ar' colspan='3'><i class='icon-report'></i> " + changes[i].change + "</td>";
+				} else if (changes[i].change === "deleted") {
+					type = "<td class='nobr ar' colspan='3'><i class='icon-trash'></i> " + changes[i].change + "</td>";
+				} else if (changes[i].change === "renamed") {
+					type = "<td class='nobr ar' colspan='3'><i class='icon-pencil'></i> " + changes[i].change + "</td>";
+				} else {
+					type = "<td class='nobr ar' title='File was saved " + changes[i].count + " times in " + changes[i].duration + " minutes'>" + (changes[i].count > 1 ? ("[" + (changes[i].count) + "]") : "") + "</td><td class='nobr ar'><i class='icon-plus-circle green'></i> " + changes[i].adds + '</td><td class="nobr ar"><i class="icon-minus-circle red"></i> ' + changes[i].dels + "</td>";
+				}
+				fileshtml = "";
+				for (var j = 0; j < changes[i].files.length; j++) {
+					t = "";
+					if (! changes[i].change || changes[i].change === "save") {
+						t = "<i title='Show changes in this commit' class='icon-speech-bubble ce_clickable_icon'></i> <i title='Compare this version to current' class='icon-number ce_clickable_icon'></i> ";
+					}
+					fileshtml += "<div><span class='ce_changelog_buttons'>" + t + "</span>" + changes[i].files[j] + "</div>";
+				}
+				table.append("<tr commitstart='" + changes[i].sha +"' commitend='" + changes[i].last_sha +"'><td class='nobr'>" + changes[i].time.format("YYYY-MM-DD  h:mma") + "</td><td class='nobr'>" + changes[i].time.fromNow() + "</td>" + type + "<td class='nobr'>" + changes[i].user + "</td><td class='ce_changelog_filescol'>" + fileshtml + "</td></tr>")
+			}
+		});
+		
+		updateTabHTML(ecfg, $("<div class='ce_changelog'></div>").append(table));
+
+		table.on("click", ".ce_clickable_icon", function(){
+			var $elem = $(this),
+				filestr = $.trim($elem.parent().parent().text());
+				
+			if ($elem.hasClass('icon-number')) {
+				var filecommitstr = $elem.parents("tr").attr("commitstart") + ":./" + filestr;
+				var ecfg = createTab('diff', filestr, "<span class='ce-dim'>diff:</span> " + dodgyBasename(filestr), false);
+				Promise.all([serverAction("read", filestr), serverAction("git-show", filecommitstr)]).then(function(results) {						
+					updateTabAsDiffer(ecfg, "# " + filecommitstr + "\n" + results[0], "# Current HEAD:./" + filestr + "\n" + results[1]);
+				});
+			} else if ($elem.hasClass('icon-speech-bubble')) {
+				var filecommitstrstart = $elem.parents("tr").attr("commitstart");
+				var filecommitstrend = $elem.parents("tr").attr("commitend");
+				getFileHistory(filestr, filecommitstrstart, filecommitstrend);
+			}
+		});
+	}
 	
+	// Git history of a specific file optionally between two commit tags
 	function getFileHistory(file, commitstart, commitend){
 		var ecfg = createTab('history', file, "<span class='ce-dim'>history:</span> " + dodgyBasename(file), false);
 		serverAction("git-history", file).then(function(contents){
@@ -798,7 +823,7 @@ require([
 				closeEmptyTab(ecfg);
 				return;
 			}
-			lines = htmlEncode(contents).split(/\r?\n/);
+			var lines = htmlEncode(contents).split(/\r?\n/);
 			var str = "";
 			var firstThree;
 			var time;
@@ -853,43 +878,45 @@ require([
 				}
 			}
 			
-			updateTabHTML(ecfg, $("<div class='ce_file_history'></div>").html(str))
+			updateTabHTML(ecfg, $("<div class='ce_file_history'></div>").html(str));
 		});
 	}
 	
-	// Might be either the effective config or spec config screen
-	function buildLeftPane() {
+	// The conf file list
+	function leftPaneConfFilesList() {
 		$filelist.empty();
 		for (var i = 0; i < confFilesSorted.length; i++) {
 			$("<div class='ce_leftnav ce_conf'></div>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-gear'></i> ").appendTo($filelist);
 		}
-		$filelist.transition({"opacity":1})
+		$filelist.transition({"opacity":1});
 		leftPathChanged();
 	}
 	
-    function activateTab(idx){
-        hideAllTabs();
+	function activateTab(idx){
+		hideAllTabs();
 		activeTab = idx;
 		$tabs.children().eq(idx).addClass('ce_active');
-        editors[idx].container.removeClass('ce_hidden');
-        editors[idx].last_opened = Date.now();  
+		editors[idx].container.removeClass('ce_hidden');
+		editors[idx].last_opened = Date.now();  
 		doPipeTabSeperators();
-    }
+	}
 	
-    function hideAllTabs() {
-        $container.children().addClass("ce_hidden");
-        $tabs.children().removeClass("ce_active");
-    }
+	function hideAllTabs() {
+		$container.children().addClass("ce_hidden");
+		$tabs.children().removeClass("ce_active");
+	}
 	
+	// The pipe seperators are between active tabs but not on the currently active tab or the one to its left.
 	function doPipeTabSeperators(){
 		$(".ce_pipe").remove();
-		$tabs.children().each(function(i,elem){
+		$tabs.children().each(function(i){
 			if ((activeTab - 1) !== i && activeTab !== i) {
 				$(this).append('<span class="ce_pipe"></span>');
 			}
 		});		
 	}
 	
+	// A tab was opened but there was nothing to put in it, so it is closed.
 	function closeEmptyTab(ecfg) {
 		for (var i = 0; i < editors.length; i++) {
 			if (editors[i].id === ecfg.id) {
@@ -899,6 +926,7 @@ require([
 		}		
 	}
 
+	// Check if tab is open with unsaved changes
 	function fileIsOpenAndHasChanges(file) {
 		for (var i = 0; i < editors.length; i++) {
 			if (editors[i].file === file) {
@@ -914,6 +942,7 @@ require([
 		}
 		return false;
 	}
+	
 	function closeTabByName(file) {
 		for (var i = 0; i < editors.length; i++) {
 			if (editors[i].file === file) {
@@ -923,6 +952,7 @@ require([
 		}
 	}
 	
+	// Check if tab is already open, and if so, active it instead.
 	function tabAlreadyOpen(type, file) {
 		// check if file is already open
 		for (var i = 0; i < editors.length; i++) {
@@ -957,11 +987,11 @@ require([
 		}
 	}
 	
+	// when tabs are closed, remember in local storage for recent files list
 	function logClosedTab(ecfg){ 
 		// make sure unique items only appear once
 		var splicy = -1;
 		for (var j = 0; j < closed_tabs.length; j++) {
-			//console.log(ecfg.label, closed_tabs[j].label);
 			if (ecfg.label === closed_tabs[j].label) {
 				splicy = j;
 			}
@@ -993,7 +1023,7 @@ require([
 		if ($tabs.children().length === 0) {
 			activeTab = null;
 		
-        // if there is already a tab selected
+		// if there is already a tab selected
 		} else if ($tabs.children(".ce_active").length === 0) {
 			var last_used_idx, 
 				newest;
@@ -1006,6 +1036,37 @@ require([
 			activateTab(last_used_idx);
 		}		
 	}
+
+	function createLabel(type, file) {
+		if (type === "read"){ 
+			return file; 
+		}
+		return type + ": " + file;
+	}
+	
+	function createTab(type, file, label, can_reopen, contents){
+		var ecfg = {
+			type: type, 
+			file: file,
+			can_reopen: can_reopen,
+			id: tabid++
+		};
+		editors.push(ecfg);	
+		ecfg.container = $("<div></div>").appendTo($container);
+		if (contents === undefined) {
+			contents = $spinner.clone();
+		}
+		ecfg.container.append(contents);
+		// Remove the "restore session" link
+		$(".ce_restore_session").remove();
+		ecfg.tab = $("<div class='ce_tab ce_active'>" + label + "<div class='ce_tab_shadow'></div></div>").attr("title", createLabel(type, file)).data({"tab": ecfg}).appendTo($tabs);
+		ecfg.hasChanges = false;
+		ecfg.server_content = '';
+		activateTab(editors.length-1);
+		openTabsListChanged();
+		return ecfg;
+	}
+	
 	function updateTabAsEditor(ecfg, contents, canBeSaved, language) {
 		if (!language) {
 			language = "ini"; // .conf, .meta, spec
@@ -1043,7 +1104,7 @@ require([
 		});
 		ecfg.server_content = ecfg.editor.getValue();
 		if (ecfg.canBeSaved) {
-			ecfg.editor.onDidChangeModelContent(function (e) {
+			ecfg.editor.onDidChangeModelContent(function() {
 				// check against saved copy
 				if (ecfg.editor.getValue() !== ecfg.server_content) {
 					if (!ecfg.hasChanges) {
@@ -1076,7 +1137,7 @@ require([
 				contextMenuOrder: 1.1,
 				contextMenuGroupId: '1_modification',
 				label: 'Run btool on ' + ecfg.matchedConf + '.conf',
-				run: function(ed) {
+				run: function() {
 					runBToolList(ecfg.matchedConf, "btool");
 				}
 			});	
@@ -1085,27 +1146,27 @@ require([
 				contextMenuOrder: 1.12,
 				contextMenuGroupId: '1_modification',
 				label: 'Open ' + ecfg.matchedConf + '.conf.spec',
-				run: function(ed) {
-					 displaySpecFile(ecfg.matchedConf);
+				run: function() {
+					displaySpecFile(ecfg.matchedConf);
 				}
-			});	
+			});
 		}
-        ecfg.editor.addAction({
+		ecfg.editor.addAction({
 			id: 'word-wrap-on',
 			label: 'Word wrap on',
-			run: function(ed) {
-                ecfg.editor.updateOptions({
-                    wordWrap: "on"
-                });
+			run: function() {
+				ecfg.editor.updateOptions({
+					wordWrap: "on"
+				});
 			}
 		});  
         ecfg.editor.addAction({
 			id: 'word-wrap-off',
 			label: 'Word wrap off',
-			run: function(ed) {
-                ecfg.editor.updateOptions({
-                    wordWrap: "off"
-                });
+			run: function() {
+				ecfg.editor.updateOptions({
+					wordWrap: "off"
+				});
 			}
 		}); 
 		openTabsListChanged();
@@ -1115,7 +1176,7 @@ require([
 		if (activeTab === null) {
 			return;
 		}
-		ecfg = editors[activeTab];
+		var ecfg = editors[activeTab];
 		if (ecfg.canBeSaved) {
 			if (! ecfg.saving) {
 				var saved_value = ecfg.editor.getValue();
@@ -1142,41 +1203,11 @@ require([
 				body: "<div class='alert alert-warning'><i class='icon-alert'></i>This file cannot be saved</div>",
 				size: 300
 			});	
-		}			
-	}
-
-	function createLabel(type, file) {
-		if (type === "read"){ 
-			return file; 
 		}
-		return type + ": " + file;
-	}
-	
-	function createTab(type, file, label, can_reopen, contents){
-		var ecfg = {
-			type: type, 
-			file: file,
-			can_reopen: can_reopen,
-			id: tabid++
-		};
-		editors.push(ecfg);	
-		ecfg.container = $("<div></div>").appendTo($container);
-		if (contents === undefined) {
-			contents = spinner.clone();
-		}
-		ecfg.container.append(contents);
-		// Remove the "restore session" link
-		$(".ce_restore_session").remove();		
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + label + "<div class='ce_tab_shadow'></div></div>").attr("title", createLabel(type, file)).data({"tab": ecfg}).appendTo($tabs);
-		ecfg.hasChanges = false;
-		ecfg.server_content = '';
-		activateTab(editors.length-1);
-		openTabsListChanged();
-		return ecfg;			
 	}
 	
 	function updateTabHTML(ecfg, contents) {
-		ecfg.container.html(contents);			
+		ecfg.container.html(contents);
 	}
 	
 	function updateTabAsDiffer(ecfg, left, right) {
@@ -1193,11 +1224,6 @@ require([
 			modified: modifiedModel
 		});	
 	}	
-	
-    // TODO replace this with something that comes from the os
-	function dodgyBasename(f) {
-		return f.replace(/.*[\/\\]/,'');
-	}
 	
 	// Make a rest call to our backend python script
 	function serverAction(type, path, param1) {
@@ -1240,7 +1266,7 @@ require([
 						errText = "<pre>" + htmlEncode(r.data.result) + "</pre>";
 						if (type === "read" && path === localStorage.getItem('ce_current_path')) {
 							// Folder must have been deleted outside of this
-							readFolder(".")
+							readFolder(".");
 						}
 					}
 				}
@@ -1249,20 +1275,20 @@ require([
 						title: "Error",
 						body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + errText + "</pre></div>",
 					});
-					reject(Error("derp"));
+					reject(Error("error"));
 				} else {
 					// if there was some unexpected git output, then open a window to display it
 					if (r.data.git && r.data.git_status !== 0) {
 						var ecfg = createTab('git', '', 'git output', false);
 						updateTabAsEditor(ecfg, r.data.git, false, "none");
-					}			
-					resolve(r.data.result);					
+					}
+					resolve(r.data.result);	
 				}
 			});	
 		});			
 	}
 
-	// Try to build a conf file from calling the rest services. turns out this isn't great
+	// Try to build a conf file from calling the rest services. turns out this is pretty unreliable. 
 	function formatLikeRunningConfig(contents) {
 		return contents.replace(/^.+?splunk[\/\\]etc[\/\\].*?\.conf\s+(?:(.+) = (.*)|(\[.+))\r?\n/img,function(all, g1, g2, g3){
 			if (g3 !== undefined) { return g3 + "\n"; }
@@ -1287,12 +1313,7 @@ require([
 			return g2 + path + g3;
 		});
 	}
-	
-	//create a in-memory div, set it's inner text(which jQuery automatically encodes)
-	//then grab the encoded contents back out.  The div never exists on the page.
-	function htmlEncode(value){
-		return $('<div/>').text(value).html();
-	}
+
 	
 	// After loading a .conf file or after saving and before any changes are made, red or green colour will
 	// be shown in the gutter about if the current line can be found in the output of btool list.
@@ -1308,8 +1329,8 @@ require([
 				}
 				// Build lookup of btool output
 				var lookup = buildBadCodeLookup(btoolcontents);
-                var seenStanzas = {};
-                var seenProps =  {};
+				var seenStanzas = {};
+				var seenProps =  {};
 				// Go through everyline of the editor
 				var contents = ecfg.editor.getValue(),
 					rows = contents.split(/\r?\n/),
@@ -1323,25 +1344,25 @@ require([
 						} else {
 							currentStanza = rows[i];
 						}
-                        if (seenStanzas.hasOwnProperty(currentStanza)) {
-                            newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Stanza already seen in this file"}]  }});
-                        }
-                        seenStanzas[currentStanza] = 1;
-                        seenProps =  {};
+						if (seenStanzas.hasOwnProperty(currentStanza)) {
+							newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Stanza already seen in this file"}]  }});
+						}
+						seenStanzas[currentStanza] = 1;
+						seenProps =  {};
 					} else {
 						var found = rows[i].match(reProps);
 						if (found) {
 							if (found[1].substr(0,1) !== "#") {
-                                if (seenProps.hasOwnProperty(found[1])) {
-                                    newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Duplicate key in stanza"}]  }});
-                                }   
-                                seenProps[found[1]] = 1;
+								if (seenProps.hasOwnProperty(found[1])) {
+									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Duplicate key in stanza"}]  }});
+								}   
+								seenProps[found[1]] = 1;
 								if (lookup.hasOwnProperty(currentStanza) && lookup[currentStanza].hasOwnProperty(found[1]) && lookup[currentStanza][found[1]] === ecfg.file) {
-                                    if (ecfg.hasOwnProperty('hinting') && found.length > 2 && ! (ecfg.hinting[""].hasOwnProperty(found[2]) || (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2]) ) )) {
-                                        //newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Unexpected property"}]  }});
-                                    } else {
-                                        newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in `btool` output"}]  }});
-                                    }
+									if (ecfg.hasOwnProperty('hinting') && found.length > 2 && ! (ecfg.hinting[""].hasOwnProperty(found[2]) || (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2]) ) )) {
+										//newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Unexpected property"}]  }});
+									} else {
+										newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in `btool` output"}]  }});
+									}
 								} else {
 									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine', glyphMarginHoverMessage: [{value:"Not found in `btool` output (overridden somewhere else?)"}] }});
 								}
@@ -1359,7 +1380,7 @@ require([
 	function buildBadCodeLookup(contents){
 		//(conf file path)(property)(stanza)
 		var rex = /^.+?splunk([\/\\]etc[\/\\].*?\.conf)\s+(?:([^=\s]+)\s*=|(\[[^\]]+\]))/gim,
-			res,								
+			res,
 			currentStanza = "",
 			currentField = "",
 			ret = {"": {"":""}};
@@ -1372,12 +1393,12 @@ require([
 					currentStanza = "";
 				} else {
 					currentStanza = res[3];
-				}				
+				}
 				currentField = "";
-				ret[currentStanza] = {"":""} // dont care about stanzas and where they come from
-			} else {
-				console.log("unexpected row:", res[0]);
-			}
+				ret[currentStanza] = {"":""}; // dont care about stanzas and where they come from
+			} //else {
+				//console.log("unexpected row:", res[0]);
+			//}
 		}	
 		return ret;
 	}
@@ -1385,7 +1406,7 @@ require([
 	// parse the spec file and build a lookup to use for code completion
 	function buildHintingLookup(conf, contents){
 		var rex = /^(?:(\w+).*=|(\[\w+))?.*$/gm,
-			res,								
+			res,
 			currentStanza = "",
 			currentField = "";
 		confFiles[conf] = {"": {"":{t:"", c:""}}};
@@ -1478,7 +1499,7 @@ require([
 				// get all text up to hovered line becuase we need to find what stanza we are in
 				var contents = model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber))),
 					ret = [],
-					rex = /.*\n\s*(\[\w+)/s,
+					rex = /[\s\S]*\n\s*(\[\w+)/,
 					currentStanza = "",
 					found = contents.match(rex);
 				if (found && editors[activeTab].hinting.hasOwnProperty(found[1])) {
@@ -1491,9 +1512,9 @@ require([
 				for (var key in editors[activeTab].hinting[currentStanza]) {
 					if (editors[activeTab].hinting[currentStanza].hasOwnProperty(key) && key) {
 						ret.push({
-							 label: key,
-							 kind: monaco.languages.CompletionItemKind.Property,
-							 documentation: "" + editors[activeTab].hinting[currentStanza][key].t + "\n\n" + editors[activeTab].hinting[currentStanza][key].c + "\n",
+							label: key,
+							kind: monaco.languages.CompletionItemKind.Property,
+							documentation: "" + editors[activeTab].hinting[currentStanza][key].t + "\n\n" + editors[activeTab].hinting[currentStanza][key].c + "\n",
 						});
 					}
 				}
@@ -1502,7 +1523,22 @@ require([
 			return [];
 		}
 	});	
+		
+    // dubious
+	function dodgyBasename(f) {
+		return f.replace(/.*[\/\\]/,'');
+	}
+	
+	//create a in-memory div, set it's inner text(which jQuery automatically encodes)
+	//then grab the encoded contents back out.  The div never exists on the page.
+	function htmlEncode(value){
+		return $('<div/>').text(value).html();
+	}
 
+	function confIsTrue(param) {
+		return (["1", "true", "yes", "t", "y"].indexOf($.trim(conf[param].toLowerCase())) > -1);
+	}
+	
 	function showToast(message) {
 		var t = $('.ce_toaster');
 		t.find('span').text(message);
@@ -1551,19 +1587,14 @@ require([
 		}
 		self.$modal.modal(options);
 	};
-
-	function confIsTrue(param) {
-		return (["1", "true", "yes", "t", "y"].indexOf($.trim(conf[param].toLowerCase())) > -1);
-	}
 	
+	// Build the list of config files
 	function loadPermissionsAndConfList(){
-		// Build the list of config files
-		
 		serverAction('init').then(function(data) {
 			var rex = /^Checking: .*[\/\\]([^\/\\]+?).conf\s*$/gmi,
 				res;
 			conf = data.conf;
-			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ')
+			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ');
 			if(confIsTrue('write_access')) {
 				$dashboardBody.removeClass('ce_no_write_access');
 			}
@@ -1577,10 +1608,10 @@ require([
 				$dashboardBody.removeClass('ce_no_git_access');
 			}
 			if (conf.hasOwnProperty('git_group_time_mins')) {
-				conf['git_group_time_mins'] = parseFloat($.trim(conf['git_group_time_mins']));
+				conf.git_group_time_mins = parseFloat($.trim(conf.git_group_time_mins));
 			}
-			if (! conf.hasOwnProperty('git_group_time_mins') || ! Number.isInteger(conf['git_group_time_mins'])) {
-				conf['git_group_time_mins'] = 60;
+			if (! conf.hasOwnProperty('git_group_time_mins') || ! Number.isInteger(conf.git_group_time_mins)) {
+				conf.git_group_time_mins = 60;
 			}
 			confFiles = {};
 			confFilesSorted = [];
@@ -1592,8 +1623,8 @@ require([
 			}
 			confFilesSorted.sort();
 			
-			spinner.detach();
-			$(".dashboard-body").removeClass("ce_loading");
+			$spinner.detach();
+			$dashboardBody.removeClass("ce_loading");
 
 			// on page load, log that tabs that were open previously
 			var ce_open_tabs = (JSON.parse(localStorage.getItem('ce_open_tabs')) || []);
@@ -1622,25 +1653,15 @@ require([
 	function leftPathChanged(){
 		if (typeof scrollbar === "undefined") {
 			scrollbar = OverlayScrollbars($dirlist[0],{ className : "os-theme-light", overflowBehavior : { x: "hidden"} });
-		//} else {
-			//scrollbar.update(true);
 		}		
 	}
+	
+	
+	
 	// Build the directory structure
     refreshCurrentPath();
 	loadPermissionsAndConfList();
-    
-	$(window).bind('keydown', function(event) {
-		if (event.ctrlKey || event.metaKey) {
-			switch (String.fromCharCode(event.which).toLowerCase()) {
-			case 's':
-				event.preventDefault();
-				saveActiveTab();
-				break;
-			}
-		}
-	});
-
+	
 	// Setup the splunk components properly
 	$('header').remove();
 	new LayoutView({ "hideAppBar": true, "hideChrome": false, "hideFooter": false, "hideSplunkBar": false, layout: "fixed" })
