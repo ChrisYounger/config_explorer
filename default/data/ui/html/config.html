@@ -45,7 +45,9 @@
 		</div>
 		<div class="ce_wrap">
 			<div class="ce_file_path"></div>
-			<ul class="ce_file_list"></ul>
+			<div class="ce_file_list">
+				<div class="ce_file_wrap"></div>
+			</div>
 			<div class="ce_container">
 				<div class="ce_tabs"></div>
 				<i title='Recent files' class='ce_recent_files ce_clickable_icon ce_right_icon icon-list'></i>
@@ -56,10 +58,15 @@
 		<div class="ce_context_menu_overlap ce_hidden"></div>
 		<div class="ce_context_menu_wrap"></div>
     </div>
+	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/overlayscrollbars/1.5.3/css/OverlayScrollbars.min.css" />
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/overlayscrollbars/1.5.3/js/OverlayScrollbars.js"></script>
+
     <script src="{{SPLUNKWEB_URL_PREFIX}}/config?autoload=1" crossorigin="use-credentials"></script>
     <script src="{{SPLUNKWEB_URL_PREFIX}}/static/js/i18n.js"></script>
     <script src="{{SPLUNKWEB_URL_PREFIX}}/i18ncatalog?autoload=1"></script>
     <script src="{{SPLUNKWEB_URL_PREFIX}}/static/build/simplexml/index.js"></script>
+	
+	
 	<script src="{{SPLUNKWEB_URL_PREFIX}}/static/app/config_explorer/config.js"></script>
 
 </body>

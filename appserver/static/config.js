@@ -17,9 +17,7 @@ require([
     "splunkjs/mvc/searchmanager",
     "vs/editor/editor.main",
 	"app/config_explorer/jquery.transit.min",
-	"app/config_explorer/sortable.min",
-	
-	//"app/config_explorer/node_modules/simplebar/dist/simplebar"
+	"app/config_explorer/sortable.min"
 ], function(
 	mvc,
 	$,
@@ -32,7 +30,6 @@ require([
     wat,
 	transit,
 	Sortable
-	//SimpleBar
 ) {
 
 	// Lovely globals
@@ -43,6 +40,7 @@ require([
 	var closed_tabs = (JSON.parse(localStorage.getItem('ce_closed_tabs')) || []);
 	var $dashboardBody = $('.dashboard-body');
     var $dirlist = $(".ce_file_list");
+	var $filelist = $(".ce_file_wrap");
 	var $filePath = $(".ce_file_path");
     var $container = $(".ce_contents");
 	var spinner = $(".sk-cube-grid");
@@ -55,6 +53,7 @@ require([
 	var inFlightRequests = 0;
 	var comparisonLeftFile = null;
 	var tabid = 0;
+	var scrollbar;
 
 	// Prevent people from navigating away when they have unsaved changes
     $(window).on("beforeunload", function() {
@@ -80,7 +79,7 @@ require([
 		} else if (p.hasClass('ce_app_run')) {
 			runShellCommand();
 			
-		} else if (p.hasClass('ce_app_settings')) {
+		} else if (p.hasClass('ce_app_settings')) {			
 			readFile("")
 
 		} else if (p.hasClass('ce_app_changelog')) {
@@ -197,17 +196,18 @@ require([
 			// Clicked a tab that causes the left pane to change
 			$('.ce_app_link.ce_active').removeClass('ce_active');
 			p.addClass('ce_active');
+			$filelist.empty().css({"transform":"", "opacity":""});
 			// Clicking one of the top links
 			if (p.hasClass('ce_app_filesystem')) {
 				refreshCurrentPath();
 				$filePath.css({"display":""});
-				$dirlist.css({"margin-top":"", "padding-top":""});
+				$dirlist.css({"top":""});
 				action_mode = 'read';
 				
 			} else if (p.hasClass('ce_app_effective')) {
 				action_mode = 'btool-list';
 				$filePath.css({"display":"none"});
-				$dirlist.css({"margin-top":"0px", "padding-top":"14px"});
+				$dirlist.css({"top":"0"});
 				buildLeftPane();
 			}
 		}
@@ -288,10 +288,10 @@ require([
 		} else if (action_mode === 'read') {
 			var elem = $(this);
 			if (elem.hasClass("ce_is_folder")) {
-				$dirlist.children().transition({ x: '-200px', opacity: 0 });
+				$filelist.transition({ x: '-200px', opacity: 0 });
 				readFolder(elem.attr('file'));
 			} else if (! elem.hasClass("ce_is_report")) {
-				$dirlist.children().transition({ x: '200px', opacity: 0 });
+				$filelist.transition({ x: '200px', opacity: 0 });
 				readFolder(elem.attr('file'));
 			} else {
 				readFile(elem.attr('file'));
@@ -611,7 +611,7 @@ require([
 			contents.sort(function (a, b) {
 				return a.toLowerCase().localeCompare(b.toLowerCase());
 			});
-			$dirlist.empty();
+			$filelist.empty().css("transform","");
 			$filePath.empty().attr("title", path);
 			$("<span></span><bdi></bdi><i title='New folder' class='ce_add_folder ce_clickable_icon ce_right_icon ce_right_two icon-folder'></i>" +
 						"<i title='New file' class='ce_add_file ce_clickable_icon ce_right_icon icon-report'></i>").attr("file", path).appendTo($filePath);
@@ -623,16 +623,17 @@ require([
 				$filePath.removeClass('ce_rtl');
 			}
 			if (path !== ".") {
-				$("<li class='ce_leftnav'><i class='icon-arrow-left'></i> ..</li>").attr("file", path.replace(/[\/\\][^\/\\]+$/,'')).appendTo($dirlist);
+				$("<div class='ce_leftnav'><i class='icon-arrow-left'></i> ..</div>").attr("file", path.replace(/[\/\\][^\/\\]+$/,'')).appendTo($filelist);
 			}
 			for (var i = 0; i < contents.length; i++) {
 				var icon = "folder";
 				if (contents[i].substr(0,1) === "F") {
 					icon = "report";
 				}
-				$("<li class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'></li>").text(contents[i].substr(1)).attr("file", path + "/" + contents[i].substr(1)).prepend("<i class='icon-" + icon + "'></i> ").appendTo($dirlist);
+				$("<div class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'></div>").text(contents[i].substr(1)).attr("file", path + "/" + contents[i].substr(1)).prepend("<i class='icon-" + icon + "'></i> ").appendTo($filelist);
 			}
-			$dirlist.children().transition({"opacity":1});
+			$filelist.transition({"opacity":1});
+			leftPathChanged();
 		});
 	}
 
@@ -855,11 +856,12 @@ require([
 	
 	// Might be either the effective config or spec config screen
 	function buildLeftPane() {
-		$dirlist.empty();
+		$filelist.empty();
 		for (var i = 0; i < confFilesSorted.length; i++) {
-			$("<li class='ce_leftnav ce_conf'></li>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-gear'></i> ").appendTo($dirlist);
+			$("<div class='ce_leftnav ce_conf'></div>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-gear'></i> ").appendTo($filelist);
 		}
-		$dirlist.children().transition({"opacity":1})
+		$filelist.transition({"opacity":1})
+		leftPathChanged();
 	}
 	
     function activateTab(idx){
@@ -1581,7 +1583,7 @@ require([
 				for (var i = 0; i < ce_open_tabs.length; i++){
 					logClosedTab(ce_open_tabs[i]);
 				}
-				var $restore = $("<span class='ce_restore_session'><i class='icon-lightning'></i> <span>Restore " + (ce_open_tabs.length === 1 ? "1 tab" : ce_open_tabs.length + " tabs") + "</span></span>").appendTo($tabs);
+				var $restore = $("<span class='ce_restore_session'><i class='icon-rotate'></i> <span>Restore " + (ce_open_tabs.length === 1 ? "1 tab" : ce_open_tabs.length + " tabs") + "</span></span>").appendTo($tabs);
 				$restore.on("click", function(){
 					for (var j = 0; j < ce_open_tabs.length; j++) {
 						restoreTab(ce_open_tabs[j].type, ce_open_tabs[j].file);
@@ -1595,8 +1597,16 @@ require([
 					openTabsListChanged();
 					doPipeTabSeperators();		
 				}
-			});
+			});			
 		});		
+	}
+	
+	function leftPathChanged(){
+		if (typeof scrollbar === "undefined") {
+			scrollbar = OverlayScrollbars($dirlist[0],{ className : "os-theme-light", overflowBehavior : { x: "hidden"} });
+		//} else {
+			//scrollbar.update(true);
+		}		
 	}
 	// Build the directory structure
     refreshCurrentPath();
@@ -1612,11 +1622,6 @@ require([
 			}
 		}
 	});
-	/*setTimeout(function(){
-	console.log(SimpleBar);
-	new SimpleBar($dirlist[0]);		
-	},1000)*/
-
 
 	// Setup the splunk components properly
 	$('header').remove();
