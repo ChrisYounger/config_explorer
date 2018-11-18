@@ -1664,7 +1664,8 @@ require([
 			});
 		}
 		
-		Sortable.create($(".ce_tabs")[0], {
+		Sortable.create($tabs[0], {
+			draggable: ".ce_tab",
 			animation: 150,
 			onEnd: function () {
 				// uptohere figure out how things moved and reorder list					
