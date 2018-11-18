@@ -1,9 +1,7 @@
 // Copyright (C) 2018 Chris Younger
 
 
-  
-
-// Opening from the CDN
+// Loading monaco from the CDN
 /*
 require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.15.0/min/vs' }});
 window.MonacoEnvironment = {
@@ -15,23 +13,30 @@ window.MonacoEnvironment = {
 	}/app/config_explorer/config.js
 };
 */
+
+
+
+// The splunk webserver prepends all scripts with a call to i18n_register() for internationalisation. This fails for web-workers becuase they dont kknow about this function yet.
+// The options are patch the function in on-the-fly like so, or to edit the file on the filesystem (which makes upgrading monaco harder)
 (function() { 
+	var mode = "min"; // or dev
+	require.config({ 
+		paths: {
+			'vs': '../app/config_explorer/node_modules/monaco-editor/'+mode+'/vs', 
+		}
+	});
 	var scripts = document.getElementsByTagName("script");
 	var src = scripts[scripts.length-1].src; 
-
-require.config({ 
-	//baseUrl: src.substring(0, src.lastIndexOf('/')),
-	paths: {
-		'vs': '../app/config_explorer/node_modules/monaco-editor/min/vs', 
-		//'app': '../app', 
-	}
-});
 	window.MonacoEnvironment = {
 		getWorkerUrl: function(workerId, label) {
-			return "data:text/javascript;charset=utf-8," + encodeURIComponent("console.log('loading worker'); function i18n_register(){console.log('fuck this thing');}; self.MonacoEnvironment = { baseUrl: '" + src.substring(0, src.lastIndexOf('/')) + "/node_modules/monaco-editor/min/' }; importScripts('" + src.substring(0, src.lastIndexOf('/')) + "/node_modules/monaco-editor/min/vs/base/worker/workerMain.js?t');");
+			return "data:text/javascript;charset=utf-8," + encodeURIComponent(
+				"console.log('shimming i18n_register for worker'); "+
+				"function i18n_register(){console.log('i18n_register shimmed');} "+
+				"self.MonacoEnvironment = { baseUrl: '" + src.substring(0, src.lastIndexOf('/')) + "/node_modules/monaco-editor/"+mode+"/' }; "+
+				"importScripts('" + src.substring(0, src.lastIndexOf('/')) + "/node_modules/monaco-editor/"+mode+"/vs/base/worker/workerMain.js');"
+			);
 		}
 	};
-﻿
 })();
 
 require([
@@ -251,7 +256,10 @@ require([
 		//closed_tabs.push({label: file: type: read|btool|btool-hidepaths|btool-hidedefaults|spec|running});
 		$(".ce_wrap").append(recent);
 
-		recent.on("click auxclick", ".ce_selectable", function(){
+		recent.on("click auxclick", ".ce_selectable", function(e){
+			if (e.which === 3) {
+				return;
+			}			
 			var d = $(this).data();
 			restoreTab(d.type, d.file);
 		});
@@ -269,6 +277,9 @@ require([
 	
 	// Middle click to close tab
 	}).on("auxclick", ".ce_tab", function(e){
+		if (e.which === 3) {
+			return;
+		}
 		var idx = $(this).index();
 		e.stopPropagation();
 		closeTabWithConfirmation(idx);	
@@ -1554,14 +1565,15 @@ require([
 					if (editors[activeTab].hinting[currentStanza].hasOwnProperty(key) && key) {
 						ret.push({
 							label: key,
+							insertText: key + " = ",
 							kind: monaco.languages.CompletionItemKind.Property,
 							documentation: "" + editors[activeTab].hinting[currentStanza][key].t + "\n\n" + editors[activeTab].hinting[currentStanza][key].c + "\n",
 						});
 					}
 				}
-				return ret;
+				return { suggestions: ret };
 			}
-			return [];
+			return { suggestions: [] };
 		}
 	});	
 		
@@ -1691,6 +1703,7 @@ require([
 			});
 		}
 		
+		// Allow tabs to be rearranged
 		Sortable.create($tabs[0], {
 			draggable: ".ce_tab",
 			animation: 150,
