@@ -1,20 +1,46 @@
 // Copyright (C) 2018 Chris Younger
 
+
+  
+
+// Opening from the CDN
+/*
+require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.15.0/min/vs' }});
+window.MonacoEnvironment = {
+	getWorkerUrl: function(workerId, label) {
+		return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
+			self.MonacoEnvironment = { baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.15.0/min/' };
+			importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.15.0/min/vs/base/worker/workerMain.js');`
+		)}`;
+	}/app/config_explorer/config.js
+};
+*/
+(function() { 
+	var scripts = document.getElementsByTagName("script");
+	var src = scripts[scripts.length-1].src; 
+
 require.config({ 
+	//baseUrl: src.substring(0, src.lastIndexOf('/')),
 	paths: {
 		'vs': '../app/config_explorer/node_modules/monaco-editor/min/vs', 
+		//'app': '../app', 
 	}
 });
-  
+	window.MonacoEnvironment = {
+		getWorkerUrl: function(workerId, label) {
+			return "data:text/javascript;charset=utf-8," + encodeURIComponent("console.log('loading worker'); function i18n_register(){console.log('fuck this thing');}; self.MonacoEnvironment = { baseUrl: '" + src.substring(0, src.lastIndexOf('/')) + "/node_modules/monaco-editor/min/' }; importScripts('" + src.substring(0, src.lastIndexOf('/')) + "/node_modules/monaco-editor/min/vs/base/worker/workerMain.js?t');");
+		}
+	};
+﻿
+})();
+
 require([
 	"splunkjs/mvc",
 	"jquery",
-	"underscore",
 	"moment",
 	"splunkjs/mvc/simplexml",
 	"splunkjs/mvc/layoutview",
 	"splunkjs/mvc/simplexml/dashboardview",
-	"splunkjs/mvc/searchmanager",
 	"vs/editor/editor.main",
 	"app/config_explorer/jquery.transit.min",
 	"app/config_explorer/sortable.min",
@@ -22,12 +48,10 @@ require([
 ], function(
 	mvc,
 	$,
-	_,
 	moment,
 	DashboardController,
 	LayoutView,
 	Dashboard,
-	SearchManager,
 	wat,
 	transit,
 	Sortable,
@@ -1050,6 +1074,7 @@ require([
 		var ecfg = {
 			type: type, 
 			file: file,
+			label: createLabel(type, file),
 			can_reopen: can_reopen,
 			id: tabid++
 		};
@@ -1061,7 +1086,7 @@ require([
 		ecfg.container.append(contents);
 		// Remove the "restore session" link
 		$(".ce_restore_session").remove();
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + label + "<div class='ce_tab_shadow'></div></div>").attr("title", createLabel(type, file)).data({"tab": ecfg}).appendTo($tabs);
+		ecfg.tab = $("<div class='ce_tab ce_active'>" + label + "<div class='ce_tab_shadow'></div></div>").attr("title", ecfg.label).data({"tab": ecfg}).appendTo($tabs);
 		ecfg.hasChanges = false;
 		ecfg.server_content = '';
 		activateTab(editors.length-1);
@@ -1097,8 +1122,10 @@ require([
 		ecfg.container.empty();
 		ecfg.editor = monaco.editor.create(ecfg.container[0], {
 			automaticLayout: true,
+			lineNumbersMinChars: 3,
 			value: contents,
 			language: language,
+			ariaLabel: ecfg.file,
 			readOnly: ! ecfg.canBeSaved,
 			theme: "vs-dark",
 			glyphMargin: true
@@ -1686,7 +1713,7 @@ require([
 			el: $dashboardBody,
 			showTitle: true,
 			editable: true
-		}, { tokens: true }).render();
+		}, { tokens: false }).render();
 
 		DashboardController.ready();
 		
