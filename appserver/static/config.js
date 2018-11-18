@@ -17,7 +17,8 @@ require([
 	"splunkjs/mvc/searchmanager",
 	"vs/editor/editor.main",
 	"app/config_explorer/jquery.transit.min",
-	"app/config_explorer/sortable.min"
+	"app/config_explorer/sortable.min",
+	"app/config_explorer/OverlayScrollbars"
 ], function(
 	mvc,
 	$,
@@ -29,7 +30,8 @@ require([
 	SearchManager,
 	wat,
 	transit,
-	Sortable
+	Sortable,
+	OverlayScrollbars
 ) {
 	// globals
 	var service = mvc.createService({ owner: "nobody" });
@@ -172,8 +174,8 @@ require([
 					var ecfg = createTab('compare', thisFile + " " + comparisonLeftFile, "<span class='ce-dim'>compare:</span> " + thisFile + " " + comparisonLeftFile, false);
 					// get both files 
 					Promise.all([
-						serverAction('read', comparisonLeftFile),
-						serverAction('read', thisFile),
+						serverActionWithoutFlicker('read', comparisonLeftFile),
+						serverActionWithoutFlicker('read', thisFile),
 					]).then(function(contents){
 						updateTabAsDiffer(ecfg, comparisonLeftFile + "\n" + contents[0], thisFile + "\n" + contents[1]);
 					});
@@ -342,7 +344,7 @@ require([
 						if (command) {
 							// save to localstorage
 							var ecfg = createTab('run', '', '<span class="ce-dim">$</span> ' + command, false);
-							serverAction("run", command).then(function(contents){
+							serverActionWithoutFlicker("run", command).then(function(contents){
 								// trim length
 								if (run_history.length > 50) {
 									run_history.shift();
@@ -369,7 +371,7 @@ require([
 	// Check config
 	function runBToolCheck() {
 		var ecfg = createTab('btool-check', "", 'Check config', false);
-		serverAction('btool-check').then(function(contents){
+		serverActionWithoutFlicker('btool-check').then(function(contents){
 			contents = contents.replace(/^(No spec file for|Checking):.*\r?\n/mg,'').replace(/^\t\t/mg,'').replace(/\n{2,}/g,'\n\n');
 			if ($.trim(contents)) {
 				updateTabAsEditor(ecfg, contents, false, 'none');
@@ -424,7 +426,7 @@ require([
 		}
 		if (! tabAlreadyOpen(type, path)) {
 			var ecfg = createTab(type, path, tab_path_fmt, false);
-			serverAction('btool-list', path).then(function(contents){
+			serverActionWithoutFlicker('btool-list', path).then(function(contents){
 				var c = formatBtoolList(contents, true, false);
 				if ($.trim(c)) {
 					getRunningConfig(path).then(function(contents_running){
@@ -475,7 +477,7 @@ require([
 		}
 		if (! tabAlreadyOpen(type, path)) {
 			var ecfg = createTab(type, path, tab_path_fmt, true);
-			serverAction('btool-list', path).then(function(contents){
+			serverActionWithoutFlicker('btool-list', path).then(function(contents){
 				var c = formatBtoolList(contents, ce_btool_default_values, ce_btool_path);
 				if ($.trim(c)) {
 					updateTabAsEditor(ecfg, c, false, 'ini');
@@ -499,7 +501,7 @@ require([
 		var tab_path_fmt = '<span class="ce-dim">spec:</span> ' + path;
 		if (! tabAlreadyOpen('spec', path)) {
 			var ecfg = createTab('spec', path, tab_path_fmt, true);
-			serverAction('spec', path).then(function(contents) {
+			serverActionWithoutFlicker('spec', path).then(function(contents) {
 				if ($.trim(contents)) {
 					updateTabAsEditor(ecfg, contents, false, 'ini');
 				} else {
@@ -516,12 +518,12 @@ require([
 
 	// Update and display the left pane in filesystem mode
 	function refreshCurrentPath() {
-		readFolder(inFolder);
+		return readFolder(inFolder);
 	}
 
-	// Run server action to load a file or folder
+	// Run server action to load a folder
 	function readFolder(path){
-		serverAction('read', path).then(function(contents){
+		return serverAction('read', path).then(function(contents){
 			inFolder = path;
 			localStorage.setItem('ce_current_path', inFolder);
 			contents.sort(function (a, b) {
@@ -563,7 +565,7 @@ require([
 				can_reopen = false;
 			}
 			var ecfg = createTab('read', path, label, can_reopen);
-			serverAction('read', path).then(function(contents){
+			serverActionWithoutFlicker('read', path).then(function(contents){
 				updateTabAsEditor(ecfg, contents, true);
 				if (ecfg.hasOwnProperty('matchedConf')) {
 					highlightBadConfig(ecfg);
@@ -702,7 +704,7 @@ require([
 	function showChangeLog() {
 		var ecfg = createTab('change-log', "", "Change log", false);
 		var table = $("<table></table>");
-		serverAction("git-log").then(function(contents){
+		serverActionWithoutFlicker("git-log").then(function(contents){
 			// commit 1, datetime 2 user 3 change 4 files 5 additions 6 deletions 7
 			var rex = /commit\s+(\S+)[\s\S]*?Date:\s+\S+\s+(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+(\S+)(?: +(\S+))?\s+([\s\S]+?)\d+\s+files? changed,(?: (\d+) insertions?\(\+\))?(?: (\d+) deletions?\(\-\))?/g,
 				res, 
@@ -812,7 +814,7 @@ require([
 	// Git history of a specific file optionally between two commit tags
 	function getFileHistory(file, commitstart, commitend){
 		var ecfg = createTab('history', file, "<span class='ce-dim'>history:</span> " + dodgyBasename(file), false);
-		serverAction("git-history", file).then(function(contents){
+		serverActionWithoutFlicker("git-history", file).then(function(contents){
 			contents = $.trim(contents);
 			if (! contents) {
 				showModal({
@@ -1225,6 +1227,18 @@ require([
 		});	
 	}	
 	
+	// Make sure the server action that results in a tab open, takes a minimum amount of time so as not to flicker and look dumb
+	function serverActionWithoutFlicker(type, path, param1) {
+		var promise = serverAction(type, path, param1);
+		var promiseTimeout = new Promise(function(resolve) {
+			setTimeout(resolve, 800);
+		});
+		var promiseCombined = Promise.all([promise, promiseTimeout]);
+		return promiseCombined.then(function(values) {
+			return values[0];
+		});			
+	}
+	
 	// Make a rest call to our backend python script
 	function serverAction(type, path, param1) {
 		return new Promise(function(resolve, reject) {
@@ -1587,10 +1601,16 @@ require([
 		}
 		self.$modal.modal(options);
 	};
+		
+	function leftPathChanged(){
+		if (typeof scrollbar === "undefined") {
+			scrollbar = OverlayScrollbars($dirlist[0],{ className : "os-theme-light", overflowBehavior : { x: "hidden"} });
+		}		
+	}
 	
-	// Build the list of config files
+	// Build the list of config files, 
 	function loadPermissionsAndConfList(){
-		serverAction('init').then(function(data) {
+		return serverAction('init').then(function(data) {
 			var rex = /^Checking: .*[\/\\]([^\/\\]+?).conf\s*$/gmi,
 				res;
 			conf = data.conf;
@@ -1622,59 +1642,54 @@ require([
 				}
 			}
 			confFilesSorted.sort();
-			
-			$spinner.detach();
-			$dashboardBody.removeClass("ce_loading");
+		});
+	}	
 
-			// on page load, log that tabs that were open previously
-			var ce_open_tabs = (JSON.parse(localStorage.getItem('ce_open_tabs')) || []);
-			if (ce_open_tabs.length) {
-				for (var i = 0; i < ce_open_tabs.length; i++){
-					logClosedTab(ce_open_tabs[i]);
-				}
-				var $restore = $("<span class='ce_restore_session'><i class='icon-rotate'></i> <span>Restore " + (ce_open_tabs.length === 1 ? "1 tab" : ce_open_tabs.length + " tabs") + "</span></span>").appendTo($tabs);
-				$restore.on("click", function(){
-					for (var j = 0; j < ce_open_tabs.length; j++) {
-						restoreTab(ce_open_tabs[j].type, ce_open_tabs[j].file);
-					}
-				});
+	// First load after init has occcured, setup the page
+	loadPermissionsAndConfList().then(function(){
+		$spinner.detach();
+		$dashboardBody.removeClass("ce_loading");
+
+		// on page load, log that tabs that were open previously
+		var ce_open_tabs = (JSON.parse(localStorage.getItem('ce_open_tabs')) || []);
+		if (ce_open_tabs.length) {
+			for (var i = 0; i < ce_open_tabs.length; i++){
+				logClosedTab(ce_open_tabs[i]);
 			}
-			Sortable.create($(".ce_tabs")[0], {
-				animation: 150,
-				onEnd: function () {
-					// uptohere figure out how things moved and reorder list					
-					openTabsListChanged();
-					doPipeTabSeperators();		
+			var $restore = $("<span class='ce_restore_session'><i class='icon-rotate'></i> <span>Restore " + (ce_open_tabs.length === 1 ? "1 tab" : ce_open_tabs.length + " tabs") + "</span></span>").appendTo($tabs);
+			$restore.on("click", function(){
+				for (var j = 0; j < ce_open_tabs.length; j++) {
+					restoreTab(ce_open_tabs[j].type, ce_open_tabs[j].file);
 				}
-			});			
-		});		
-	}
-	
-	function leftPathChanged(){
-		if (typeof scrollbar === "undefined") {
-			scrollbar = OverlayScrollbars($dirlist[0],{ className : "os-theme-light", overflowBehavior : { x: "hidden"} });
-		}		
-	}
-	
-	
-	
-	// Build the directory structure
-    refreshCurrentPath();
-	loadPermissionsAndConfList();
-	
-	// Setup the splunk components properly
-	$('header').remove();
-	new LayoutView({ "hideAppBar": true, "hideChrome": false, "hideFooter": false, "hideSplunkBar": false, layout: "fixed" })
-		.render()
-		.getContainerElement()
-		.appendChild($dashboardBody[0]);
+			});
+		}
+		
+		Sortable.create($(".ce_tabs")[0], {
+			animation: 150,
+			onEnd: function () {
+				// uptohere figure out how things moved and reorder list					
+				openTabsListChanged();
+				doPipeTabSeperators();		
+			}
+		});	
 
-	new Dashboard({
-		id: 'dashboard',
-		el: $dashboardBody,
-		showTitle: true,
-		editable: true
-	}, { tokens: true }).render();
+		// Setup the splunk components properly
+		$('header').remove();
+		new LayoutView({ "hideAppBar": true, "hideChrome": false, "hideFooter": false, "hideSplunkBar": false, layout: "fixed" })
+			.render()
+			.getContainerElement()
+			.appendChild($dashboardBody[0]);
 
-	DashboardController.ready();
+		new Dashboard({
+			id: 'dashboard',
+			el: $dashboardBody,
+			showTitle: true,
+			editable: true
+		}, { tokens: true }).render();
+
+		DashboardController.ready();
+		
+		// Build the directory
+		refreshCurrentPath();		
+	});
 });

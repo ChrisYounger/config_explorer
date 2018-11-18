@@ -6,7 +6,8 @@
     <title>Config Editor</title>
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/build/css/bootstrap-enterprise.css" />
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/css/build/pages/dashboard-simple-bootstrap.min.css"/>
-    <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/app/config_explorer/config.css" media="all" />
+    <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/app/config_explorer/config.css" />
+	<link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/app/config_explorer/OverlayScrollbars.min.css" />
     <meta name="referrer" content="never" />
     <meta name="referrer" content="no-referrer" />
 </head>
@@ -20,7 +21,6 @@
             </div>
         </div>
     </header>
-    
     <div class="dashboard-body container-fluid main-section-body ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ce_loading" data-role="main">
 		<div class="sk-cube-grid">
 			<div class="sk-cube sk-cube1"></div>
@@ -58,17 +58,11 @@
 		<div class="ce_context_menu_overlap ce_hidden"></div>
 		<div class="ce_context_menu_wrap"></div>
     </div>
-	<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/overlayscrollbars/1.5.3/css/OverlayScrollbars.min.css" />
-	<script src="https://cdnjs.cloudflare.com/ajax/libs/overlayscrollbars/1.5.3/js/OverlayScrollbars.js"></script>
-
     <script src="{{SPLUNKWEB_URL_PREFIX}}/config?autoload=1" crossorigin="use-credentials"></script>
     <script src="{{SPLUNKWEB_URL_PREFIX}}/static/js/i18n.js"></script>
     <script src="{{SPLUNKWEB_URL_PREFIX}}/i18ncatalog?autoload=1"></script>
-    <script src="{{SPLUNKWEB_URL_PREFIX}}/static/build/simplexml/index.js"></script>
-	
-	
+    <script src="{{SPLUNKWEB_URL_PREFIX}}/static/build/simplexml/index.js"></script>	
 	<script src="{{SPLUNKWEB_URL_PREFIX}}/static/app/config_explorer/config.js"></script>
-
 </body>
 </html>
 
