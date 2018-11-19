@@ -26,8 +26,8 @@ max_file_size = <non-negative integer>
 #  Experimental features                                                   #
 ############################################################################
 
-git = <bool>
-* Enable tracking of changes using git.  
+git_commit = <bool>
+* Track all file saves by automatically committing them to git. 
   Defaults to false 
 
 git_dir = <string>
@@ -44,5 +44,6 @@ git_group_time_mins = <non-negative integer>
 
 conf_validate_on_save = <bool>
 * Show a green or red indicator in the code gutter of each line if it appears
-  in the btool list output or not
+  in the btool list output or not. As parsing .spec files is not particularly 
+  reliable this can be wrong.
   Defaults to true

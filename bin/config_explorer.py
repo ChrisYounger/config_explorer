@@ -27,7 +27,7 @@ class req(splunk.rest.BaseRestHandler):
         
 		def runCommand(cmds, use_shell=False, status_codes=[]):
 			my_env = os.environ.copy()
-			if confIsTrue("git"):
+			if confIsTrue("git_commit", False):
 				my_env["GIT_DIR"] = os.path.join(SPLUNK_HOME, conf["default"]["git_dir"].strip("\""))
 				my_env["GIT_WORK_TREE"] = os.path.join(SPLUNK_HOME, conf["default"]["git_work_tree"].strip("\""))
 			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=use_shell, env=my_env)
@@ -37,7 +37,7 @@ class req(splunk.rest.BaseRestHandler):
 
 		def git(message, git_status_codes, file1, file2=None):
 			git_output = ""
-			if confIsTrue("git"):
+			if confIsTrue("git_commit", False):
 				try:
 					if file2 == None:
 						git_output += '$git add ' + file1 + "\n"
@@ -58,7 +58,9 @@ class req(splunk.rest.BaseRestHandler):
 					#self.response.write(json.dumps({'result': message, 'status': 'error', 'debug': debug}, ensure_ascii=False))		
 			return git_output
 
-		def confIsTrue(param):
+		def confIsTrue(param, defaultValue):
+			if param not in conf["default"]:
+				return defaultValue
 			if conf["default"][param].lower().strip() in ("1", "true", "yes", "t", "y"):
 				return True
 			return False
@@ -79,13 +81,13 @@ class req(splunk.rest.BaseRestHandler):
 			capabilities = transforms_content['entry'][0]['content']['capabilities']
 					
 			# dont allow write or run access unless the user makes the effort to set the capability
-			if action == 'run' and not confIsTrue("run_commands"):
+			if action == 'run' and not confIsTrue("run_commands", False):
 				status = "missing_perm_run"
 					
-			elif ((action in ['delete', 'rename', 'newfolder', 'newfile']) or (action == "save" and action_item != "")) and not confIsTrue("write_access"):
+			elif ((action in ['delete', 'rename', 'newfolder', 'newfile']) or (action == "save" and action_item != "")) and not confIsTrue("write_access", False):
 				status = "missing_perm_write"
 			
-			elif action == "save" and action_item == "" and confIsTrue("hide_settings"):
+			elif action == "save" and action_item == "" and confIsTrue("hide_settings", False):
 				status = "config_locked"
 			
 			# we need to prevent even read access to admins so that people don't call our api and read the .secrets file

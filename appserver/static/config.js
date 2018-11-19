@@ -79,7 +79,6 @@ require([
 	var conf = {};
 	var confFiles = {};
 	var confFilesSorted = [];
-	var action_mode = 'read';
 	var inFlightRequests = 0;
 	var comparisonLeftFile = null;
 	var tabid = 0;
@@ -135,10 +134,8 @@ require([
 				refreshCurrentPath();
 				$filePath.css({"display":""});
 				$dirlist.css({"top":""});
-				action_mode = 'read';
 				
 			} else if (p.hasClass('ce_app_effective')) {
-				action_mode = 'btool-list';
 				$filePath.css({"display":"none"});
 				$dirlist.css({"top":"0"});
 				leftPaneConfFilesList();
@@ -147,28 +144,31 @@ require([
 	});
 	
 	// Click handlers for New File/New Folder buttons
-	$filePath.on("click", ".ce_add_file,.ce_add_folder", function(e){
+	$filePath.on("click", ".ce_add_file, .ce_add_folder", function(e){
 		e.stopPropagation();
 		var parentPath = $(this).attr('file');
 		fileSystemCreateNew(parentPath, !$(this).hasClass("ce_add_folder"));
 	});
 	
 	// Click handler for left pane items
-	$dirlist.on("click", ".ce_leftnav", function(){	
-		if (action_mode === 'btool-list') {
-			runBToolList($(this).attr('file'), 'btool');			
-		} else if (action_mode === 'read') {
-			var elem = $(this);
-			if (elem.hasClass("ce_is_folder")) {
-				$filelist.transition({ x: '-200px', opacity: 0 });
-				readFolder(elem.attr('file'));
-			} else if (! elem.hasClass("ce_is_report")) {
-				$filelist.transition({ x: '200px', opacity: 0 });
-				readFolder(elem.attr('file'));
-			} else {
-				readFile(elem.attr('file'));
-			}
+	$dirlist.on("click", ".ce_leftnav", function(){
+		var elem = $(this);
+		// click on a conf file
+		if (elem.hasClass("ce_conf")) {
+			runBToolList($(this).attr('file'), 'btool');
+		// click on folder
+		} else if (elem.hasClass("ce_is_folder")) {
+			$filelist.transition({ x: '-200px', opacity: 0 });
+			readFolder(elem.attr('file'));
+		// click on back arrow
+		} else if (! elem.hasClass("ce_is_report")) {
+			$filelist.transition({ x: '200px', opacity: 0 });
+			readFolder(elem.attr('file'));
+		// click on ce_is_report
+		} else {
+			readFile(elem.attr('file'));
 		}
+		
 	// Right click menu for left pane
 	}).on("contextmenu", ".ce_leftnav", function (e) {
 		var $t = $(this);
@@ -189,7 +189,7 @@ require([
 		}
 
 		if ($t.hasClass("ce_is_report")) {
-			if (confIsTrue('git')) {
+			if (confIsTrue('git_commit', false)) {
 				// can show history
 				actions.push($("<div>View file history</div>").on("click", function(){ getFileHistory(thisFile); }));
 			}
@@ -261,7 +261,7 @@ require([
 				return;
 			}			
 			var d = $(this).data();
-			restoreTab(d.type, d.file);
+			reopenTab(d.type, d.file);
 		});
 			
 		$(document).one("click", function(){
@@ -296,7 +296,7 @@ require([
 	});
 	
 	// Used by recent files functionality
-	function restoreTab(type, file) {
+	function reopenTab(type, file) {
 		if (type === 'btool-hidepaths') {
 			runBToolList(file, 'btool-hidepaths');
 		} else if (type === 'btool-hidedefaults') {
@@ -307,6 +307,10 @@ require([
 			runningVsLayered(file, false);
 		} else if (type === 'btool') {
 			runBToolList(file, 'btool');
+		} else if (type === 'btool-check') {
+			runBToolCheck();
+		} else if (type === 'run') {
+			runShellCommandNow(file);
 		} else if (type === 'read') {
 			readFile(file);
 		}		
@@ -377,20 +381,7 @@ require([
 					$('.modal').one('hidden.bs.modal', function() {
 						var command = $input.val();
 						if (command) {
-							// save to localstorage
-							var ecfg = createTab('run', '', '<span class="ce-dim">$</span> ' + command, false);
-							serverActionWithoutFlicker("run", command).then(function(contents){
-								// trim length
-								if (run_history.length > 50) {
-									run_history.shift();
-								}
-								// only save if the command is different to what was last run
-								if (command !== run_history[(run_history.length - 1)]) {
-									run_history.push(command);
-								}
-								localStorage.setItem('ce_run_history', JSON.stringify(run_history));
-								updateTabAsEditor(ecfg, contents, false, 'none');
-							}, command);
+							runShellCommandNow(command);
 						}
 					}).modal('hide');
 				},
@@ -403,6 +394,23 @@ require([
 		});
 	}
 	
+	function runShellCommandNow(command){
+		// save to localstorage
+		var ecfg = createTab('run', command, '<span class="ce-dim">$</span> ' + htmlEncode(command), false);
+		serverActionWithoutFlicker("run", command).then(function(contents){
+			// trim length
+			if (run_history.length > 50) {
+				run_history.shift();
+			}
+			// only save if the command is different to what was last run
+			if (command !== run_history[(run_history.length - 1)]) {
+				run_history.push(command);
+			}
+			localStorage.setItem('ce_run_history', JSON.stringify(run_history));
+			updateTabAsEditor(ecfg, contents, false, 'none');
+		}, command);		
+	}
+	
 	// Check config
 	function runBToolCheck() {
 		var ecfg = createTab('btool-check', "", 'Check config', false);
@@ -411,7 +419,7 @@ require([
 			if ($.trim(contents)) {
 				updateTabAsEditor(ecfg, contents, false, 'none');
 			} else {
-				closeEmptyTab(ecfg);
+				closeTabByCfg(ecfg);
 				showModal({
 					title: "Info",
 					body: "<div class='alert alert-info'><i class='icon-alert'></i>No configuration errors found</div>",
@@ -475,7 +483,7 @@ require([
 							updateTabAsEditor(ecfg, contents_running, false, 'ini');
 						}
 					}).catch(function(){
-						closeEmptyTab(ecfg);
+						closeTabByCfg(ecfg);
 						showModal({
 							title: "Warning",
 							body: "<div class='alert alert-warning'><i class='icon-alert'></i>Could not get retreieve running config for " + htmlEncode(path) + "</div>",
@@ -483,7 +491,7 @@ require([
 						});
 					});	
 				} else {
-					closeEmptyTab(ecfg);
+					closeTabByCfg(ecfg);
 					showModal({
 						title: "Error",
 						body: "<div class='alert alert-error'><i class='icon-alert'></i>No btool data returned for " + htmlEncode(path) + "</div>",
@@ -521,7 +529,7 @@ require([
 						ecfg.hinting = buildHintingLookup(path, h);
 					});
 				} else {
-					closeEmptyTab(ecfg);
+					closeTabByCfg(ecfg);
 					showModal({
 						title: "Warning",
 						body: "<div class='alert alert-warning'><i class='icon-alert'></i>No contents for \"<strong>" + tab_path_fmt + "</strong>\"</div>",
@@ -540,7 +548,7 @@ require([
 				if ($.trim(contents)) {
 					updateTabAsEditor(ecfg, contents, false, 'ini');
 				} else {
-					closeEmptyTab(ecfg);
+					closeTabByCfg(ecfg);
 					showModal({
 						title: "Error",
 						body: "<div class='alert alert-error'><i class='icon-alert'></i>No spec file found!</div>",
@@ -857,7 +865,7 @@ require([
 					body: "<div class='alert alert-warning'><i class='icon-alert'></i>No change history found for: <br><br><code>" + htmlEncode(file) + "</code></div>",
 					size: 400
 				});
-				closeEmptyTab(ecfg);
+				closeTabByCfg(ecfg);
 				return;
 			}
 			var lines = htmlEncode(contents).split(/\r?\n/);
@@ -952,16 +960,7 @@ require([
 			}
 		});		
 	}
-	
-	// A tab was opened but there was nothing to put in it, so it is closed.
-	function closeEmptyTab(ecfg) {
-		for (var i = 0; i < editors.length; i++) {
-			if (editors[i].id === ecfg.id) {
-				closeTabNow(i);
-				return;
-			}
-		}		
-	}
+
 
 	// Check if tab is open with unsaved changes
 	function fileIsOpenAndHasChanges(file) {
@@ -978,6 +977,16 @@ require([
 			}
 		}
 		return false;
+	}
+	
+	// A tab was opened but there was nothing to put in it, so it is closed.
+	function closeTabByCfg(ecfg) {
+		for (var i = 0; i < editors.length; i++) {
+			if (editors[i].id === ecfg.id) {
+				closeTabNow(i);
+				return;
+			}
+		}		
 	}
 	
 	function closeTabByName(file) {
@@ -1191,6 +1200,21 @@ require([
 				}
 			});
 		}
+		// add an ability to refresh for btools
+		if (ecfg.type === 'btool' || ecfg.type === 'btool-hidedefaults' || ecfg.type === 'btool-hidepaths' || ecfg.type === 'btool-check' || ecfg.type === 'run') {
+			ecfg.editor.addAction({
+				id: 'reload',
+				contextMenuOrder: 1.12,
+				contextMenuGroupId: '1_modification',
+				label: 'Reload',
+				run: function() {
+					var type = ecfg.type;
+					var file = ecfg.file;
+					closeTabByCfg(ecfg);
+					reopenTab(type, file);
+				}
+			});
+		}		
 		ecfg.editor.addAction({
 			id: 'word-wrap-on',
 			label: 'Word wrap on',
@@ -1370,7 +1394,7 @@ require([
 	// After loading a .conf file or after saving and before any changes are made, red or green colour will
 	// be shown in the gutter about if the current line can be found in the output of btool list.
 	function highlightBadConfig(ecfg){
-		if (!confIsTrue('conf_validate_on_save')) {
+		if (!confIsTrue('conf_validate_on_save', true)) {
 			return;
 		}
 		if (ecfg.hasOwnProperty('matchedConf')) {
@@ -1388,13 +1412,14 @@ require([
 					rows = contents.split(/\r?\n/),
 					currentStanza = "",
 					reProps = /^\s*((\w+)[^=\s]*)\s*=/,
-					newdecorations = [];
+					newdecorations = [],
+					extra;
 				for (var i = 0; i < rows.length; i++) {
 					if (rows[i].substr(0,1) === "[") {
 						if (rows[i].substr(0,9) === "[default]") {
 							currentStanza = "";
 						} else {
-							currentStanza = rows[i];
+							currentStanza = $.trim(rows[i]);
 						}
 						if (seenStanzas.hasOwnProperty(currentStanza)) {
 							newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Stanza already seen in this file"}]  }});
@@ -1410,16 +1435,27 @@ require([
 								}   
 								seenProps[found[1]] = 1;
 								if (lookup.hasOwnProperty(currentStanza) && lookup[currentStanza].hasOwnProperty(found[1]) && lookup[currentStanza][found[1]] === ecfg.file) {
-									if (ecfg.hasOwnProperty('hinting') && found.length > 2 && ! (ecfg.hinting[""].hasOwnProperty(found[2]) || (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2]) ) )) {
-										//newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Unexpected property"}]  }});
-									} else {
-										newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in `btool` output"}]  }});
+									if (ecfg.hasOwnProperty('hinting') && found.length > 2) {
+										if (ecfg.hinting[""].hasOwnProperty(found[2]) || (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2]))) {
+											newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output and spec file"}]  }});
+										} else {
+											console.log(ecfg.hinting);
+											newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output, but not found in spec file. Unexpected stanza \"" + currentStanza + "\" or property \"" + found[2] + "\"" }]  }});
+										}
 									}
 								} else {
-									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine', glyphMarginHoverMessage: [{value:"Not found in `btool` output (overridden somewhere else?)"}] }});
+									extra = "";
+									if (!lookup.hasOwnProperty(currentStanza)){
+										extra = "(btool does not have stanza \"" + currentStanza +"\")";
+									} else if (! lookup[currentStanza].hasOwnProperty(found[1])){
+										extra = "(btool with stanza [" + currentStanza +"] does not have property \"" + found[1] + "\")";
+									} else {
+										extra = "(set in :" + lookup[currentStanza][found[1]] + ")";
+									}
+									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine', glyphMarginHoverMessage: [{value:"Not found in \"btool\" output " + extra + ""}] }});
 								}
 							}
-						}			
+						}
 					}
 				}
 				ecfg.decorations = ecfg.editor.deltaDecorations(ecfg.decorations, newdecorations);
@@ -1451,13 +1487,13 @@ require([
 			} //else {
 				//console.log("unexpected row:", res[0]);
 			//}
-		}	
+		}
 		return ret;
 	}
 	
 	// parse the spec file and build a lookup to use for code completion
 	function buildHintingLookup(conf, contents){
-		var rex = /^(?:(\w+).*=|(\[\w+))?.*$/gm,
+		var rex = /^(?:([\w\.]+).*=|(\[\w+))?.*$/gm,
 			res,
 			currentStanza = "",
 			currentField = "";
@@ -1497,7 +1533,7 @@ require([
 				if (editors[activeTab].hasOwnProperty('hinting')) {
 					// get all text up to hovered line becuase we need to find what stanza we are in
 					var contents = model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber))),
-						rex = /^(?:(\w+)|(\[\w+))?.*$/gm,
+						rex = /^(?:([\w\.]+)|(\[\w+))?.*$/gm,
 						currentStanza = "",
 						currentField = "",
 						hintdata,
@@ -1588,7 +1624,10 @@ require([
 		return $('<div/>').text(value).html();
 	}
 
-	function confIsTrue(param) {
+	function confIsTrue(param, defaultValue) {
+		if (!conf.hasOwnProperty(param)) {
+			return defaultValue;
+		}
 		return (["1", "true", "yes", "t", "y"].indexOf($.trim(conf[param].toLowerCase())) > -1);
 	}
 	
@@ -1654,16 +1693,16 @@ require([
 				res;
 			conf = data.conf;
 			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ');
-			if(confIsTrue('write_access')) {
+			if(confIsTrue('write_access', false)) {
 				$dashboardBody.removeClass('ce_no_write_access');
 			}
-			if(confIsTrue('run_commands')) {
+			if(confIsTrue('run_commands', false)) {
 				$dashboardBody.removeClass('ce_no_run_access');
 			}
-			if(! confIsTrue('hide_settings')) {
+			if(! confIsTrue('hide_settings', false)) {
 				$dashboardBody.removeClass('ce_no_settings_access');
 			}
-			if(confIsTrue('git')) {
+			if(confIsTrue('git_commit', false)) {
 				$dashboardBody.removeClass('ce_no_git_access');
 			}
 			if (conf.hasOwnProperty('git_group_time_mins')) {
@@ -1698,7 +1737,7 @@ require([
 			var $restore = $("<span class='ce_restore_session'><i class='icon-rotate'></i> <span>Restore " + (ce_open_tabs.length === 1 ? "1 tab" : ce_open_tabs.length + " tabs") + "</span></span>").appendTo($tabs);
 			$restore.on("click", function(){
 				for (var j = 0; j < ce_open_tabs.length; j++) {
-					restoreTab(ce_open_tabs[j].type, ce_open_tabs[j].file);
+					reopenTab(ce_open_tabs[j].type, ce_open_tabs[j].file);
 				}
 			});
 		}

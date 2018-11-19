@@ -509,13 +509,13 @@
 }
 
 .ceRedLine {
-	border-left: 8px solid red;
+	border-left: 8px solid rgba(255,0,0,0.75);
 }
 .ceGreeenLine {
 	border-left: 8px solid green;
 }
 .ceOrangeLine {
-	border-left: 8px solid orange;
+	border-left: 8px solid rgba(0,128,0,0.5);
 }
 .ce_diff_addition { background-color: rgba(0,255,0,.2); }
 .ce_diff_deletion { background-color: rgba(255,0,0,.2); }
