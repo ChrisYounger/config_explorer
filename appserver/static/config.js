@@ -207,6 +207,8 @@ require([
 						serverActionWithoutFlicker('read', thisFile),
 					]).then(function(contents){
 						updateTabAsDiffer(ecfg, comparisonLeftFile + "\n" + contents[0], thisFile + "\n" + contents[1]);
+					}).catch(function(){ 
+						closeTabByCfg(ecfg);
 					});
 				}));
 			}
@@ -408,7 +410,9 @@ require([
 			}
 			localStorage.setItem('ce_run_history', JSON.stringify(run_history));
 			updateTabAsEditor(ecfg, contents, false, 'none');
-		}, command);		
+		}).catch(function(){ 
+			closeTabByCfg(ecfg);
+		});		
 	}
 	
 	// Check config
@@ -426,6 +430,8 @@ require([
 					size: 300
 				});	
 			}
+		}).catch(function(){ 
+			closeTabByCfg(ecfg);
 		});
 	}
 	
@@ -498,6 +504,8 @@ require([
 						size: 300
 					});
 				}
+			}).catch(function(){ 
+				closeTabByCfg(ecfg);
 			});
 		}	
 	}
@@ -536,6 +544,8 @@ require([
 						size: 300
 					});
 				}
+			}).catch(function(){ 
+				closeTabByCfg(ecfg);
 			});
 		}	
 	}	
@@ -555,6 +565,8 @@ require([
 						size: 300
 					});
 				}
+			}).catch(function(){ 
+				closeTabByCfg(ecfg);
 			});
 		}
 	}
@@ -618,6 +630,8 @@ require([
 						});
 					}
 				} 
+			}).catch(function(){ 
+				closeTabByCfg(ecfg);
 			});
 		}
 	}
@@ -832,25 +846,29 @@ require([
 				}
 				table.append("<tr commitstart='" + changes[i].sha +"' commitend='" + changes[i].last_sha +"'><td class='nobr'>" + changes[i].time.format("YYYY-MM-DD  h:mma") + "</td><td class='nobr'>" + changes[i].time.fromNow() + "</td>" + type + "<td class='nobr'>" + changes[i].user + "</td><td class='ce_changelog_filescol'>" + fileshtml + "</td></tr>")
 			}
-		});
 		
-		updateTabHTML(ecfg, $("<div class='ce_changelog'></div>").append(table));
+			updateTabHTML(ecfg, $("<div class='ce_changelog'></div>").append(table));
 
-		table.on("click", ".ce_clickable_icon", function(){
-			var $elem = $(this),
-				filestr = $.trim($elem.parent().parent().text());
-				
-			if ($elem.hasClass('icon-number')) {
-				var filecommitstr = $elem.parents("tr").attr("commitstart") + ":./" + filestr;
-				var ecfg = createTab('diff', filestr, "<span class='ce-dim'>diff:</span> " + dodgyBasename(filestr), false);
-				Promise.all([serverAction("read", filestr), serverAction("git-show", filecommitstr)]).then(function(results) {						
-					updateTabAsDiffer(ecfg, "# " + filecommitstr + "\n" + results[0], "# Current HEAD:./" + filestr + "\n" + results[1]);
-				});
-			} else if ($elem.hasClass('icon-speech-bubble')) {
-				var filecommitstrstart = $elem.parents("tr").attr("commitstart");
-				var filecommitstrend = $elem.parents("tr").attr("commitend");
-				getFileHistory(filestr, filecommitstrstart, filecommitstrend);
-			}
+			table.on("click", ".ce_clickable_icon", function(){
+				var $elem = $(this),
+					filestr = $.trim($elem.parent().parent().text());
+					
+				if ($elem.hasClass('icon-number')) {
+					var filecommitstr = $elem.parents("tr").attr("commitstart") + ":./" + filestr;
+					var ecfg = createTab('diff', filestr, "<span class='ce-dim'>diff:</span> " + dodgyBasename(filestr), false);
+					Promise.all([serverAction("read", filestr), serverAction("git-show", filecommitstr)]).then(function(results) {						
+						updateTabAsDiffer(ecfg, "# " + filecommitstr + "\n" + results[0], "# Current HEAD:./" + filestr + "\n" + results[1]);
+					}).catch(function(){ 
+						closeTabByCfg(ecfg);
+					});
+				} else if ($elem.hasClass('icon-speech-bubble')) {
+					var filecommitstrstart = $elem.parents("tr").attr("commitstart");
+					var filecommitstrend = $elem.parents("tr").attr("commitend");
+					getFileHistory(filestr, filecommitstrstart, filecommitstrend);
+				}
+			});			
+		}).catch(function(){ 
+			closeTabByCfg(ecfg);
 		});
 	}
 	
@@ -924,6 +942,8 @@ require([
 			}
 			
 			updateTabHTML(ecfg, $("<div class='ce_file_history'></div>").html(str));
+		}).catch(function(){ 
+			closeTabByCfg(ecfg);
 		});
 	}
 	
@@ -1422,7 +1442,7 @@ require([
 							currentStanza = $.trim(rows[i]);
 						}
 						if (seenStanzas.hasOwnProperty(currentStanza)) {
-							newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Stanza already seen in this file"}]  }});
+							newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Duplicate Stanza in this file"}]  }});
 						}
 						seenStanzas[currentStanza] = 1;
 						seenProps =  {};
@@ -1432,27 +1452,27 @@ require([
 							if (found[1].substr(0,1) !== "#") {
 								if (seenProps.hasOwnProperty(found[1])) {
 									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Duplicate key in stanza"}]  }});
-								}   
-								seenProps[found[1]] = 1;
-								if (lookup.hasOwnProperty(currentStanza) && lookup[currentStanza].hasOwnProperty(found[1]) && lookup[currentStanza][found[1]] === ecfg.file) {
-									if (ecfg.hasOwnProperty('hinting') && found.length > 2) {
-										if (ecfg.hinting[""].hasOwnProperty(found[2]) || (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2]))) {
-											newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output and spec file"}]  }});
-										} else {
-											console.log(ecfg.hinting);
-											newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output, but not found in spec file. Unexpected stanza \"" + currentStanza + "\" or property \"" + found[2] + "\"" }]  }});
-										}
-									}
 								} else {
-									extra = "";
-									if (!lookup.hasOwnProperty(currentStanza)){
-										extra = "(btool does not have stanza \"" + currentStanza +"\")";
-									} else if (! lookup[currentStanza].hasOwnProperty(found[1])){
-										extra = "(btool with stanza [" + currentStanza +"] does not have property \"" + found[1] + "\")";
+									seenProps[found[1]] = 1;
+									if (lookup.hasOwnProperty(currentStanza) && lookup[currentStanza].hasOwnProperty(found[1]) && lookup[currentStanza][found[1]] === ecfg.file) {
+										if (ecfg.hasOwnProperty('hinting') && found.length > 2) {
+											if (ecfg.hinting[""].hasOwnProperty(found[2]) || (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2]))) {
+												newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output and spec file"}]  }});
+											} else {
+												newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceDimGreeenLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output, but not found in spec file. Unexpected stanza \"" + currentStanza + "\" or property \"" + found[2] + "\"" }]  }});
+											}
+										}
 									} else {
-										extra = "(set in :" + lookup[currentStanza][found[1]] + ")";
+										extra = "";
+										if (!lookup.hasOwnProperty(currentStanza)){
+											extra = "(btool does not have stanza \"" + currentStanza +"\")";
+										} else if (! lookup[currentStanza].hasOwnProperty(found[1])){
+											extra = "(btool with stanza [" + currentStanza +"] does not have property \"" + found[1] + "\")";
+										} else {
+											extra = "(set in :" + lookup[currentStanza][found[1]] + ")";
+										}
+										newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine', glyphMarginHoverMessage: [{value:"Not found in \"btool\" output " + extra + ""}] }});
 									}
-									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine', glyphMarginHoverMessage: [{value:"Not found in \"btool\" output " + extra + ""}] }});
 								}
 							}
 						}
@@ -1467,7 +1487,7 @@ require([
 	// from the current editor is being recognised by btool or not.
 	function buildBadCodeLookup(contents){
 		//(conf file path)(property)(stanza)
-		var rex = /^.+?splunk([\/\\]etc[\/\\].*?\.conf)\s+(?:([^=\s]+)\s*=|(\[[^\]]+\]))/gim,
+		var rex = /^.+?splunk([\/\\]etc[\/\\].*?\.conf)\s+(?:([^=\s\[]+)\s*=|(\[[^\]]+\]))/gim,
 			res,
 			currentStanza = "",
 			currentField = "",
