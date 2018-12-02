@@ -189,7 +189,7 @@ require([
 		}
 
 		if ($t.hasClass("ce_is_report")) {
-			if (confIsTrue('git_commit', false)) {
+			if (confIsTrue('git_autocommit', false)) {
 				// can show history
 				actions.push($("<div>View file history</div>").on("click", function(){ getFileHistory(thisFile); }));
 			}
@@ -1153,7 +1153,7 @@ require([
 		}
 		var re = /([^\/\\]+).conf$/;
 		var found = ecfg.file.match(re);
-		if (found && ecfg.type === 'read') {
+		if (found && ecfg.type === 'read' && found[1] !== 'app') {
 			ecfg.matchedConf = found[1];
 		}					
 		ecfg.canBeSaved = canBeSaved;
@@ -1376,7 +1376,8 @@ require([
 					// if there was some unexpected git output, then open a window to display it
 					if (r.data.git && r.data.git_status !== 0) {
 						var ecfg = createTab('git', '', 'git output', false);
-						updateTabAsEditor(ecfg, r.data.git, false, "none");
+						updateTabAsEditor(ecfg, "Warning: Unexpected status code when attempting to commit changes to git version control. Output is below:\n" +
+												"----------------------------------------------------------------------------------------------------------\n\n\n" + r.data.git, false, "none");
 					}
 					resolve(r.data.result);	
 				}
@@ -1722,7 +1723,7 @@ require([
 			if(! confIsTrue('hide_settings', false)) {
 				$dashboardBody.removeClass('ce_no_settings_access');
 			}
-			if(confIsTrue('git_commit', false)) {
+			if(confIsTrue('git_autocommit', false)) {
 				$dashboardBody.removeClass('ce_no_git_access');
 			}
 			if (conf.hasOwnProperty('git_group_time_mins')) {

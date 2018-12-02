@@ -27,8 +27,9 @@ class req(splunk.rest.BaseRestHandler):
         
 		def runCommand(cmds, use_shell=False, status_codes=[]):
 			my_env = os.environ.copy()
-			if confIsTrue("git_commit", False):
+			if conf["default"]["git_dir"].strip("\"") != "":
 				my_env["GIT_DIR"] = os.path.join(SPLUNK_HOME, conf["default"]["git_dir"].strip("\""))
+			if conf["default"]["git_work_tree"].strip("\"") != "":	
 				my_env["GIT_WORK_TREE"] = os.path.join(SPLUNK_HOME, conf["default"]["git_work_tree"].strip("\""))
 			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=use_shell, env=my_env)
 			o = p.communicate()
@@ -36,8 +37,13 @@ class req(splunk.rest.BaseRestHandler):
 			return str(o[0]) + "\n" + str(o[1]) + "\n"
 
 		def git(message, git_status_codes, file1, file2=None):
-			git_output = ""
-			if confIsTrue("git_commit", False):
+			git_output = "cwd = " + os.getcwd() + "\n"
+			if conf["default"]["git_dir"].strip("\"") != "":
+				git_output += "GIT_DIR=" + os.path.join(SPLUNK_HOME, conf["default"]["git_dir"].strip("\"")) + "\n"
+			if conf["default"]["git_work_tree"].strip("\"") != "":	
+				git_output += "GIT_WORK_TREE=" + os.path.join(SPLUNK_HOME, conf["default"]["git_work_tree"].strip("\"")) + "\n"
+			git_output += "\n"
+			if confIsTrue("git_autocommit", False):
 				try:
 					if file2 == None:
 						git_output += '$git add ' + file1 + "\n"
@@ -180,6 +186,7 @@ class req(splunk.rest.BaseRestHandler):
 									result = "Cannot save to a file that does not exist"
 								
 								else:
+									os.chdir(os.path.dirname(file_path))
 									git("unknown", git_status_codes, file_path)
 									with open(file_path, "w") as fh:
 										fh.write(param1)
@@ -212,6 +219,7 @@ class req(splunk.rest.BaseRestHandler):
 										status = "error"
 										
 							elif action == 'delete':
+								os.chdir(os.path.dirname(file_path))
 								git("unknown", git_status_codes, file_path)
 								if os.path.isdir(file_path):
 									shutil.rmtree(file_path)
@@ -234,6 +242,7 @@ class req(splunk.rest.BaseRestHandler):
 										status = "error"
 										
 									else:
+										os.chdir(os.path.dirname(file_path))
 										git("unknown", git_status_codes, file_path)
 										os.rename(file_path, new_path)
 										git_output += git(user + " renamed", git_status_codes, new_path, file_path)
@@ -251,6 +260,7 @@ class req(splunk.rest.BaseRestHandler):
 										
 									elif action == 'newfile':
 										open(new_path, 'w').close()
+										os.chdir(os.path.dirname(new_path))
 										git_output += git(user + " new", git_status_codes, new_path)
 										status = "success"
 									
