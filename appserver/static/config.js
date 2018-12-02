@@ -399,7 +399,7 @@ require([
 	function runShellCommandNow(command){
 		// save to localstorage
 		var ecfg = createTab('run', command, '<span class="ce-dim">$</span> ' + htmlEncode(command), false);
-		serverActionWithoutFlicker("run", command).then(function(contents){
+		serverActionWithoutFlicker("run", command, inFolder).then(function(contents){
 			// trim length
 			if (run_history.length > 50) {
 				run_history.shift();

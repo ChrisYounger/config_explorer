@@ -147,6 +147,9 @@ class req(splunk.rest.BaseRestHandler):
 							result = runCommand([cmd, 'btool', action_item, 'list', '--debug'])	
 						
 						elif action == 'run':
+							# dont need to check if we are inside Splunk dir. User can do anything with run command anyway.
+							file_path = os.path.join(SPLUNK_HOME, param1)
+							os.chdir(file_path)
 							result = runCommand(action_item, True)
 							
 						status = "success"
