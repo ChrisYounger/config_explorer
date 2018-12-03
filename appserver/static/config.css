@@ -121,9 +121,10 @@
 	margin: 0;
     padding: 0; 
 	overflow-x: hidden;
-    top: 37px;
+    top: 38px;
 	bottom: 0;
-	box-shadow: inset -4px 0px 4px rgba(0, 0, 0, 0.28);
+	border-top: 1px solid #1c1c1c;
+	/*box-shadow: inset -4px 0px 4px rgba(0, 0, 0, 0.28);*/
 }
 .ce_leftnav i{
 	margin-right: 4px;
@@ -257,6 +258,7 @@
     border-top-right-radius: 8px;
     border-top-left-radius: 8px;
     color: white;
+	z-index: 9;
 }
 .ce_clickable_icon {
 	cursor: pointer;
@@ -335,17 +337,20 @@
     right: 49px;    
 }
 .ce_contents {
-    top: 48px;
+    top: 38px;
+	padding-top: 10px;
     bottom: 0;
     left: 0;
     right: 0;
     position: absolute;
-	box-shadow: inset 4px 0px 4px rgba(0, 0, 0, 0.28);
+	border-top: 1px solid #1c1c1c;
+	/*box-shadow: inset 4px 0px 4px rgba(0, 0, 0, 0.28);*/
 }
 .ce_contents > div {
     height: 100%
 }
-.ce_contents a, .ce_contents a:hover {
+.ce_contents a,
+.ce_contents a:hover {
 	color: inherit;
 }
 .ce_contents p {
@@ -354,7 +359,8 @@
 .monaco-action-bar .actions-container  {
 	padding: 10px 0;
 }
-.monaco-menu .monaco-action-bar.vertical .action-item > a, .monaco-menu .monaco-action-bar.vertical .action-item > span {
+.monaco-menu .monaco-action-bar.vertical .action-item > a,
+.monaco-menu .monaco-action-bar.vertical .action-item > span {
 	line-height: 2;
 }
 .monaco-menu .monaco-action-bar.vertical .action-item:not(.disabled):hover {
@@ -605,8 +611,8 @@
 
 /* http://tobiasahlin.com/spinkit/ */
 .sk-cube-grid {
-  width: 100px;
-  height: 100px;
+  width: 50px;
+  height: 50px;
   margin: 200px auto;
 }
 
