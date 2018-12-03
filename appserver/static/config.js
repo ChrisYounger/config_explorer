@@ -1426,12 +1426,21 @@ require([
 				}
 				// Build lookup of btool output
 				var lookup = buildBadCodeLookup(btoolcontents);
+				// try to figure out the SPLUNK_HOME value
+				// Its common that in inputs.conf, some stanzas are defined with $SPLUNK_HOME which btool always expands
+				var rexSplunkHome = /^(.+?)[\\\/]etc[\\\/]/;
+				var foundSplunkHome = btoolcontents.match(rexSplunkHome);
+				var splunk_home = "";
+				if (foundSplunkHome && foundSplunkHome.length == 2) {
+					splunk_home = foundSplunkHome[1];
+				}
 				var seenStanzas = {};
 				var seenProps =  {};
 				// Go through everyline of the editor
 				var contents = ecfg.editor.getValue(),
 					rows = contents.split(/\r?\n/),
 					currentStanza = "",
+					currentStanzaExpandedHome = "",
 					reProps = /^\s*((\w+)[^=\s]*)\s*=/,
 					newdecorations = [],
 					extra;
@@ -1458,21 +1467,28 @@ require([
 									if (lookup.hasOwnProperty(currentStanza) && lookup[currentStanza].hasOwnProperty(found[1]) && lookup[currentStanza][found[1]] === ecfg.file) {
 										if (ecfg.hasOwnProperty('hinting') && found.length > 2) {
 											if (ecfg.hinting[""].hasOwnProperty(found[2]) || (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2]))) {
-												newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output and spec file"}]  }});
+												newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output and spec file. Stanza=\"" + currentStanza + "\" or property \"" + found[2] + "\""}]  }});
 											} else {
 												newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceDimGreeenLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output, but not found in spec file. Unexpected stanza \"" + currentStanza + "\" or property \"" + found[2] + "\"" }]  }});
 											}
 										}
 									} else {
-										extra = "";
-										if (!lookup.hasOwnProperty(currentStanza)){
-											extra = "(btool does not have stanza \"" + currentStanza +"\")";
-										} else if (! lookup[currentStanza].hasOwnProperty(found[1])){
-											extra = "(btool with stanza [" + currentStanza +"] does not have property \"" + found[1] + "\")";
+										// attempt to find the stanza by expanding $SPLUNK_HOME
+										currentStanzaExpandedHome = currentStanza.replace(/\$SPLUNK_HOME/i, splunk_home);
+										if (lookup.hasOwnProperty(currentStanzaExpandedHome) && lookup[currentStanzaExpandedHome].hasOwnProperty(found[1]) && lookup[currentStanzaExpandedHome][found[1]] === ecfg.file) {
+											newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output"}]  }});
 										} else {
-											extra = "(set in :" + lookup[currentStanza][found[1]] + ")";
+											// TODO: attempt to expand stanza [script://./bin/go.sh] from current script location
+											extra = "";
+											if (!lookup.hasOwnProperty(currentStanza)){
+												extra = "(btool does not have stanza \"" + currentStanza +"\")";
+											} else if (! lookup[currentStanza].hasOwnProperty(found[1])){
+												extra = "(btool with stanza [" + currentStanza +"] does not have property \"" + found[1] + "\")";
+											} else {
+												extra = "(set in :" + lookup[currentStanza][found[1]] + ")";
+											}
+											newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine', glyphMarginHoverMessage: [{value:"Not found in \"btool\" output " + extra + ""}] }});
 										}
-										newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine', glyphMarginHoverMessage: [{value:"Not found in \"btool\" output " + extra + ""}] }});
 									}
 								}
 							}
@@ -1493,6 +1509,7 @@ require([
 			currentStanza = "",
 			currentField = "",
 			ret = {"": {"":""}};
+					
 		while(res = rex.exec(contents)) {
 			if (res[2]) {
 				currentField = res[2];
