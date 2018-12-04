@@ -13,6 +13,8 @@ class req(splunk.rest.BaseRestHandler):
 		
 		app_name = "config_explorer"
 		conf = splunk.clilib.cli_common.getMergedConf(app_name)
+		env_copy = os.environ.copy()
+		env_git = os.environ.copy()
 		
 		# From here: http://dev.splunk.com/view/logging/SP-CAAAFCN
 		def setup_logging():
@@ -25,44 +27,30 @@ class req(splunk.rest.BaseRestHandler):
 			return logger
 		logger = setup_logging()
         
-		def runCommand(cmds, use_shell=False, status_codes=[]):
-			my_env = os.environ.copy()
-			if conf["default"]["git_dir"].strip("\"") != "":
-				my_env["GIT_DIR"] = os.path.join(SPLUNK_HOME, conf["default"]["git_dir"].strip("\""))
-			if conf["default"]["git_work_tree"].strip("\"") != "":	
-				my_env["GIT_WORK_TREE"] = os.path.join(SPLUNK_HOME, conf["default"]["git_work_tree"].strip("\""))
-			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=use_shell, env=my_env)
+		def runCommand(cmds, this_env, use_shell=False, status_codes=[]):
+			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=use_shell, env=this_env)
 			o = p.communicate()
 			status_codes.append(p.returncode)
 			return str(o[0]) + "\n" + str(o[1]) + "\n"
 
-		def git(message, git_status_codes, file1, file2=None):
-			git_output = "cwd = " + os.getcwd() + "\n"
-			if conf["default"]["git_dir"].strip("\"") != "":
-				git_output += "GIT_DIR=" + os.path.join(SPLUNK_HOME, conf["default"]["git_dir"].strip("\"")) + "\n"
-			if conf["default"]["git_work_tree"].strip("\"") != "":	
-				git_output += "GIT_WORK_TREE=" + os.path.join(SPLUNK_HOME, conf["default"]["git_work_tree"].strip("\"")) + "\n"
-			git_output += "\n"
+		def git(message, git_status_codes, git_output, file1, file2=None):
 			if confIsTrue("git_autocommit", False):
 				try:
 					if file2 == None:
-						git_output += '$git add ' + file1 + "\n"
-						git_output += runCommand(['git','add', file1], False, git_status_codes)
-						git_output += "\n\n"
+						git_output.append({"type": "cmd", "content": '$git add ' + file1})
+						git_output.append({"type": "out", "content": runCommand(['git','add', file1], env_git, False, git_status_codes)})
 					else:
-						git_output += '$git add ' + file1 + " " + file2 + "\n"
-						git_output += runCommand(['git','add', file1, file2], False, git_status_codes)
-						git_output += "\n\n"
-					git_output += '$git commit -m ' + message + "\n"
-					git_output_tmp = runCommand(['git','commit','-m', message], False, git_status_codes)
-					git_output += re.sub(r"On branch \S*\s*\nUntracked [\s\S]+ but untracked files present", '', git_output_tmp)
-					git_output += "\n\n"
+						git_output.append({"type": "cmd", "content": '$git add ' + file1 + " " + file2})
+						git_output.append({"type": "out", "content": runCommand(['git','add', file1, file2], env_git, False, git_status_codes)})
+
+					git_output.append({"type": "cmd", "content": '$git commit -m ' + message})
+					#git_output_tmp = runCommand(['git','commit','-m', message], env_git, False, git_status_codes)
+					#git_output.append({"type": "cmd", "content": re.sub(r"On branch \S*\s*\nUntracked [\s\S]+ but untracked files present", '', git_output_tmp)})
+					git_output.append({"type": "out", "content": runCommand(['git','commit','-m', message], env_git, False, git_status_codes)})
 				except Exception as ex:
-					template = "Git failed. Is git installed and configured correctly? {0}: {1!r}"
-					git_output += template.format(type(ex).__name__, ex.args)
-					#self.response.setHeader('content-type', 'application/json')
-					#self.response.write(json.dumps({'result': message, 'status': 'error', 'debug': debug}, ensure_ascii=False))		
-			return git_output
+					template = "{0}: {1!r}"
+					git_output.append({"type": "desc", "content": "Git failed. Is git installed and configured correctly?"})
+					git_output.append({"type": "out", "content": template.format(type(ex).__name__, ex.args)})
 
 		def confIsTrue(param, defaultValue):
 			if param not in conf["default"]:
@@ -75,7 +63,7 @@ class req(splunk.rest.BaseRestHandler):
 			result = ""
 			status = ""
 			debug = ""
-			git_output = ""
+			git_output = []
 			git_status_codes = [0]
 			action = self.request['form']['action']
 			action_item = self.request['form']['path']
@@ -101,6 +89,23 @@ class req(splunk.rest.BaseRestHandler):
 				status = "missing_perm_read"
 				
 			else:
+				if confIsTrue("git_autocommit", False):
+					git_output.append({"type": "out", "content": "cwd = " + os.getcwd() + "\n"})
+					try:
+						git_autocommit_dir = conf["default"]["git_autocommit_dir"].strip("\"")
+						if git_autocommit_dir != "":
+							env_git["GIT_DIR"] = os.path.join(SPLUNK_HOME, git_autocommit_dir)
+							git_output.append({"type": "out", "content": "GIT_DIR=" + os.path.join(SPLUNK_HOME, git_autocommit_dir)})
+					except KeyError:
+						pass
+					try:
+						git_autocommit_work_tree = conf["default"]["git_autocommit_work_tree"].strip("\"")
+						if git_autocommit_work_tree != "":
+							env_git["GIT_WORK_TREE"] = os.path.join(SPLUNK_HOME, git_autocommit_work_tree)
+							git_output.append({"type": "out", "content": "GIT_WORK_TREE=" + os.path.join(SPLUNK_HOME, git_autocommit_work_tree)})
+					except KeyError:
+						pass
+					
 				# when calling read or write with an empty argument it means we are trying to change the config
 				if (action == 'read' or action == 'save') and action_item == "":
 					localfolder = os.path.join(os.path.dirname( __file__ ), '..', 'local')
@@ -124,33 +129,33 @@ class req(splunk.rest.BaseRestHandler):
 							
 						if action == 'init':
 							result = {}
-							result['files'] = runCommand([cmd, 'btool', 'check', '--debug'])
+							result['files'] = runCommand([cmd, 'btool', 'check', '--debug'], env_copy)
 							result['conf'] = conf["default"]
 
 						elif action == 'git-log':
-							result = runCommand(['git', 'log', '--stat', '--max-count=200'])
+							result = runCommand(['git', 'log', '--stat', '--max-count=200'], env_git)
 
 						elif action == 'git-history':
 							debug = action_item
-							result = runCommand(['git', 'log', '--follow', '-p', '--', action_item])
+							result = runCommand(['git', 'log', '--follow', '-p', '--', action_item], env_git)
 
 						elif action == 'git-show':
-							result = runCommand(['git', 'show', action_item])
+							result = runCommand(['git', 'show', action_item], env_git)
 							
 						elif action == 'btool-check':
-							result = runCommand([cmd, 'btool', 'check', '--debug'])
-							result = result + runCommand([cmd, 'btool', 'find-dangling'])
-							result = result + runCommand([cmd, 'btool', 'validate-strptime'])
-							result = result + runCommand([cmd, 'btool', 'validate-regex'])
+							result = runCommand([cmd, 'btool', 'check', '--debug'], env_copy)
+							result = result + runCommand([cmd, 'btool', 'find-dangling'], env_copy)
+							result = result + runCommand([cmd, 'btool', 'validate-strptime'], env_copy)
+							result = result + runCommand([cmd, 'btool', 'validate-regex'], env_copy)
 							
 						elif action == 'btool-list':
-							result = runCommand([cmd, 'btool', action_item, 'list', '--debug'])	
+							result = runCommand([cmd, 'btool', action_item, 'list', '--debug'], env_copy)	
 						
 						elif action == 'run':
 							# dont need to check if we are inside Splunk dir. User can do anything with run command anyway.
 							file_path = os.path.join(SPLUNK_HOME, param1)
 							os.chdir(file_path)
-							result = runCommand(action_item, True)
+							result = runCommand(action_item, env_copy, True)
 							
 						status = "success"
 
@@ -190,11 +195,12 @@ class req(splunk.rest.BaseRestHandler):
 								
 								else:
 									os.chdir(os.path.dirname(file_path))
-									git("unknown", git_status_codes, file_path)
+									git_output.append({"type": "desc", "content": "Committing file before saving changes"})
+									git("unknown", git_status_codes, git_output, file_path)
 									with open(file_path, "w") as fh:
 										fh.write(param1)
-									
-									git_output += git(user + " save ", git_status_codes, file_path)
+									git_output.append({"type": "desc", "content": "Committing file after saving changes"})
+									git(user + " save ", git_status_codes, git_output, file_path)
 									status = "success" 
 									 
 							elif action == 'read':
@@ -223,14 +229,15 @@ class req(splunk.rest.BaseRestHandler):
 										
 							elif action == 'delete':
 								os.chdir(os.path.dirname(file_path))
-								git("unknown", git_status_codes, file_path)
+								git_output.append({"type": "desc", "content": "Committing file before it is deleted"})
+								git("unknown", git_status_codes, git_output, file_path)
 								if os.path.isdir(file_path):
 									shutil.rmtree(file_path)
 									
 								else:
 									os.remove(file_path)
-									
-								git_output += git(user + " deleted ", git_status_codes, file_path)
+								git_output.append({"type": "desc", "content": "Deleting file"})
+								git(user + " deleted ", git_status_codes, git_output, file_path)
 								status = "success"
 								
 							else:
@@ -246,9 +253,11 @@ class req(splunk.rest.BaseRestHandler):
 										
 									else:
 										os.chdir(os.path.dirname(file_path))
-										git("unknown", git_status_codes, file_path)
+										git_output.append({"type": "desc", "content": "Committing file before renaming"})	
+										git("unknown", git_status_codes, git_output, file_path)
 										os.rename(file_path, new_path)
-										git_output += git(user + " renamed", git_status_codes, new_path, file_path)
+										git_output.append({"type": "desc", "content": "Committing renamed file"})
+										git(user + " renamed", git_status_codes, git_output, new_path, file_path)
 										status = "success"
 										
 								else:
@@ -264,7 +273,7 @@ class req(splunk.rest.BaseRestHandler):
 									elif action == 'newfile':
 										open(new_path, 'w').close()
 										os.chdir(os.path.dirname(new_path))
-										git_output += git(user + " new", git_status_codes, new_path)
+										git(user + " new", git_status_codes, git_output, new_path)
 										status = "success"
 									
 			self.response.setHeader('content-type', 'application/json')

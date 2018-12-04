@@ -73,7 +73,7 @@ require([
 	var $filelist = $(".ce_file_wrap");
 	var $filePath = $(".ce_file_path");
     var $container = $(".ce_contents");
-	var $spinner = $(".sk-cube-grid");
+	var $spinner = $(".ce_spinner");
     var $tabs = $(".ce_tabs");
 	var activeTab = null;
 	var conf = {};
@@ -1375,9 +1375,12 @@ require([
 				} else {
 					// if there was some unexpected git output, then open a window to display it
 					if (r.data.git && r.data.git_status !== 0) {
+						var git_output = "<h2>Warning: Unexpected return code when attempting to autocommit changes to version control. Output is below:</h2>";
+						for (var j = 0; j < r.data.git.length; j++) {
+							git_output += "<div class='ce_gitoutput-" + r.data.git[j].type + "'>" + htmlEncode($.trim(r.data.git[j].content)) + "</div>"
+						}
 						var ecfg = createTab('git', '', 'git output', false);
-						updateTabAsEditor(ecfg, "Warning: Unexpected status code when attempting to commit changes to git version control. Output is below:\n" +
-												"----------------------------------------------------------------------------------------------------------\n\n\n" + r.data.git, false, "none");
+						updateTabHTML(ecfg, "<div class='ce_gitoutput'>" + git_output + "</div>");
 					}
 					resolve(r.data.result);	
 				}
