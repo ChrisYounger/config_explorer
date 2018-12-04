@@ -1,7 +1,5 @@
 # Config Explorer
 
-![GitHub issues](https://img.shields.io/github/issues/badges/shields.svg)
-
 ![screenshot](README/screenshot1.png)
 
 This app provides a modern editor interface for viewing and editing Splunk files. It has code completion and 
