@@ -9,8 +9,8 @@ users must have "admin_all_objects" capability. The editor is Microsoft Monaco e
 This app can optionally version control all changes by committing them to a git repository before and after 
 saving. To use this you need to have "git" installed (not provided by this app) and you also need to setup 
 a git repository.
-  
-   
+
+
 ## Important warnings:
 
 * Don't use this app on Search Head clusters becuase it won't sync changes to cluster members. 
@@ -40,34 +40,30 @@ I am a Splunk Professional Services consultant working for JDS Australia (www.jd
 
 
   
-# Enabling git auto-commit
+# Using git auto-commit
+Before enabling the git auto-complete feature you must first create a git repository somewhere. For example: 
+
+```
+$ cd /opt/splunk/etc
+$ git init
+```
+
+You will probably also need to set a username and email address for config_explorer to use for commits:
+
+```
+git config user.name config_explorer
+git config user.email config_explorer@splunk.acme.com
+```
+
+If you wish to use a non-standard git repository location, you can set these environment variables:
+
+```
 export GIT_DIR=/opt/splunk/.git/
 export GIT_WORK_TREE=/opt/splunk/
-git init
-Set a username and email address for config_explorer to use for commits
-git config user.name config_explorer
-git config user.email config_explorer@splunk.splunk  
-Optionally connect to a remote repository:
+```
 
-Optionally create a scheduled job to push changes to remote repository:
+You will need to consider your `.gitignore` file. If your directory already has `.gitignore` files in it, you 
+may instead need to make a `.gitignore` file that ignores deeper nested `.gitignore` files.
 
-Optionally set a scheduled job to add and commit changes that happen outside of  config_explorer
-
-# Settings on repo can be changed here: ./etc/apps/config_explorer/git/config
-
-# To check size of repo, run this: "du -sh $GIT_DIR"
-
-! to enable scheduled sync of git changes to remote repository, do this:
-1. run git remote set-url origin http://USERNAME:PASSWORD@REMOTE_URL/pathto/repo.git
-2. create a file: `./etc/apps/config_explorer/local/inputs.conf`
-3. copy contents from `/etc/apps/config_explorer/default/inputs.conf`
-4. set `enable = true`
-
-
-!! Using an existing git repository
-
-!! Tracking changes made outside of config_explorer
-
-!! Setting what files are ignored for git
-
-!! Pushing to a remote git repository
+Finally, if you want to push changes to an external repo, I would recommend you create a `script` input 
+to do so, or alternatively, see my custom git app here: https://splunkbase.splunk.com/app/4182/
