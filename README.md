@@ -40,7 +40,7 @@ I am a Splunk Professional Services consultant working for JDS Australia (www.jd
 
 
   
-# Using git auto-commit
+## Using git auto-commit
 Before enabling the git auto-complete feature you must first create a git repository somewhere. For example: 
 
 ```
@@ -67,3 +67,9 @@ may instead need to make a `.gitignore` file that ignores deeper nested `.gitign
 
 Finally, if you want to push changes to an external repo, I would recommend you create a `script` input 
 to do so, or alternatively, see my custom git app here: https://splunkbase.splunk.com/app/4182/
+
+
+## Locking it down
+
+In order to prevent file editing semi-permanantly, set `write_access = false`  and `hide_settings = true`.
+This will prevent being able to change settings until someone changes files directly on the filesystem. 

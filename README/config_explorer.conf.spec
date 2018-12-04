@@ -36,11 +36,11 @@ git_autocommit = <bool>
   Note you must first configure the git repo using "git init". Please see the documentation.
   Defaults to false 
 
-git_dir = <string>
+git_autocommit_dir = <string>
 * Force specific git repository location, relative to SPLUNK_HOME directory.
   Defaults to empty, meaning normal git rules will apply (search up from current directory)
 
-git_work_tree = <string>
+git_autocommit_work_tree = <string>
 * Force root location from where changes are tracked, relative to SPLUNK_HOME directory
   Set to "etc/" to track all changes beneath etc folder.
   Defaults to empty, meaning the normal git behavior will apply.
