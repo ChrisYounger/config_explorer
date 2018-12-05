@@ -83,6 +83,8 @@ require([
 	var comparisonLeftFile = null;
 	var tabid = 0;
 	var scrollbar;
+	var leftPaneFiles = true;
+	var ignore_left_pane_click = false;
 
 	// Set the "save" hotkey at a global level instnead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
@@ -134,10 +136,12 @@ require([
 				refreshCurrentPath();
 				$filePath.css({"display":""});
 				$dirlist.css({"top":""});
+				leftPaneFiles = true;
 				
 			} else if (p.hasClass('ce_app_effective')) {
 				$filePath.css({"display":"none"});
 				$dirlist.css({"top":"0"});
+				leftPaneFiles = false;
 				leftPaneConfFilesList();
 			}
 		}
@@ -156,17 +160,22 @@ require([
 		// click on a conf file
 		if (elem.hasClass("ce_conf")) {
 			runBToolList($(this).attr('file'), 'btool');
-		// click on folder
-		} else if (elem.hasClass("ce_is_folder")) {
-			$filelist.transition({ x: '-200px', opacity: 0 });
-			readFolder(elem.attr('file'));
-		// click on back arrow
-		} else if (! elem.hasClass("ce_is_report")) {
-			$filelist.transition({ x: '200px', opacity: 0 });
-			readFolder(elem.attr('file'));
-		// click on ce_is_report
-		} else {
+		// click on file
+		} else if (elem.hasClass("ce_is_report")) {
 			readFile(elem.attr('file'));
+		} else {
+			// prevent double clicking causing strange behavior
+			if (ignore_left_pane_click) {return;}
+			ignore_left_pane_click = true;
+			setTimeout(function(){ ignore_left_pane_click = false; }, 300);
+			if (elem.hasClass("ce_is_folder")) {
+				// click on folder
+				$filelist.transition({ x: '-200px', opacity: 0 });
+			} else {
+				// click on back arrow
+				$filelist.transition({ x: '200px', opacity: 0 });
+			}
+			readFolder(elem.attr('file'));
 		}
 		
 	// Right click menu for left pane
@@ -579,6 +588,10 @@ require([
 	// Run server action to load a folder
 	function readFolder(path){
 		return serverAction('read', path).then(function(contents){
+			// If the user changed to the conf files tab, then dump out
+			if (! leftPaneFiles) {
+				return;
+			}
 			inFolder = path;
 			localStorage.setItem('ce_current_path', inFolder);
 			contents.sort(function (a, b) {
@@ -605,7 +618,7 @@ require([
 				}
 				$("<div class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'></div>").text(contents[i].substr(1)).attr("file", path + "/" + contents[i].substr(1)).prepend("<i class='icon-" + icon + "'></i> ").appendTo($filelist);
 			}
-			$filelist.transition({"opacity":1});
+			$filelist.transition({x: '0px', "opacity":1});
 			leftPathChanged();
 		});
 	}
@@ -1135,6 +1148,7 @@ require([
 	}
 	
 	function updateTabAsEditor(ecfg, contents, canBeSaved, language) {
+		// TODO instead use the built-in language detection
 		if (!language) {
 			language = "ini"; // .conf, .meta, spec
 			if (/.js$/.test(ecfg.file)) {
