@@ -15,7 +15,7 @@ class req(splunk.rest.BaseRestHandler):
 		conf = splunk.clilib.cli_common.getMergedConf(app_name)
 		env_copy = os.environ.copy()
 		env_git = os.environ.copy()
-		
+
 		# From here: http://dev.splunk.com/view/logging/SP-CAAAFCN
 		def setup_logging():
 			logger = logging.getLogger("a")
@@ -113,7 +113,7 @@ class req(splunk.rest.BaseRestHandler):
 					if not os.path.exists(localfolder):
 						os.makedirs(localfolder)
 					if not os.path.exists(action_item):
-						shutil.copyfile(os.path.join(os.path.dirname( __file__ ), '..','default', app_name + '.conf'), action_item)
+						shutil.copyfile(os.path.join(os.path.dirname( __file__ ), '..','default', app_name + '.conf.example'), action_item)
 					
 				if action[:5] == 'btool' or action == 'run' or action == 'init' or action[:3] == 'git':
 					system = platform.system()
