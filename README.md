@@ -1,5 +1,7 @@
 # Config Explorer
- 
+
+![screenshot](README/screenshot1.png)
+
 This app provides a modern editor interface for viewing and editing Splunk files. It has code completion and 
 tooltip hinting for '.conf' files from the Splunk '.spec' files. The code gutter shows indicators highlighting if
 the line can be found in the btool output or not.  By default, the app is not able to save files, but this can
