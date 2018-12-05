@@ -30,8 +30,8 @@ window.MonacoEnvironment = {
 	window.MonacoEnvironment = {
 		getWorkerUrl: function(workerId, label) {
 			return "data:text/javascript;charset=utf-8," + encodeURIComponent(
-				"console.log('shimming i18n_register for worker'); "+
-				"function i18n_register(){console.log('i18n_register shimmed');} "+
+				//"console.log('shimming i18n_register for worker'); "+
+				"function i18n_register(){/*console.log('i18n_register shimmed');*/} "+
 				"self.MonacoEnvironment = { baseUrl: '" + src.substring(0, src.lastIndexOf('/')) + "/node_modules/monaco-editor/"+mode+"/' }; "+
 				"importScripts('" + src.substring(0, src.lastIndexOf('/')) + "/node_modules/monaco-editor/"+mode+"/vs/base/worker/workerMain.js');"
 			);
@@ -418,7 +418,7 @@ require([
 				run_history.push(command);
 			}
 			localStorage.setItem('ce_run_history', JSON.stringify(run_history));
-			updateTabAsEditor(ecfg, contents, false, 'none');
+			updateTabAsEditor(ecfg, contents, false, 'plaintext');
 		}).catch(function(){ 
 			closeTabByCfg(ecfg);
 		});		
@@ -430,7 +430,7 @@ require([
 		serverActionWithoutFlicker('btool-check').then(function(contents){
 			contents = contents.replace(/^(No spec file for|Checking):.*\r?\n/mg,'').replace(/^\t\t/mg,'').replace(/\n{2,}/g,'\n\n');
 			if ($.trim(contents)) {
-				updateTabAsEditor(ecfg, contents, false, 'none');
+				updateTabAsEditor(ecfg, contents, false, 'plaintext');
 			} else {
 				closeTabByCfg(ecfg);
 				showModal({
@@ -1093,6 +1093,7 @@ require([
 		logClosedTab(editors[idx]);
 		if (editors[idx].hasOwnProperty("editor")) {
 			editors[idx].editor.dispose();
+			editors[idx].model.dispose();
 		}
 		editors[idx].tab.remove();
 		editors[idx].container.remove();
@@ -1149,22 +1150,12 @@ require([
 	
 	function updateTabAsEditor(ecfg, contents, canBeSaved, language) {
 		// TODO instead use the built-in language detection
-		if (!language) {
-			language = "ini"; // .conf, .meta, spec
-			if (/.js$/.test(ecfg.file)) {
-				language = "javascript";
-			} else if (/.xml$/.test(ecfg.file)) {
-				language = "xml";
-			} else if (/.html$/.test(ecfg.file)) {
-				language = "html";
-			} else if (/.css$/.test(ecfg.file)) {
-				language = "css";
-			} else if (/.py$/.test(ecfg.file)) {
-				language = "python";
-			} else if (/.md$/.test(ecfg.file)) {
-				language = "markdown";
+		if (! language) {
+			if (/\.(?:conf|meta|spec)/.test(ecfg.file)) {
+				language = "ini";
 			}
 		}
+
 		var re = /([^\/\\]+).conf$/;
 		var found = ecfg.file.match(re);
 		if (found && ecfg.type === 'read' && found[1] !== 'app') {
@@ -1174,11 +1165,17 @@ require([
 		ecfg.saving = false;
 		ecfg.decorations = [];
 		ecfg.container.empty();
+		ecfg.model = monaco.editor.createModel(contents, language, monaco.Uri.file(ecfg.file));
+
+		// Default things to be ini syntax highlighting rather than none
+		if (ecfg.model.getModeId() === "plaintext" && ! language) {
+			monaco.editor.setModelLanguage(ecfg.model, "ini");
+		}
+
 		ecfg.editor = monaco.editor.create(ecfg.container[0], {
 			automaticLayout: true,
+			model: ecfg.model,
 			lineNumbersMinChars: 3,
-			value: contents,
-			language: language,
 			ariaLabel: ecfg.file,
 			readOnly: ! ecfg.canBeSaved,
 			theme: "vs-dark",
