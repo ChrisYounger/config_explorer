@@ -13,7 +13,6 @@
 .ce_loading .ce_wrap
  {
 	visibility: hidden;
-	
 }
 .ce_no_write_access .ce_add_file,
 .ce_no_write_access .ce_add_folder,
@@ -109,49 +108,97 @@
     right: 0;
     left: 0;
 }
-.ce_file_wrap {
-	opacity: 0;
-	padding: 4px 0;
-}
-.ce_file_list {
-    background-color: #1e1e1e;
-    color: #ccc;
-    position: absolute !important;
-    width: 280px;
-	margin: 0;
-    padding: 0; 
-	overflow-x: hidden;
-    top: 38px;
-	bottom: 0;
-	border-top: 1px solid #1c1c1c;
-	/*box-shadow: inset -4px 0px 4px rgba(0, 0, 0, 0.28);*/
-}
-.ce_leftnav i{
+
+
+.ce_file_wrap i{
 	margin-right: 4px;
 }
 .ce_leftnav {
     cursor: pointer;
     white-space: nowrap;
-    padding: 2px 10px 2px 22px;
+    padding: 2px 10px 2px 19px;
     text-overflow: ellipsis;
     overflow: hidden;	
+	border-left: 3px solid #1d1d1d
 }
 .ce_leftnav:hover {
     background-color:#2a2d2e;
+	border-left: 3px solid #00A4FD;
+}
+.ce_tree_pane {
+	position: absolute;
+	width: 280px;
+	height: 100%;
+	background-color: #1d1d1d;
+}
+
+.ce_tree_icons{
+	display: flex;
+	justify-content: space-evenly;
+	height: 39px;
+    background-color: #262626;
+    box-shadow: inset 0px -4px 4px rgba(0, 0, 0, 0.28), inset 0px 4px 4px rgba(0, 0, 0, 0.28);	
+    color: #ccc;
+	padding: 5px 0;
+	border-bottom: 1px solid #171d21
+}
+.ce_tree_icons .ce_clickable_icon {
+	border: 2px solid #262626;
+	padding-top: 3px;
+    border-radius: 6px;	
+}
+.ce_tree_icons .ce_selected {
+	border: 2px solid #00A4FD;
+    color: #00A4FD;
+}
+.ce_treenothing{
+	white-space: nowrap;
+    padding: 42px 10px 2px 19px;
+    text-overflow: ellipsis;
+    overflow: hidden;	
+}
+.ce_treehighlight,
+.ce_treenothing_text {
+	color: #00A4FD;
+}
+input[type=text].ce_treesearch_input{
+    background-color: rgb(60, 60, 60);
+    color: rgb(204, 204, 204);
+    position: absolute;
+    z-index: 9;
+    top: 42px;
+    font-size: 12px;
+    /* margin: 10px; */
+    border: 1px solid black;
+    left: 19px;
+    height: 28px;
+    /* width: auto; */
+    /* right: 23px; */
+    display: block;
+    box-shadow: none;
 }
 .ce_file_path {
-	position: relative;
-	width: 280px;
-	height: 40px;
-    border-bottom: 1px solid #171d21;
-    line-height: 36px;
-    background-color: #262626;
-    box-shadow: inset 0px -4px 4px rgba(0, 0, 0, 0.28), inset 0px 4px 4px rgba(0, 0, 0, 0.28);
-	white-space: nowrap;
-    padding: 2px 58px 2px 22px;
+    line-height: 22px;
+    white-space: nowrap;
+    padding: 8px 10px 2px 22px;
     text-overflow: ellipsis;
     overflow: hidden;
+	color: white;
+}
+.ce_file_list {
 	color: #ccc;
+    position: absolute !important;
+    margin: 0;
+    padding: 0;
+    top: 70px;
+    /* overflow-x: hidden; */
+    bottom: 4px;
+    width: 100%;
+}	
+
+.ce_file_wrap {
+	opacity: 0;
+	padding: 4px 0;
 }
 .ce_rtl{
 	direction:rtl;
@@ -191,7 +238,7 @@
     /*border-bottom: 1px solid black;*/
 	/*overflow: hidden;  prevent shadow from overlapping */
 	box-shadow: inset 0px -4px 4px rgba(0, 0, 0, 0.28), inset 0px 4px 4px rgba(0, 0, 0, 0.28);
-	padding-right: 40px;
+	padding-right: 12px;
 }
 .ce_tab {
     position: relative;
@@ -262,11 +309,15 @@
 }
 .ce_clickable_icon {
 	cursor: pointer;
-	color: white;
+	color: white;	
 	font-size: 18px;
 	padding: 5px;
 }
-.ce_clickable_icon:hover {
+.ce_clickable_icon.ce_disabled {
+	color: #5c6773;
+	cursor: not-allowed;
+}
+.ce_clickable_icon:not(.ce_disabled):hover {
 	color: #00A4FD;
 }
 .ce_right_icon {
@@ -301,34 +352,34 @@
 .ce_restore_session:hover span  {
 	text-decoration: underline;
 }
-.ce_recent_files {
-    top: 10px;
-    background-color: transparent;
-    right: 10px;
-}
+
 .ce_recent_list {
-	background-color: #3d424d;
+	background-color: #2d2f31;
     color: white;
     position: absolute;
     max-width: 600px;
     max-height: 600px;
 	overflow: hidden;
-    right: 10px;
+    left: 226px;
     top: 50px;
 	list-style-type: none;
     padding: 10px;
 	box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+	z-index:10;
 }
 .ce_recent_list li {
-	padding: 3px 6px;
+	padding: 3px 6px 3px 9px;
     margin: 1px 0 2px 0;
+	border-left: 3px solid transparent;
 }
 .ce_recent_list li.ce_selectable {
     cursor: pointer;
-	color: #ccc;
+	color: #bbb;
+	border-left: 3px solid transparent;
 }
 .ce_recent_list li.ce_selectable:hover {
-	background-color: #262626
+	background-color: #262626;
+	border-left: 3px solid #00A4FD;
 }
 .ce_right_icon.ce_right_two {
     right: 28px;    
@@ -356,6 +407,10 @@
 .ce_contents p {
 	color: inherit;
 }
+.context-view.monaco-menu-container {
+	font-family: Splunk Platform Sans,Proxima Nova,Roboto,Droid,Helvetica Neue,Helvetica,Arial,sans-serif !important;
+	font-size: 14px;
+}
 .monaco-action-bar .actions-container  {
 	padding: 10px 0;
 }
@@ -363,8 +418,19 @@
 .monaco-menu .monaco-action-bar.vertical .action-item > span {
 	line-height: 2;
 }
+.monaco-menu .monaco-action-bar.vertical {
+	background-color: #2d2f31 !important;
+}
+.monaco-menu .monaco-action-bar.vertical .action-item:not(.disabled) > a{
+	background-color: inherit !important;
+}
+.monaco-menu .monaco-action-bar.vertical .action-item:not(.disabled) {
+	border-left: 3px solid transparent;
+	background-color: #2d2f31;
+}
 .monaco-menu .monaco-action-bar.vertical .action-item:not(.disabled):hover {
-	background-color: #3c3c3c;
+	background-color: #262626;
+	border-left: 3px solid #00A4FD;
 }
 .monaco-editor .scroll-decoration{
     /* disable the scroll shadow at the top */
@@ -391,8 +457,8 @@
 	bottom: auto;
 	transition: opacity 300ms;
     background-color: #2d2f31;
-    padding: 4px;
-    width: 220px;
+    padding: 2px;
+    width: 200px;
     box-shadow: 0 2px 8px #000;
     color: #bbb;
 	z-index: 9;	
@@ -400,10 +466,12 @@
 .ce_context_menu_wrap > div {
 	margin: 2px 2px; 
 	padding: 4px 10px;
+	border-left: 3px solid transparent;
 }
 .ce_context_menu_wrap > div:hover {
-	background-color: black;
+	background-color: #262626;
 	cursor: pointer;
+	border-left: 3px solid #00A4FD;
 }
 .ce_toaster {
 	background-color: white;
@@ -658,7 +726,7 @@ html .ce_spinner {
 .spinner > div {
   width: 18px;
   height: 18px;
-  background-color: rgba(255,255,255,0.4);
+  background-color: #00A4FD;
 
   border-radius: 100%;
   display: inline-block;

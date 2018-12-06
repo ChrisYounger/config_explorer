@@ -66,12 +66,14 @@ require([
 	var service = mvc.createService({ owner: "nobody" });
 	var editors = [];  
 	var inFolder = (localStorage.getItem('ce_current_path') || './etc/apps');
+	var folderContents;
 	var run_history = (JSON.parse(localStorage.getItem('ce_run_history')) || []);
 	var closed_tabs = (JSON.parse(localStorage.getItem('ce_closed_tabs')) || []);
 	var $dashboardBody = $('.dashboard-body');
     var $dirlist = $(".ce_file_list");
 	var $filelist = $(".ce_file_wrap");
 	var $filePath = $(".ce_file_path");
+	var $ce_tree_icons = $(".ce_tree_icons");
     var $container = $(".ce_contents");
 	var $spinner = $(".ce_spinner");
     var $tabs = $(".ce_tabs");
@@ -135,11 +137,13 @@ require([
 			if (p.hasClass('ce_app_filesystem')) {
 				refreshCurrentPath();
 				$filePath.css({"display":""});
+				$ce_tree_icons.css({"display":""});
 				$dirlist.css({"top":""});
 				leftPaneFiles = true;
 				
 			} else if (p.hasClass('ce_app_effective')) {
 				$filePath.css({"display":"none"});
+				$ce_tree_icons.css({"display":"none"});
 				$dirlist.css({"top":"0"});
 				leftPaneFiles = false;
 				leftPaneConfFilesList();
@@ -148,11 +152,70 @@ require([
 	});
 	
 	// Click handlers for New File/New Folder buttons
-	$filePath.on("click", ".ce_add_file, .ce_add_folder", function(e){
+	$ce_tree_icons.on("click", "i", function(e){
 		e.stopPropagation();
-		var parentPath = $(this).attr('file');
-		fileSystemCreateNew(parentPath, !$(this).hasClass("ce_add_folder"));
-	});
+		var elem = $(this);
+		if (elem.hasClass("ce_disabled")) {
+			return;
+		}
+		if (elem.hasClass("ce_add_file")) {
+			fileSystemCreateNew(inFolder, true);
+		} else if (elem.hasClass("ce_add_folder")) {
+			fileSystemCreateNew(inFolder, false);
+		} else if (elem.hasClass("ce_refresh_tree")) {
+			$filelist.transition({ opacity: 0 });
+			refreshCurrentPath();
+		} else if (elem.hasClass("ce_folder_up")) {
+			$filelist.transition({ x: '200px', opacity: 0 });
+			readFolder(inFolder.replace(/[\/\\][^\/\\]+$/,''));
+		} else if (elem.hasClass("ce_recent_files")) {
+			if (elem.hasClass("ce_selected")) {
+				buildFilesystemList();
+				elem.removeClass("ce_selected");
+			} else {
+				filterModeOff();
+				showRecentFilesPopover();
+				elem.addClass("ce_selected");
+			}			
+		} else if (elem.hasClass("ce_filter")) {
+			if (elem.hasClass("ce_selected")) {
+				buildFilesystemList();
+				filterModeOff();
+			} else {
+				var $in = $('<input class="ce_treesearch_input" autocorrect="off" autocapitalize="off" spellcheck="false" type="text" wrap="off" aria-label="Filter text" placeholder="Filter text" title="Filter text">');
+				elem.addClass("ce_selected");
+				$in.appendTo(".ce_tree_pane").focus().on("input ",function(){
+					buildFilesystemList($(this).val().toLowerCase())
+				});
+			}
+			
+		} else if (elem.hasClass('ce_app_run')) {
+			runShellCommand();
+			
+		} else if (elem.hasClass("ce_show_confs")) {
+			if (elem.hasClass("ce_selected")) {
+				elem.removeClass("ce_selected");
+				buildFilesystemList();
+				$filePath.css({"display":""});
+				//$dirlist.css({"top":""});
+				leftPaneFiles = true;
+				
+			} else {
+				elem.addClass("ce_selected");
+				$filePath.css({"display":"none"});
+				//$dirlist.css({"top":"0"});
+				leftPaneFiles = false;
+				leftPaneConfFilesList();
+			}			
+		}
+	})
+	
+	
+	function filterModeOff() {
+		$(".ce_filter").removeClass("ce_selected");
+		$(".ce_treesearch_input").remove();
+	}
+	
 	
 	// Click handler for left pane items
 	$dirlist.on("click", ".ce_leftnav", function(){
@@ -163,6 +226,8 @@ require([
 		// click on file
 		} else if (elem.hasClass("ce_is_report")) {
 			readFile(elem.attr('file'));
+		} else if (elem.hasClass("ce_leftnav_reopen")) {
+			reopenTab(elem.attr('type'), elem.attr('file'));	
 		} else {
 			// prevent double clicking causing strange behavior
 			if (ignore_left_pane_click) {return;}
@@ -171,9 +236,6 @@ require([
 			if (elem.hasClass("ce_is_folder")) {
 				// click on folder
 				$filelist.transition({ x: '-200px', opacity: 0 });
-			} else {
-				// click on back arrow
-				$filelist.transition({ x: '200px', opacity: 0 });
 			}
 			readFolder(elem.attr('file'));
 		}
@@ -241,42 +303,6 @@ require([
 			$(".ce_context_menu_overlap").addClass("ce_hidden");
 			$t.css("background-color","");
 			$(document).off("click");           
-		});
-	});
-	
-	// Click handler for Recent Files button in top right
-	$(".ce_recent_files").on("click", function(e){
-		e.stopPropagation();
-		var recent = $("<ul class='ce_recent_list'></ul>");
-		var counter = 0;
-		var openlabels = [];
-		for (var j = 0; j < editors.length; j++) {
-			openlabels.push(editors[j].label);
-		}
-		$("<li>Recently closed</li>").appendTo(recent);
-		for (var i = closed_tabs.length - 1; i >= 0 ; i--) {
-			if (counter > 15) {
-				break;
-			}
-			// hide item if they are actually open at the moment
-			if (openlabels.indexOf(closed_tabs[i].label) === -1) {
-				counter++;
-				$("<li class='ce_selectable'></li>").text(closed_tabs[i].label).data(closed_tabs[i]).appendTo(recent);
-			}
-		}
-		//closed_tabs.push({label: file: type: read|btool|btool-hidepaths|btool-hidedefaults|spec|running});
-		$(".ce_wrap").append(recent);
-
-		recent.on("click auxclick", ".ce_selectable", function(e){
-			if (e.which === 3) {
-				return;
-			}			
-			var d = $(this).data();
-			reopenTab(d.type, d.file);
-		});
-			
-		$(document).one("click", function(){
-			recent.remove();
 		});
 	});
 
@@ -592,36 +618,98 @@ require([
 			if (! leftPaneFiles) {
 				return;
 			}
+			filterModeOff();
 			inFolder = path;
 			localStorage.setItem('ce_current_path', inFolder);
-			contents.sort(function (a, b) {
+			contents.sort(function(a, b) {
 				return a.toLowerCase().localeCompare(b.toLowerCase());
 			});
-			$filelist.empty().css("transform","");
-			$filePath.empty().attr("title", path);
-			$("<span></span><bdi></bdi><i title='New folder' class='ce_add_folder ce_clickable_icon ce_right_icon ce_right_two icon-folder'></i>" +
-						"<i title='New file' class='ce_add_file ce_clickable_icon ce_right_icon icon-report'></i>").attr("file", path).appendTo($filePath);
-			var span = $filePath.find("span").text(path + '/');
-			$filePath.find("bdi").text(path + '/');
-			if (span.width() > $filePath.width()) {
-				$filePath.addClass('ce_rtl');
-			} else {
-				$filePath.removeClass('ce_rtl');
-			}
-			if (path !== ".") {
-				$("<div class='ce_leftnav'><i class='icon-arrow-left'></i> ..</div>").attr("file", path.replace(/[\/\\][^\/\\]+$/,'')).appendTo($filelist);
-			}
-			for (var i = 0; i < contents.length; i++) {
-				var icon = "folder";
-				if (contents[i].substr(0,1) === "F") {
-					icon = "report";
-				}
-				$("<div class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'></div>").text(contents[i].substr(1)).attr("file", path + "/" + contents[i].substr(1)).prepend("<i class='icon-" + icon + "'></i> ").appendTo($filelist);
-			}
-			$filelist.transition({x: '0px', "opacity":1});
+			folderContents = contents;
 			leftPathChanged();
+			buildFilesystemList();
 		});
 	}
+
+	function buildFilesystemList(filter){	
+		$filelist.empty().css("transform","");
+		$filePath.empty().attr("title", inFolder);
+		$(".ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter").removeClass("ce_disabled");
+		if (inFolder === ".") {
+			$(".ce_folder_up").addClass("ce_disabled");
+		} else {
+			$(".ce_folder_up").removeClass("ce_disabled");
+		}
+		
+		$("<span></span><bdi></bdi>").attr("file", inFolder).appendTo($filePath);
+		var span = $filePath.find("span").text(inFolder + '/');
+		$filePath.find("bdi").text(inFolder + '/');
+		if (span.width() > $filePath.width()) {
+			$filePath.addClass('ce_rtl');
+		} else {
+			$filePath.removeClass('ce_rtl');
+		}
+		var files = false;
+		var filter_re;
+		if (filter) {
+			filter_re = new RegExp(escapeRegExp(filter), 'gi'); 
+		}
+		for (var i = 0; i < folderContents.length; i++) {
+			var item = folderContents[i].substr(1);
+			if (! filter || item.toLowerCase().indexOf(filter) > -1) {
+				var icon = "folder";
+				if (folderContents[i].substr(0,1) === "F") {
+					icon = "report";
+				}
+				files = true;
+				var text = htmlEncode(item);
+				if (filter) {
+					text = text.replace(filter_re, "<span class='ce_treehighlight'>$&</span>");
+				}
+				$("<div class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'>" + text + "</div>").attr("file", inFolder + "/" + item).prepend("<i class='icon-" + icon + "'></i> ").appendTo($filelist);
+			}
+		}
+		if (!files) {
+			if (filter) {
+				$("<div class='ce_treenothing'><i class='icon-warning'></i>Not found: <span class='ce_treenothing_text'>" + htmlEncode(filter) + "<span></div>").appendTo($filelist);
+			} else {
+				
+			}
+		}
+		$filelist.transition({x: '0px', "opacity":1});
+	}
+	
+	// Click handler for Recent Files button in top right
+	function showRecentFilesPopover() {
+		$filelist.empty().css("transform","");
+		$filePath.empty().attr("title", inFolder);
+		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter").addClass("ce_disabled");
+		$("<span></span>").text("Recent files").appendTo($filePath);
+		
+		
+		
+		var recent = $("<ul class='ce_recent_list'></ul>");
+		var counter = 0;
+		var openlabels = [];
+		for (var j = 0; j < editors.length; j++) {
+			openlabels.push(editors[j].label);
+		}
+		for (var i = closed_tabs.length - 1; i >= 0 ; i--) {
+			if (counter > 15) {
+				break;
+			}
+			// hide item if they are actually open at the moment
+			if (openlabels.indexOf(closed_tabs[i].label) === -1) {
+				counter++;
+				var icon = "report";
+				if (closed_tabs[i].type !== "read") {
+					icon = "gear";
+				}
+				$("<div class='ce_leftnav ce_leftnav_reopen'><i class='icon-" + icon + "'></i> " + htmlEncode(closed_tabs[i].label) + "</div>").attr("file", closed_tabs[i].file).attr("title", closed_tabs[i].file).attr("type", closed_tabs[i].type).appendTo($filelist);
+			}
+		}
+	}
+
+	
 	
 	// Handle clicking an file or folder in the left pane
 	function readFile(path){
@@ -1674,6 +1762,10 @@ require([
 	//then grab the encoded contents back out.  The div never exists on the page.
 	function htmlEncode(value){
 		return $('<div/>').text(value).html();
+	}
+	
+	function escapeRegExp(str) {
+		return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
 	}
 
 	function confIsTrue(param, defaultValue) {
