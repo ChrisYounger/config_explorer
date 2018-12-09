@@ -1,6 +1,5 @@
 // Copyright (C) 2018 Chris Younger
 
-
 // Loading monaco from the CDN
 /*
 require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.15.0/min/vs' }});
@@ -9,12 +8,9 @@ window.MonacoEnvironment = {
 		return `data:text/javascript;charset=utf-8,${encodeURIComponent(`
 			self.MonacoEnvironment = { baseUrl: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.15.0/min/' };
 			importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.15.0/min/vs/base/worker/workerMain.js');`
-		)}`;
-	}/app/config_explorer/config.js
-};
-*/
-
-
+		)}`; 
+	}
+}*/ 
 
 // The splunk webserver prepends all scripts with a call to i18n_register() for internationalisation. This fails for web-workers becuase they dont kknow about this function yet.
 // The options are patch the function in on-the-fly like so, or to edit the file on the filesystem (which makes upgrading monaco harder)
@@ -77,7 +73,7 @@ require([
     var $container = $(".ce_contents");
 	var $spinner = $(".ce_spinner");
     var $tabs = $(".ce_tabs");
-	var activeTab = null;
+	var activeTab = -1;
 	var conf = {};
 	var confFiles = {};
 	var confFilesSorted = [];
@@ -107,48 +103,18 @@ require([
 			}
 		}
     });
-
-	// Event handlers for the top bar
-	$('.ce_app_link a').on('click', function(e){
-		e.preventDefault();
-		var p = $(this).parent();
-		
-		if (p.hasClass('ce_active')) {
-			// clicked tab that is already active. do nothing
-			
-		} else if (p.hasClass('ce_app_errors')) {
-			runBToolCheck();
-
-		} else if (p.hasClass('ce_app_run')) {
-			runShellCommand();
-			
-		} else if (p.hasClass('ce_app_settings')) {			
-			readFile("");
-
-		} else if (p.hasClass('ce_app_changelog')) {
-			showChangeLog();
-			
-		} else {
-			// Clicked a tab that causes the left pane to change
-			$('.ce_app_link.ce_active').removeClass('ce_active');
-			p.addClass('ce_active');
-			$filelist.empty().css({"transform":"", "opacity":""});
-			// Clicking one of the top links
-			if (p.hasClass('ce_app_filesystem')) {
-				refreshCurrentPath();
-				$filePath.css({"display":""});
-				$ce_tree_icons.css({"display":""});
-				$dirlist.css({"top":""});
-				leftPaneFiles = true;
-				
-			} else if (p.hasClass('ce_app_effective')) {
-				$filePath.css({"display":"none"});
-				$ce_tree_icons.css({"display":"none"});
-				$dirlist.css({"top":"0"});
-				leftPaneFiles = false;
-				leftPaneConfFilesList();
-			}
-		}
+//$(document).off("mousemove").on("mousemove", function(e){ console.log(e.offsetX)})
+	$('.ce_app_errors').on('click', function(e){
+		runBToolCheck();
+	});
+	$('.ce_app_settings').on('click', function(e){
+		readFile("");
+	});
+	$('.ce_app_changelog').on('click', function(e){
+		showChangeLog();
+	});
+	$(".ce_home_tab").on("click", function(){
+		activateTab(-1);
 	});
 	
 	// Click handlers for New File/New Folder buttons
@@ -160,53 +126,58 @@ require([
 		}
 		if (elem.hasClass("ce_add_file")) {
 			fileSystemCreateNew(inFolder, true);
+
 		} else if (elem.hasClass("ce_add_folder")) {
 			fileSystemCreateNew(inFolder, false);
+
 		} else if (elem.hasClass("ce_refresh_tree")) {
 			$filelist.transition({ opacity: 0 });
 			refreshCurrentPath();
+
 		} else if (elem.hasClass("ce_folder_up")) {
 			$filelist.transition({ x: '200px', opacity: 0 });
+			elem.addClass("ce_disabled");
 			readFolder(inFolder.replace(/[\/\\][^\/\\]+$/,''));
-		} else if (elem.hasClass("ce_recent_files")) {
-			if (elem.hasClass("ce_selected")) {
-				buildFilesystemList();
-				elem.removeClass("ce_selected");
-			} else {
-				filterModeOff();
-				showRecentFilesPopover();
-				elem.addClass("ce_selected");
-			}			
+
 		} else if (elem.hasClass("ce_filter")) {
 			if (elem.hasClass("ce_selected")) {
-				buildFilesystemList();
-				filterModeOff();
+				leftPaneFileList();
+				filterModeOff();				
 			} else {
 				var $in = $('<input class="ce_treesearch_input" autocorrect="off" autocapitalize="off" spellcheck="false" type="text" wrap="off" aria-label="Filter text" placeholder="Filter text" title="Filter text">');
+				$filePath.css("display", "none");
 				elem.addClass("ce_selected");
 				$in.appendTo(".ce_tree_pane").focus().on("input ",function(){
-					buildFilesystemList($(this).val().toLowerCase())
+					leftPaneFileList($(this).val().toLowerCase())
 				});
 			}
-			
-		} else if (elem.hasClass('ce_app_run')) {
-			runShellCommand();
-			
+					
 		} else if (elem.hasClass("ce_show_confs")) {
 			if (elem.hasClass("ce_selected")) {
 				elem.removeClass("ce_selected");
-				buildFilesystemList();
-				$filePath.css({"display":""});
-				//$dirlist.css({"top":""});
+				leftPaneFileList();
 				leftPaneFiles = true;
 				
 			} else {
 				elem.addClass("ce_selected");
-				$filePath.css({"display":"none"});
-				//$dirlist.css({"top":"0"});
 				leftPaneFiles = false;
-				leftPaneConfFilesList();
+				leftPaneConfList();
 			}			
+		
+		} else if (elem.hasClass("ce_recent_files")) {
+			if (elem.hasClass("ce_selected")) {
+				leftPaneFileList();
+				elem.removeClass("ce_selected");
+				leftPaneFiles = true;
+			} else {
+				filterModeOff();
+				leftPaneRecentList();
+				leftPaneFiles = false;
+				elem.addClass("ce_selected");
+			}
+	
+		} else if (elem.hasClass('ce_app_run')) {
+			runShellCommand();
 		}
 	})
 	
@@ -214,6 +185,7 @@ require([
 	function filterModeOff() {
 		$(".ce_filter").removeClass("ce_selected");
 		$(".ce_treesearch_input").remove();
+		$filePath.css("display", "");
 	}
 	
 	
@@ -433,8 +405,19 @@ require([
 	
 	function runShellCommandNow(command){
 		// save to localstorage
+		// TODO There is a bug here somewhere where teh same command doesnt get rerun properly
 		var ecfg = createTab('run', command, '<span class="ce-dim">$</span> ' + htmlEncode(command), false);
+		//var cancel = $("<div class='ce_cancel ce_internal_link'>Cancel</div>").appendTo(ecfg.container);
+		var timer = $("<div class='ce_timer'></div>").appendTo(ecfg.container);
+		var started = Date.now();
+		var interval = setInterval(function() {
+			var tt = Math.round((Date.now() - started) / 1000);
+			if (tt > 2) {
+				timer.html(tt + " sec");
+			}
+		},1000);
 		serverActionWithoutFlicker("run", command, inFolder).then(function(contents){
+			clearInterval(interval);
 			// trim length
 			if (run_history.length > 50) {
 				run_history.shift();
@@ -445,7 +428,7 @@ require([
 			}
 			localStorage.setItem('ce_run_history', JSON.stringify(run_history));
 			updateTabAsEditor(ecfg, contents, false, 'plaintext');
-		}).catch(function(){ 
+		}).catch(function(){
 			closeTabByCfg(ecfg);
 		});		
 	}
@@ -613,12 +596,10 @@ require([
 
 	// Run server action to load a folder
 	function readFolder(path){
+		filterModeOff();
+		$spinner.clone().appendTo($(".ce_tree_pane"));
 		return serverAction('read', path).then(function(contents){
-			// If the user changed to the conf files tab, then dump out
-			if (! leftPaneFiles) {
-				return;
-			}
-			filterModeOff();
+			$(".ce_tree_pane .ce_spinner").remove();
 			inFolder = path;
 			localStorage.setItem('ce_current_path', inFolder);
 			contents.sort(function(a, b) {
@@ -626,14 +607,19 @@ require([
 			});
 			folderContents = contents;
 			leftPathChanged();
-			buildFilesystemList();
+			// If the user changed to the conf files tab, then dump out
+			if (! leftPaneFiles) {
+				return;
+			}			
+			leftPaneFileList();
 		});
 	}
 
-	function buildFilesystemList(filter){	
+	// TODO There is a bug in the recent files handling somewhere
+	function leftPaneFileList(filter){	
 		$filelist.empty().css("transform","");
 		$filePath.empty().attr("title", inFolder);
-		$(".ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter").removeClass("ce_disabled");
+		$(".ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_recent_files, .ce_show_confs, .ce_app_run").removeClass("ce_disabled");
 		if (inFolder === ".") {
 			$(".ce_folder_up").addClass("ce_disabled");
 		} else {
@@ -677,15 +663,29 @@ require([
 		}
 		$filelist.transition({x: '0px', "opacity":1});
 	}
+
 	
+	// The conf file list
+	function leftPaneConfList() {
+		$(".ce_tree_pane .ce_spinner").css("display","none");
+		$filelist.empty().css({"transform":"", "opacity":1});
+		$filePath.empty();
+		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_recent_files, .ce_app_run").addClass("ce_disabled");
+		$("<span>Splunk conf files</span>").appendTo($filePath);
+		for (var i = 0; i < confFilesSorted.length; i++) {
+			$("<div class='ce_leftnav ce_conf'></div>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-bulb'></i> ").appendTo($filelist);
+		}
+		leftPathChanged();
+	}
+
+
 	// Click handler for Recent Files button in top right
-	function showRecentFilesPopover() {
-		$filelist.empty().css("transform","");
-		$filePath.empty().attr("title", inFolder);
-		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter").addClass("ce_disabled");
-		$("<span></span>").text("Recent files").appendTo($filePath);
-		
-		
+	function leftPaneRecentList() {
+		$(".ce_tree_pane .ce_spinner").css("display","none");
+		$filelist.empty().css({"transform":"", "opacity":1});
+		$filePath.empty();
+		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_show_confs, .ce_app_run").addClass("ce_disabled");
+		$("<span>Recent files</span>").appendTo($filePath);
 		
 		var recent = $("<ul class='ce_recent_list'></ul>");
 		var counter = 0;
@@ -702,7 +702,7 @@ require([
 				counter++;
 				var icon = "report";
 				if (closed_tabs[i].type !== "read") {
-					icon = "gear";
+					icon = "bulb";
 				}
 				$("<div class='ce_leftnav ce_leftnav_reopen'><i class='icon-" + icon + "'></i> " + htmlEncode(closed_tabs[i].label) + "</div>").attr("file", closed_tabs[i].file).attr("title", closed_tabs[i].file).attr("type", closed_tabs[i].type).appendTo($filelist);
 			}
@@ -1047,39 +1047,44 @@ require([
 			closeTabByCfg(ecfg);
 		});
 	}
-	
-	// The conf file list
-	function leftPaneConfFilesList() {
-		$filelist.empty();
-		for (var i = 0; i < confFilesSorted.length; i++) {
-			$("<div class='ce_leftnav ce_conf'></div>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-gear'></i> ").appendTo($filelist);
-		}
-		$filelist.transition({"opacity":1});
-		leftPathChanged();
-	}
+
 	
 	function activateTab(idx){
 		hideAllTabs();
 		activeTab = idx;
-		$tabs.children().eq(idx).addClass('ce_active');
-		editors[idx].container.removeClass('ce_hidden');
-		editors[idx].last_opened = Date.now();  
+		if (idx !== -1) {
+			$tabs.children().eq(idx).addClass('ce_active');
+			editors[idx].container.removeClass('ce_hidden');
+			editors[idx].last_opened = Date.now();  
+		} else {
+			$(".ce_home_tab").addClass('ce_active');
+			$(".ce_contents_home").removeClass('ce_hidden');			
+		}
 		doPipeTabSeperators();
 	}
 	
 	function hideAllTabs() {
 		$container.children().addClass("ce_hidden");
+		$(".ce_contents_home").addClass("ce_hidden");
 		$tabs.children().removeClass("ce_active");
+		$(".ce_home_tab").removeClass("ce_active");
+
 	}
 	
 	// The pipe seperators are between active tabs but not on the currently active tab or the one to its left.
 	function doPipeTabSeperators(){
-		$(".ce_pipe").remove();
+		$(".ce_pipe, .ce_pipe_left").remove();
 		$tabs.children().each(function(i){
 			if ((activeTab - 1) !== i && activeTab !== i) {
 				$(this).append('<span class="ce_pipe"></span>');
 			}
-		});		
+		});
+		if (activeTab > 0) {
+			$(".ce_home_tab").append('<span class="ce_pipe"></span>');
+		}
+		if (activeTab >= 0) {
+			$(".ce_home_tab").append('<span class="ce_pipe_left"></span>');
+		}
 	}
 
 
@@ -1189,7 +1194,7 @@ require([
 		openTabsListChanged();
 		// if there are still tabs open, find the most recently used tab and activate that one
 		if ($tabs.children().length === 0) {
-			activeTab = null;
+			activateTab(-1);
 		
 		// if there is already a tab selected
 		} else if ($tabs.children(".ce_active").length === 0) {
@@ -1228,7 +1233,7 @@ require([
 		ecfg.container.append(contents);
 		// Remove the "restore session" link
 		$(".ce_restore_session").remove();
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + label + "<div class='ce_tab_shadow'></div></div>").attr("title", ecfg.label).data({"tab": ecfg}).appendTo($tabs);
+		ecfg.tab = $("<div class='ce_tab ce_active'>" + label + "</div>").attr("title", ecfg.label).data({"tab": ecfg}).appendTo($tabs);
 		ecfg.hasChanges = false;
 		ecfg.server_content = '';
 		activateTab(editors.length-1);
@@ -1265,7 +1270,7 @@ require([
 			model: ecfg.model,
 			lineNumbersMinChars: 3,
 			ariaLabel: ecfg.file,
-			readOnly: ! ecfg.canBeSaved,
+			//readOnly: ! ecfg.canBeSaved,
 			theme: "vs-dark",
 			glyphMargin: true
 			
@@ -1356,7 +1361,7 @@ require([
 	}
 	
 	function saveActiveTab(){
-		if (activeTab === null) {
+		if (activeTab === null || activeTab === -1) {
 			return;
 		}
 		var ecfg = editors[activeTab];
@@ -1364,8 +1369,10 @@ require([
 			if (! ecfg.saving) {
 				var saved_value = ecfg.editor.getValue();
 				ecfg.saving = true;
+				ecfg.tab.append("<i class='ce_right_icon ce_right_two ce_tab_saving_icon icon-two-arrows-cycle' title='Saving...'></i>");
 				serverAction('save', ecfg.file, saved_value).then(function(){
 					ecfg.saving = false;
+					ecfg.tab.find('.ce_tab_saving_icon').remove();
 					showToast('Saved');
 					ecfg.server_content = saved_value;
 					ecfg.tab.find('.icon-alert-circle').remove();
@@ -1377,6 +1384,7 @@ require([
 					}
 				}, function(){
 					ecfg.saving = false;
+					ecfg.tab.find('.icon-alert-circle').remove();
 				});
 			}
 			return null;
