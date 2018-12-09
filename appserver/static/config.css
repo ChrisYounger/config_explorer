@@ -53,13 +53,6 @@
 		opacity: 0.2;
 	}		
 }
-.ce_app_name {
-	font-size: 26px;
-	font-weight: 200;
-	color: white;
-	padding-right: 20px;
-	
-}
 .ce_cancel {
     text-align: center;
     margin: 30px 10px;
@@ -189,13 +182,22 @@ input[type=text].ce_treesearch_input::placeholder {
 }
 .ce_container {
     position: absolute;
-	left: 280px;
+	left: 283px;
     right: 0;
     top: 0;
     bottom: 0;
-    border-left: 3px solid #404040;
     background-color: #404040;
     padding-left: 6px;
+}
+.ce_resize_column {
+    top: 0;
+    bottom: 0;
+	left: 280px;
+    position: absolute;
+    background: #404040;
+    width: 3px;
+    cursor: col-resize;
+    z-index: 12;
 }
 .ce_tabs {
     height: 38px;
@@ -214,13 +216,41 @@ input[type=text].ce_treesearch_input::placeholder {
     width: 34px;
     line-height: 34px;
     cursor: pointer;
-    color: white;
+    color: #ccc;
     background-color: #404040;
     left: 0;
     padding-left: 6px;
     top: 0;
     height: 40px;
     margin-top: 4px;
+}
+.ce_app_name {
+	font-size: 20px;
+	font-weight: 200;
+	padding-right: 20px;	
+}
+.ce_app_name i {
+    font-size: 22px;
+}
+.ca_app_title {
+    color: white;
+	font-size: 26px;
+}
+.ce_tagline {
+    font-size: 10px;
+    letter-spacing: 3px;
+    margin-bottom: 40px;
+    opacity: 0.2;
+}
+.ce_home_section{
+    margin-bottom:20px;
+}
+.ce_home_section .btn {
+    margin-right: 8px;
+}
+.ce_home_buttonset {
+    margin-top:30px;
+    margin-bottom: 30px;
 }
 .ce_tab {
     position: relative;
@@ -365,7 +395,7 @@ input[type=text].ce_treesearch_input::placeholder {
 .ce_contents_home {
     position:absolute;
     top: 38px;
-    color: white;
+    color: #ccc;
     padding: 27px;
 }
 .ce_contents {

@@ -66,6 +66,7 @@ require([
 	var run_history = (JSON.parse(localStorage.getItem('ce_run_history')) || []);
 	var closed_tabs = (JSON.parse(localStorage.getItem('ce_closed_tabs')) || []);
 	var $dashboardBody = $('.dashboard-body');
+	var $ce_tree_pane = $(".ce_tree_pane");
     var $dirlist = $(".ce_file_list");
 	var $filelist = $(".ce_file_wrap");
 	var $filePath = $(".ce_file_path");
@@ -103,14 +104,30 @@ require([
 			}
 		}
     });
-//$(document).off("mousemove").on("mousemove", function(e){ console.log(e.offsetX)})
-	$('.ce_app_errors').on('click', function(e){
+	
+	// Handler for resizing the tree pane/editor divider
+	$('.ce_resize_column').on("mousedown", function(e) {
+		e.preventDefault();
+		var ce_container = $('.ce_container');
+		var ce_resize_column = $('.ce_resize_column');
+		$(document).on("mousemove.colresize", function(e) {
+			$ce_tree_pane.css("width", e.pageX + "px");
+			ce_resize_column.css("left", e.pageX + "px");
+			ce_container.css("left", (e.pageX + 3) + "px");
+		});
+	});
+
+	$(document).on("mouseup",function(e) {
+		$(document).off('mousemove.colresize');
+	});
+
+	$('.ce_app_errors .btn').on('click', function(){
 		runBToolCheck();
 	});
-	$('.ce_app_settings').on('click', function(e){
+	$('.ce_app_settings .btn').on('click', function(){
 		readFile("");
 	});
-	$('.ce_app_changelog').on('click', function(e){
+	$('.ce_app_changelog .btn').on('click', function(){
 		showChangeLog();
 	});
 	$(".ce_home_tab").on("click", function(){
@@ -147,7 +164,7 @@ require([
 				var $in = $('<input class="ce_treesearch_input" autocorrect="off" autocapitalize="off" spellcheck="false" type="text" wrap="off" aria-label="Filter text" placeholder="Filter text" title="Filter text">');
 				$filePath.css("display", "none");
 				elem.addClass("ce_selected");
-				$in.appendTo(".ce_tree_pane").focus().on("input ",function(){
+				$in.appendTo($ce_tree_pane).focus().on("input ",function(){
 					leftPaneFileList($(this).val().toLowerCase())
 				});
 			}
@@ -195,11 +212,14 @@ require([
 		// click on a conf file
 		if (elem.hasClass("ce_conf")) {
 			runBToolList($(this).attr('file'), 'btool');
+
 		// click on file
 		} else if (elem.hasClass("ce_is_report")) {
 			readFile(elem.attr('file'));
+
 		} else if (elem.hasClass("ce_leftnav_reopen")) {
 			reopenTab(elem.attr('type'), elem.attr('file'));	
+
 		} else {
 			// prevent double clicking causing strange behavior
 			if (ignore_left_pane_click) {return;}
@@ -300,6 +320,7 @@ require([
 	// On hover show the cross
 	}).on("mouseenter", ".ce_tab", function(){
 		$(this).append("<i class='ce_close_tab icon-close ce_clickable_icon ce_right_icon'></i>");
+
 	}).on("mouseleave", ".ce_tab", function(){
 		$(this).find('.ce_close_tab').remove();
 	});
@@ -597,9 +618,9 @@ require([
 	// Run server action to load a folder
 	function readFolder(path){
 		filterModeOff();
-		$spinner.clone().appendTo($(".ce_tree_pane"));
+		$spinner.clone().appendTo($ce_tree_pane);
 		return serverAction('read', path).then(function(contents){
-			$(".ce_tree_pane .ce_spinner").remove();
+			$ce_tree_pane.find(".ce_spinner").remove();
 			inFolder = path;
 			localStorage.setItem('ce_current_path', inFolder);
 			contents.sort(function(a, b) {
@@ -667,7 +688,7 @@ require([
 	
 	// The conf file list
 	function leftPaneConfList() {
-		$(".ce_tree_pane .ce_spinner").css("display","none");
+		$ce_tree_pane.find(".ce_spinner").css("display","none");
 		$filelist.empty().css({"transform":"", "opacity":1});
 		$filePath.empty();
 		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_recent_files, .ce_app_run").addClass("ce_disabled");
@@ -681,7 +702,7 @@ require([
 
 	// Click handler for Recent Files button in top right
 	function leftPaneRecentList() {
-		$(".ce_tree_pane .ce_spinner").css("display","none");
+		$ce_tree_pane.find(".ce_spinner").css("display","none");
 		$filelist.empty().css({"transform":"", "opacity":1});
 		$filePath.empty();
 		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_show_confs, .ce_app_run").addClass("ce_disabled");
@@ -1242,7 +1263,7 @@ require([
 	}
 	
 	function updateTabAsEditor(ecfg, contents, canBeSaved, language) {
-		// TODO instead use the built-in language detection
+		// uses the built-in language detection where possible
 		if (! language) {
 			if (/\.(?:conf|meta|spec)/.test(ecfg.file)) {
 				language = "ini";
