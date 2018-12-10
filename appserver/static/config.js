@@ -1943,6 +1943,10 @@ require([
 		DashboardController.ready();
 		
 		// Build the directory
-		refreshCurrentPath();		
+		refreshCurrentPath();
+
+		return serverAction('fs', "").then(function(contents){
+			console.log(contents);
+		});
 	});
 });

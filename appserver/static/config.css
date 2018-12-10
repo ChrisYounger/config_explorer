@@ -343,7 +343,7 @@ input[type=text].ce_treesearch_input::placeholder {
 }
 .ce_restore_session {
     color: #c3cbd4;
-    margin: 10px 30px;
+    margin: 12px 30px;
     cursor: pointer;
     position: relative;
 }
