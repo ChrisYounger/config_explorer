@@ -162,10 +162,20 @@ require([
 				filterModeOff();				
 			} else {
 				var $in = $('<input class="ce_treesearch_input" autocorrect="off" autocapitalize="off" spellcheck="false" type="text" wrap="off" aria-label="Filter text" placeholder="Filter text" title="Filter text">');
-				$filePath.css("display", "none");
+				$filePath.css("margin-top", "30px");
+				$dirlist.css("top", "100px");
 				elem.addClass("ce_selected");
 				$in.appendTo($ce_tree_pane).focus().on("input ",function(){
 					leftPaneFileList($(this).val().toLowerCase())
+				}).on("keydown", function(e){
+					// select the top item
+					if (e.which === 13) {
+						$filelist.find(".ce_leftnav").eq(0).click();
+					// If user hits backspace with nothing in box then navigate back
+					} else if (e.which === 8 && $in.val() === "") {
+						//Todo navigate back
+						$(".ce_folder_up").click();
+					}
 				});
 			}
 					
@@ -202,7 +212,13 @@ require([
 	function filterModeOff() {
 		$(".ce_filter").removeClass("ce_selected");
 		$(".ce_treesearch_input").remove();
-		$filePath.css("display", "");
+		$filePath.css("margin-top", "");
+		$dirlist.css("top", "");
+	}
+
+	function filterModeReset(){
+		$(".ce_treesearch_input").val("");
+
 	}
 	
 	
@@ -620,7 +636,7 @@ require([
 
 	// Run server action to load a folder
 	function readFolder(path){
-		filterModeOff();
+		filterModeReset();
 		showTreePaneSpinner();
 		return serverAction('read', path).then(function(contents){
 			$ce_tree_pane.find(".ce_spinner").remove();
@@ -774,7 +790,7 @@ require([
 			body: "<div>Enter new " + type + " name:<br><br><input type='text' value='' class='ce_prompt_input input input-text' style='width: 100%; background-color: #3d424d; color: #cccccc;'/></div>",
 			onShow: function(){ 
 				$('.ce_prompt_input').focus().on('keydown', function(e) {
-					if (e.which == 13) {
+					if (e.which === 13) {
 						$('.modal').find('button:first-child').click();
 					}
 				}); 
@@ -812,7 +828,7 @@ require([
 			onShow: function(){ 
 				$('.ce_prompt_input').focus().on('keydown', function(e) {
 					// submit form on enter key
-					if (e.which == 13) {
+					if (e.which === 13) {
 						$('.modal').find('button:first-child').click();
 					}
 				}); 
@@ -857,7 +873,7 @@ require([
 						$('.modal').find(".btn-danger").addClass('btn-disabled');
 					}
 				}).on('keydown', function(e) {
-					if (e.which == 13) {
+					if (e.which === 13) {
 						$('.modal').find('button:first-child').click();
 					}
 				});
