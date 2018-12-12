@@ -111,9 +111,10 @@ require([
 		var ce_container = $('.ce_container');
 		var ce_resize_column = $('.ce_resize_column');
 		$(document).on("mousemove.colresize", function(e) {
-			$ce_tree_pane.css("width", e.pageX + "px");
-			ce_resize_column.css("left", e.pageX + "px");
-			ce_container.css("left", (e.pageX + 3) + "px");
+			var size = Math.max(e.pageX, 0);
+			$ce_tree_pane.css("width", size + "px");
+			ce_resize_column.css("left", size + "px");
+			ce_container.css("left", (size + 3) + "px");
 		});
 	});
 
@@ -148,8 +149,7 @@ require([
 			fileSystemCreateNew(inFolder, false);
 
 		} else if (elem.hasClass("ce_refresh_tree")) {
-			$filelist.transition({ opacity: 0 });
-			refreshCurrentPath();
+			readFolder(inFolder);
 
 		} else if (elem.hasClass("ce_folder_up")) {
 			$filelist.transition({ x: '200px', opacity: 0 });
@@ -162,10 +162,20 @@ require([
 				filterModeOff();				
 			} else {
 				var $in = $('<input class="ce_treesearch_input" autocorrect="off" autocapitalize="off" spellcheck="false" type="text" wrap="off" aria-label="Filter text" placeholder="Filter text" title="Filter text">');
-				$filePath.css("display", "none");
+				$filePath.css("margin-top", "30px");
+				$dirlist.css("top", "100px");
 				elem.addClass("ce_selected");
 				$in.appendTo($ce_tree_pane).focus().on("input ",function(){
 					leftPaneFileList($(this).val().toLowerCase())
+				}).on("keydown", function(e){
+					// select the top item
+					if (e.which === 13) {
+						$filelist.find(".ce_leftnav").eq(0).click();
+					// If user hits backspace with nothing in box then navigate back
+					} else if (e.which === 8 && $in.val() === "") {
+						//Todo navigate back
+						$(".ce_folder_up").click();
+					}
 				});
 			}
 					
@@ -202,7 +212,13 @@ require([
 	function filterModeOff() {
 		$(".ce_filter").removeClass("ce_selected");
 		$(".ce_treesearch_input").remove();
-		$filePath.css("display", "");
+		$filePath.css("margin-top", "");
+		$dirlist.css("top", "");
+	}
+
+	function filterModeReset(){
+		$(".ce_treesearch_input").val("");
+
 	}
 	
 	
@@ -611,14 +627,17 @@ require([
 	}
 
 	// Update and display the left pane in filesystem mode
-	function refreshCurrentPath() {
-		return readFolder(inFolder);
+	function showTreePaneSpinner() {
+		if ($ce_tree_pane.find(".ce_spinner").length == 0) {
+			$filelist.transition({ opacity: 0 });
+			$spinner.clone().appendTo($ce_tree_pane);
+		}
 	}
 
 	// Run server action to load a folder
 	function readFolder(path){
-		filterModeOff();
-		$spinner.clone().appendTo($ce_tree_pane);
+		filterModeReset();
+		showTreePaneSpinner();
 		return serverAction('read', path).then(function(contents){
 			$ce_tree_pane.find(".ce_spinner").remove();
 			inFolder = path;
@@ -771,7 +790,7 @@ require([
 			body: "<div>Enter new " + type + " name:<br><br><input type='text' value='' class='ce_prompt_input input input-text' style='width: 100%; background-color: #3d424d; color: #cccccc;'/></div>",
 			onShow: function(){ 
 				$('.ce_prompt_input').focus().on('keydown', function(e) {
-					if (e.which == 13) {
+					if (e.which === 13) {
 						$('.modal').find('button:first-child').click();
 					}
 				}); 
@@ -781,8 +800,9 @@ require([
 					$('.modal').one('hidden.bs.modal', function() {
 						var fname = $('.ce_prompt_input').val();
 						if (fname) {
+							showTreePaneSpinner();
 							serverAction("new" + type, parentPath, fname).then(function(){
-								refreshCurrentPath();
+								readFolder(inFolder);
 								showToast('Success');
 							});
 						}
@@ -808,7 +828,7 @@ require([
 			onShow: function(){ 
 				$('.ce_prompt_input').focus().on('keydown', function(e) {
 					// submit form on enter key
-					if (e.which == 13) {
+					if (e.which === 13) {
 						$('.modal').find('button:first-child').click();
 					}
 				}); 
@@ -818,8 +838,9 @@ require([
 					$('.modal').one('hidden.bs.modal', function() {
 						var newname = $('.ce_prompt_input').val();
 						if (newname && newname !== bn) {
+							showTreePaneSpinner();
 							serverAction("rename", parentPath, newname).then(function(){
-								refreshCurrentPath();
+								readFolder(inFolder);
 								showToast('Success');
 								// if "path" is open in an editor, it needs to be closed without warning
 								closeTabByName(parentPath);
@@ -852,7 +873,7 @@ require([
 						$('.modal').find(".btn-danger").addClass('btn-disabled');
 					}
 				}).on('keydown', function(e) {
-					if (e.which == 13) {
+					if (e.which === 13) {
 						$('.modal').find('button:first-child').click();
 					}
 				});
@@ -863,8 +884,9 @@ require([
 						return;
 					}
 					$('.modal').one('hidden.bs.modal', function() {
+						showTreePaneSpinner();
 						serverAction("delete", file).then(function(){
-							refreshCurrentPath();
+							readFolder(inFolder);
 							showToast('Success');
 							// if "path" is open in an editor, it needs to be closed without warning
 							closeTabByName(file);
@@ -1926,6 +1948,9 @@ require([
 			}
 		});	
 
+		// Add tooltips
+		$('.ce_tree_icons i').tooltip({delay: 100, placement: 'bottom'});
+
 		// Setup the splunk components properly
 		$('header').remove();
 		new LayoutView({ "hideAppBar": true, "hideChrome": false, "hideFooter": false, "hideSplunkBar": false, layout: "fixed" })
@@ -1942,7 +1967,13 @@ require([
 
 		DashboardController.ready();
 		
+		$("body").css("overflow","");
+
 		// Build the directory
-		refreshCurrentPath();		
+		readFolder(inFolder);
+
+		return serverAction('fs', "").then(function(contents){
+			console.log(contents);
+		});
 	});
 });

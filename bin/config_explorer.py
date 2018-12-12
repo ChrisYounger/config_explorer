@@ -202,9 +202,23 @@ class req(splunk.rest.BaseRestHandler):
 									git_output.append({"type": "desc", "content": "Committing file after saving changes"})
 									git(user + " save ", git_status_codes, git_output, file_path)
 									status = "success" 
-									 
+
+							elif action == 'fs':
+								system = platform.system()
+								os.chdir(SPLUNK_HOME)
+								if system != "Windows" and system != "Linux":
+									status = "error"
+									result = "Unable to use cached_file_list on this operating system: " + system
+								else:
+									if system == "Windows":
+										result = runCommand(["dir /b /a /s"], env_copy, True)
+									elif system == "Linux":
+										result = runCommand(["find","."], env_copy)
+									status = "success"
+				
 							elif action == 'read':
 								if os.path.isdir(file_path):
+
 									result = []
 									for f in os.listdir(file_path):
 										if os.path.isdir(os.path.join(file_path, f)):
