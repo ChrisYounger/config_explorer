@@ -111,9 +111,10 @@ require([
 		var ce_container = $('.ce_container');
 		var ce_resize_column = $('.ce_resize_column');
 		$(document).on("mousemove.colresize", function(e) {
-			$ce_tree_pane.css("width", e.pageX + "px");
-			ce_resize_column.css("left", e.pageX + "px");
-			ce_container.css("left", (e.pageX + 3) + "px");
+			var size = Math.max(e.pageX, 0);
+			$ce_tree_pane.css("width", size + "px");
+			ce_resize_column.css("left", size + "px");
+			ce_container.css("left", (size + 3) + "px");
 		});
 	});
 
@@ -1926,6 +1927,9 @@ require([
 			}
 		});	
 
+		// Add tooltips
+		$('.ce_tree_icons i').tooltip({delay: 100, placement: 'bottom'});
+
 		// Setup the splunk components properly
 		$('header').remove();
 		new LayoutView({ "hideAppBar": true, "hideChrome": false, "hideFooter": false, "hideSplunkBar": false, layout: "fixed" })
@@ -1942,6 +1946,7 @@ require([
 
 		DashboardController.ready();
 		
+		$("body").css("overflow","");
 		// Build the directory
 		refreshCurrentPath();
 

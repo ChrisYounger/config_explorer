@@ -124,6 +124,9 @@
 .ce_treenothing_text {
 	color: #00A4FD;
 }
+.tooltip.in {
+    opacity: 0.95
+}
 input[type=text].ce_treesearch_input{
     background-color: rgb(64, 64, 64);
     color: white;
@@ -768,3 +771,4 @@ html .ce_spinner {
     transform: scale(1.0);
   }
 }
+
