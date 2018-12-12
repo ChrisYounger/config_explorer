@@ -149,8 +149,7 @@ require([
 			fileSystemCreateNew(inFolder, false);
 
 		} else if (elem.hasClass("ce_refresh_tree")) {
-			$filelist.transition({ opacity: 0 });
-			refreshCurrentPath();
+			readFolder(inFolder);
 
 		} else if (elem.hasClass("ce_folder_up")) {
 			$filelist.transition({ x: '200px', opacity: 0 });
@@ -612,14 +611,17 @@ require([
 	}
 
 	// Update and display the left pane in filesystem mode
-	function refreshCurrentPath() {
-		return readFolder(inFolder);
+	function showTreePaneSpinner() {
+		if ($ce_tree_pane.find(".ce_spinner").length == 0) {
+			$filelist.transition({ opacity: 0 });
+			$spinner.clone().appendTo($ce_tree_pane);
+		}
 	}
 
 	// Run server action to load a folder
 	function readFolder(path){
 		filterModeOff();
-		$spinner.clone().appendTo($ce_tree_pane);
+		showTreePaneSpinner();
 		return serverAction('read', path).then(function(contents){
 			$ce_tree_pane.find(".ce_spinner").remove();
 			inFolder = path;
@@ -782,8 +784,9 @@ require([
 					$('.modal').one('hidden.bs.modal', function() {
 						var fname = $('.ce_prompt_input').val();
 						if (fname) {
+							showTreePaneSpinner();
 							serverAction("new" + type, parentPath, fname).then(function(){
-								refreshCurrentPath();
+								readFolder(inFolder);
 								showToast('Success');
 							});
 						}
@@ -819,8 +822,9 @@ require([
 					$('.modal').one('hidden.bs.modal', function() {
 						var newname = $('.ce_prompt_input').val();
 						if (newname && newname !== bn) {
+							showTreePaneSpinner();
 							serverAction("rename", parentPath, newname).then(function(){
-								refreshCurrentPath();
+								readFolder(inFolder);
 								showToast('Success');
 								// if "path" is open in an editor, it needs to be closed without warning
 								closeTabByName(parentPath);
@@ -864,8 +868,9 @@ require([
 						return;
 					}
 					$('.modal').one('hidden.bs.modal', function() {
+						showTreePaneSpinner();
 						serverAction("delete", file).then(function(){
-							refreshCurrentPath();
+							readFolder(inFolder);
 							showToast('Success');
 							// if "path" is open in an editor, it needs to be closed without warning
 							closeTabByName(file);
@@ -1947,8 +1952,9 @@ require([
 		DashboardController.ready();
 		
 		$("body").css("overflow","");
+
 		// Build the directory
-		refreshCurrentPath();
+		readFolder(inFolder);
 
 		return serverAction('fs', "").then(function(contents){
 			console.log(contents);
