@@ -114,11 +114,17 @@
 	border: 2px solid #00A4FD;
     color: #00A4FD;
 }
-.ce_treenothing{
+.ce_treenothing .icon-warning, .ce_treeempty .icon-warning {
+	margin-right: 8px;
+}
+.ce_treenothing, .ce_treeempty {
 	white-space: nowrap;
-    padding: 42px 10px 2px 19px;
+    padding: 40px 10px 2px 22px;
     text-overflow: ellipsis;
     overflow: hidden;	
+}
+.ce_treeempty{
+	opacity: 0.4;
 }
 .ce_treehighlight,
 .ce_treenothing_text {
@@ -204,15 +210,14 @@ input[type=text].ce_treesearch_input::placeholder {
 }
 .ce_tabs {
     height: 38px;
-    width: 100%;
-    position:absolute;
+    position: absolute;
     left: 34px;
     right: 0;
     top: 0;
     display: flex;
     background-color: #404040;
     color: #ccc;
-	padding-right: 12px;
+    padding-right: 4px;
 }
 .ce_home_tab {
     position: absolute;
@@ -235,9 +240,10 @@ input[type=text].ce_treesearch_input::placeholder {
 .ce_app_name i {
     font-size: 22px;
 }
-.ca_app_title {
+.ce_app_title {
     color: white;
 	font-size: 26px;
+    letter-spacing: -1px;
 }
 .ce_tagline {
     font-size: 10px;
@@ -268,7 +274,7 @@ input[type=text].ce_treesearch_input::placeholder {
 .ce_pipe  {
     position: absolute;
     right: 0px;
-    margin-top: 4px;
+    margin-top: 6px;
     height: 21px;
     width: 0px;
     z-index: 4;
@@ -474,7 +480,7 @@ input[type=text].ce_treesearch_input::placeholder {
     width: 200px;
     box-shadow: 0 2px 8px #000;
     color: #bbb;
-	z-index: 9;	
+	z-index: 13;	
 }
 .ce_context_menu_wrap > div {
 	margin: 2px 2px; 

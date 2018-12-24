@@ -75,6 +75,7 @@ require([
 	var $spinner = $(".ce_spinner");
     var $tabs = $(".ce_tabs");
 	var activeTab = -1;
+	var filecache = {};
 	var conf = {};
 	var confFiles = {};
 	var confFilesSorted = [];
@@ -82,8 +83,7 @@ require([
 	var comparisonLeftFile = null;
 	var tabid = 0;
 	var scrollbar;
-	var leftPaneFiles = true;
-	var ignore_left_pane_click = false;
+	var leftpane_ignore = false;
 
 	// Set the "save" hotkey at a global level instnead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
@@ -115,6 +115,7 @@ require([
 			$ce_tree_pane.css("width", size + "px");
 			ce_resize_column.css("left", size + "px");
 			ce_container.css("left", (size + 3) + "px");
+			filePathRTLCheck();
 		});
 	});
 
@@ -149,12 +150,10 @@ require([
 			fileSystemCreateNew(inFolder, false);
 
 		} else if (elem.hasClass("ce_refresh_tree")) {
-			readFolder(inFolder);
+			refreshFolder();
 
 		} else if (elem.hasClass("ce_folder_up")) {
-			$filelist.transition({ x: '200px', opacity: 0 });
-			elem.addClass("ce_disabled");
-			readFolder(inFolder.replace(/[\/\\][^\/\\]+$/,''));
+			readFolder(inFolder.replace(/[\/\\][^\/\\]+$/,''), 'back');
 
 		} else if (elem.hasClass("ce_filter")) {
 			if (elem.hasClass("ce_selected")) {
@@ -173,7 +172,7 @@ require([
 						$filelist.find(".ce_leftnav").eq(0).click();
 					// If user hits backspace with nothing in box then navigate back
 					} else if (e.which === 8 && $in.val() === "") {
-						//Todo navigate back
+						// navigate back
 						$(".ce_folder_up").click();
 					}
 				});
@@ -183,11 +182,9 @@ require([
 			if (elem.hasClass("ce_selected")) {
 				elem.removeClass("ce_selected");
 				leftPaneFileList();
-				leftPaneFiles = true;
 				
 			} else {
 				elem.addClass("ce_selected");
-				leftPaneFiles = false;
 				leftPaneConfList();
 			}			
 		
@@ -195,11 +192,9 @@ require([
 			if (elem.hasClass("ce_selected")) {
 				leftPaneFileList();
 				elem.removeClass("ce_selected");
-				leftPaneFiles = true;
 			} else {
 				filterModeOff();
 				leftPaneRecentList();
-				leftPaneFiles = false;
 				elem.addClass("ce_selected");
 			}
 	
@@ -218,9 +213,7 @@ require([
 
 	function filterModeReset(){
 		$(".ce_treesearch_input").val("");
-
 	}
-	
 	
 	// Click handler for left pane items
 	$dirlist.on("click", ".ce_leftnav", function(){
@@ -233,19 +226,15 @@ require([
 		} else if (elem.hasClass("ce_is_report")) {
 			readFile(elem.attr('file'));
 
+		// recent files list
 		} else if (elem.hasClass("ce_leftnav_reopen")) {
 			reopenTab(elem.attr('type'), elem.attr('file'));	
 
+		// Folder
 		} else {
-			// prevent double clicking causing strange behavior
-			if (ignore_left_pane_click) {return;}
-			ignore_left_pane_click = true;
-			setTimeout(function(){ ignore_left_pane_click = false; }, 300);
-			if (elem.hasClass("ce_is_folder")) {
-				// click on folder
-				$filelist.transition({ x: '-200px', opacity: 0 });
+			if (! leftpane_ignore) {
+				readFolder(elem.attr('file'), 'fwd');
 			}
-			readFolder(elem.attr('file'));
 		}
 		
 	// Right click menu for left pane
@@ -471,8 +460,7 @@ require([
 	}
 	
 	// Check config
-	function runBToolCheck() {
-		var ecfg = createTab('btool-check', "", 'Check config', false);
+	function runBToolCheck() {	
 		serverActionWithoutFlicker('btool-check').then(function(contents){
 			contents = contents.replace(/^(No spec file for|Checking):.*\r?\n/mg,'').replace(/^\t\t/mg,'').replace(/\n{2,}/g,'\n\n');
 			if ($.trim(contents)) {
@@ -627,38 +615,137 @@ require([
 	}
 
 	// Update and display the left pane in filesystem mode
-	function showTreePaneSpinner() {
-		if ($ce_tree_pane.find(".ce_spinner").length == 0) {
-			$filelist.transition({ opacity: 0 });
+	function showTreePaneSpinner(direction) {
+		if (! leftpane_ignore) {
+			leftpane_ignore = direction || "none";
+			if (direction === 'fwd') {
+				$filelist.transition({ x: '-200px', opacity: 0 });
+			} else if (direction === 'back') {
+				$filelist.transition({ x: '200px', opacity: 0});
+			} else {
+				$filelist.transition({ x: 0, opacity: 0 });
+			} 
 			$spinner.clone().appendTo($ce_tree_pane);
+			$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_recent_files, .ce_show_confs, .ce_app_run").addClass("ce_disabled");
 		}
 	}
 
+	function refreshFolder(){
+		readFolderFromServer(inFolder);
+	}
+	
+	function getTreeCache(path) {
+		var patharray = path.split("/");
+		var base = filecache;
+		if (filecache === null) {
+			return base;
+		}
+		for (var i = 1; i < patharray.length; i++) {
+			//console.log(i, patharray[i], base);
+			if (base.hasOwnProperty(patharray[i])) {
+				base = base[patharray[i]];
+			} else {
+				base = null;
+				break;
+			}
+		}
+		return base;
+	}
 	// Run server action to load a folder
-	function readFolder(path){
+	function readFolder(path, direction) {
+		//console.log(path, filecache);
 		filterModeReset();
-		showTreePaneSpinner();
+		var base = getTreeCache(path);
+		if (base === null || ! base.hasOwnProperty(".")){
+			readFolderFromServer(path, direction);
+		} else {
+			folderContents = [];
+			for (key in base) {
+				if (base.hasOwnProperty(key) && key !== ".") {
+					folderContents.push("D" + key);
+				}
+			}
+			if (base.hasOwnProperty(".")) {
+				for (var j = 0; j < base["."].length; j++) {
+					folderContents.push("F" + base["."][j]);
+				}
+			}
+			readFolderLoad(path);
+		}
+	}
+	
+	function readFolderFromServer(path, direction) {
+		showTreePaneSpinner(direction);
 		return serverAction('read', path).then(function(contents){
-			$ce_tree_pane.find(".ce_spinner").remove();
-			inFolder = path;
-			localStorage.setItem('ce_current_path', inFolder);
-			contents.sort(function(a, b) {
-				return a.toLowerCase().localeCompare(b.toLowerCase());
-			});
+			// if filecache is null it means user turned it off by setting conf to -1
+			if (filecache !== null) {
+				var base = getTreeCache(path);
+				// base can be null if the screen was opened when we were already deep in the uncached zone
+				if (base !== null) {
+					var folders = ["."];
+					var fn;
+					base["."] = [];
+					for (var i = 0; i < contents.length; i++) {
+						fn = contents[i].substr(1);
+						if (contents[i].substr(0,1) == "F") {
+							base["."].push(fn);
+						} else {
+							folders.push(fn);
+							if (! base.hasOwnProperty(fn)) {
+								base[fn] = {};
+							}
+						}
+					}
+					// Go through and delete any keys that might no longer exist
+					for (var key in base) {
+						if (base.hasOwnProperty(key) && folders.indexOf(key) === -1) {
+							delete base[key];
+						}
+					}
+				}
+			}
 			folderContents = contents;
 			leftPathChanged();
 			// If the user changed to the conf files tab, then dump out
-			if (! leftPaneFiles) {
-				return;
-			}			
-			leftPaneFileList();
+			readFolderLoad(path);
 		});
 	}
+	
+	function readFolderLoad(path){
+		inFolder = path;
+		localStorage.setItem('ce_current_path', inFolder);
+		folderContents.sort(function(a, b) {
+			return a.toLowerCase().localeCompare(b.toLowerCase());
+		});	
+		leftPaneFileList();
+	}
 
+	function filePathRTLCheck() {
+		var span = $filePath.find("span");
+		if (span.attr("title")) {
+			if (span.width() > $filePath.width()) {
+				$filePath.addClass('ce_rtl');
+			} else {
+				$filePath.removeClass('ce_rtl');
+			}
+		}
+	}
 	// TODO There is a bug in the recent files handling somewhere
-	function leftPaneFileList(filter){	
-		$filelist.empty().css("transform","");
-		$filePath.empty().attr("title", inFolder);
+	function leftPaneFileList(filter){
+		if (leftpane_ignore) {
+			if (leftpane_ignore === 'fwd') {
+				$filelist.css({x: '200px', opacity: 0});
+			} else if (leftpane_ignore === 'back') {
+				$filelist.css({x: '-200px', opacity: 0});
+			} else {
+				$filelist.css({x: '0px', opacity: 0});
+			}
+			$ce_tree_pane.find(".ce_spinner").remove();
+			$filelist.transition({x:0, opacity:1});
+			leftpane_ignore = false;	
+		}
+		$filelist.empty();
+		$filePath.empty();
 		$(".ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_recent_files, .ce_show_confs, .ce_app_run").removeClass("ce_disabled");
 		if (inFolder === ".") {
 			$(".ce_folder_up").addClass("ce_disabled");
@@ -666,14 +753,9 @@ require([
 			$(".ce_folder_up").removeClass("ce_disabled");
 		}
 		
-		$("<span></span><bdi></bdi>").attr("file", inFolder).appendTo($filePath);
-		var span = $filePath.find("span").text(inFolder + '/');
-		$filePath.find("bdi").text(inFolder + '/');
-		if (span.width() > $filePath.width()) {
-			$filePath.addClass('ce_rtl');
-		} else {
-			$filePath.removeClass('ce_rtl');
-		}
+		$("<span></span><bdi></bdi>").appendTo($filePath);
+		$filePath.find("span, bdi").attr("title", inFolder).text(inFolder + '/');
+		filePathRTLCheck();
 		var files = false;
 		var filter_re;
 		if (filter) {
@@ -698,18 +780,16 @@ require([
 			if (filter) {
 				$("<div class='ce_treenothing'><i class='icon-warning'></i>Not found: <span class='ce_treenothing_text'>" + htmlEncode(filter) + "<span></div>").appendTo($filelist);
 			} else {
-				
+				$("<div class='ce_treeempty'><i class='icon-warning'></i>Folder empty</div>").appendTo($filelist);
 			}
 		}
-		$filelist.transition({x: '0px', "opacity":1});
 	}
 
 	
 	// The conf file list
 	function leftPaneConfList() {
-		$ce_tree_pane.find(".ce_spinner").css("display","none");
-		$filelist.empty().css({"transform":"", "opacity":1});
-		$filePath.empty();
+		$filelist.empty();
+		$filePath.removeClass('ce_rtl').empty();
 		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_recent_files, .ce_app_run").addClass("ce_disabled");
 		$("<span>Splunk conf files</span>").appendTo($filePath);
 		for (var i = 0; i < confFilesSorted.length; i++) {
@@ -721,9 +801,8 @@ require([
 
 	// Click handler for Recent Files button in top right
 	function leftPaneRecentList() {
-		$ce_tree_pane.find(".ce_spinner").css("display","none");
-		$filelist.empty().css({"transform":"", "opacity":1});
-		$filePath.empty();
+		$filelist.empty();
+		$filePath.removeClass('ce_rtl').empty();
 		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_show_confs, .ce_app_run").addClass("ce_disabled");
 		$("<span>Recent files</span>").appendTo($filePath);
 		
@@ -802,7 +881,7 @@ require([
 						if (fname) {
 							showTreePaneSpinner();
 							serverAction("new" + type, parentPath, fname).then(function(){
-								readFolder(inFolder);
+								refreshFolder();
 								showToast('Success');
 							});
 						}
@@ -840,7 +919,7 @@ require([
 						if (newname && newname !== bn) {
 							showTreePaneSpinner();
 							serverAction("rename", parentPath, newname).then(function(){
-								readFolder(inFolder);
+								refreshFolder();
 								showToast('Success');
 								// if "path" is open in an editor, it needs to be closed without warning
 								closeTabByName(parentPath);
@@ -886,7 +965,7 @@ require([
 					$('.modal').one('hidden.bs.modal', function() {
 						showTreePaneSpinner();
 						serverAction("delete", file).then(function(){
-							readFolder(inFolder);
+							refreshFolder();
 							showToast('Success');
 							// if "path" is open in an editor, it needs to be closed without warning
 							closeTabByName(file);
@@ -1969,11 +2048,18 @@ require([
 		
 		$("body").css("overflow","");
 
-		// Build the directory
-		readFolder(inFolder);
-
-		return serverAction('fs', "").then(function(contents){
-			console.log(contents);
-		});
+		// Build the left pane
+		showTreePaneSpinner();
+		if (Number(conf.cache_file_depth) > 0) {
+			serverAction('fs').then(function(contents){
+				filecache = contents;
+				readFolder(inFolder);
+			});	
+		} else {
+			if (Number(conf.cache_file_depth) === -1) {
+				filecache = null;
+			}
+			readFolder(inFolder);
+		}
 	});
 });

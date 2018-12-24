@@ -3,14 +3,14 @@
 ![screenshot](README/screenshot1.png)
 
 This app provides a modern editor interface for viewing and editing Splunk files. It has code completion and 
-tooltip hinting for '.conf' files from the Splunk '.spec' files. The code gutter shows indicators highlighting if
-the line can be found in the btool output or not.  By default, the app is not able to save files, but this can
+tooltip hinting for '.conf' files (by loading the Splunk '.spec' files). The code gutter highlights if the 
+line can be found in the btool output or not.  By default, the app is not able to save files, but this can
 be enabled from the "Settings" link. As this app essentially provides unrestricted access to the Splunk files, 
 users must have "admin_all_objects" capability. The editor is Microsoft Monaco editor (Visual Studio Code).
 
 This app can optionally version control all changes by committing them to a git repository before and after 
-saving. To use this you need to have "git" installed (not provided by this app) and you also need to setup 
-a git repository.
+saving. To use this you need to have "git" installed (not provided by this app) and you need to setup a git 
+repository using the instructions below.
 
 
 ## Important warnings:
@@ -18,6 +18,8 @@ a git repository.
 * Don't use this app on Search Head clusters becuase it won't sync changes to cluster members. 
 * As a matter of fact, because this app allows changing files just like you are on the filesystem, it should be 
 used very carefully in any environment that you care about. 
+* This app does not automatically update the Splunk running config (well except for search-time properties which
+Splunk does regularly re-read).
 * There are no built-in restrictions on viewing secrets files or passwords. Don't make this app available to 
 users who should not see that sort of things.
 * There are also no restrictions that prevent editing files in `default/` folders. You should follow normal Splunk 
@@ -75,3 +77,13 @@ to do so, or alternatively, see my custom git app here: https://splunkbase.splun
 
 In order to prevent file editing semi-permanantly, set `write_access = false`  and `hide_settings = true`.
 This will prevent being able to change settings until someone changes files directly on the filesystem. 
+
+
+## Third party software
+
+The following third-party libraries are used by this app. Thank you!
+
+* Monaco Editor - MIT - https://github.com/Microsoft/monaco-editor
+* Sortable - MIT - https://github.com/rubaxa/Sortable.git
+* OverlayScrollbars - MIT - https://github.com/KingSora/OverlayScrollbars
+* jquery.transit - MIT - https://github.com/rstacruz/jquery.transit

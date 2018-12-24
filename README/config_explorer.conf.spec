@@ -25,6 +25,13 @@ max_file_size = <non-negative integer>
 #  Experimental features                                                   #
 ############################################################################
 
+cache_file_depth = <integer>
+* Cache the list of files and folders for the left pane to this many levels deep. 
+  This makes navigation much faster (especially on windows) but uses more memory, 
+  causes slightly slower startup, and will not follow symbolic links. Set to 0 to 
+  disable cache but allow caching of visited directories. Set -1 to disable all caching.
+  Defaults to 6
+
 conf_validate_on_save = <bool>
 * Show a green or red indicator in the code gutter of each line if it appears
   in the btool list output or not. As parsing .spec files is not particularly 

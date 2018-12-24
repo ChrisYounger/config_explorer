@@ -58,7 +58,7 @@ class req(splunk.rest.BaseRestHandler):
 			if conf["default"][param].lower().strip() in ("1", "true", "yes", "t", "y"):
 				return True
 			return False
-			
+
 		try:
 			result = ""
 			status = ""
@@ -204,17 +204,24 @@ class req(splunk.rest.BaseRestHandler):
 									status = "success" 
 
 							elif action == 'fs':
-								system = platform.system()
-								os.chdir(SPLUNK_HOME)
-								if system != "Windows" and system != "Linux":
-									status = "error"
-									result = "Unable to use cached_file_list on this operating system: " + system
-								else:
-									if system == "Windows":
-										result = runCommand(["dir /b /a /s"], env_copy, True)
-									elif system == "Linux":
-										result = runCommand(["find","."], env_copy)
-									status = "success"
+								def pack(base, path, dirs, files):
+									if len(path) == 0:
+										for i in dirs: 
+											base[i] = {}
+										base["."] = files
+									else:
+										pack(base[path[0]], path[1:], dirs, files)
+
+								result = {}
+								cut = len(SPLUNK_HOME.split(os.path.sep))
+								depth = int(conf["default"]["cache_file_depth"])
+								for root, dirs, files in os.walk(SPLUNK_HOME):
+									paths = root.split(os.path.sep)[cut:]
+									pack(result, paths, dirs, files)
+									if len(paths) >= depth:
+										del dirs[:]
+
+								status = "success"
 				
 							elif action == 'read':
 								if os.path.isdir(file_path):

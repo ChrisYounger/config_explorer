@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-    <title>Config Editor</title>
+    <title>Config Explorer</title>
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/build/css/bootstrap-enterprise.css" />
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/css/build/pages/dashboard-simple-bootstrap.min.css"/>
     <link rel="stylesheet" type="text/css" href="{{SPLUNKWEB_URL_PREFIX}}/static/app/config_explorer/config.css" />
@@ -54,7 +54,7 @@
 				<div class="ce_tabs"></div>
 				<div class="ce_contents"></div>
 				<div class="ce_contents_home">
-					<div class='ce_app_name'><span class='ca_app_title'>Config Explorer</span> for <i class="icon-splunk"></i></div>
+					<div class='ce_app_name'><span class='ce_app_title'>Config Explorer</span> for <i class="icon-splunk"></i></div>
 					<div class='ce_tagline'>by Chris Younger</div>
 					<div class='ce_home_section ce_app_settings'>
 						<span class="btn">Settings</span> Change the Config Explorer settings.
@@ -65,8 +65,11 @@
 					<div class='ce_home_section ce_app_changelog'>
 						<span class='btn'>Change log</span> Review changes made using Config Explorer.
 					</div>
-					<div><a href="https://127.0.0.1:8089/servicesNS/nobody/config_explorer/data/ui/views/_reload" target="_blank">Reload Config explorer views</a></p>
-					<div><a href="/static/docs/style/style-guide.html" target="_blank">Style guide</a></div>
+					<div>
+						<a href="/en-GB/debug/refresh?entity=data/ui/views" target="_blank">Reload views</a> | 
+						<a href="/en-GB/debug/refresh" target="_blank">Debug refresh</a> | 
+						<a href="/static/docs/style/style-guide.html" target="_blank">Style guide</a>
+					</div>
 				</div>
 			</div>
 		</div>
