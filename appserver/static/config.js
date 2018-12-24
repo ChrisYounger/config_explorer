@@ -84,6 +84,7 @@ require([
 	var tabid = 0;
 	var scrollbar;
 	var leftpane_ignore = false;
+	var max_recent_files_show = 30;
 
 	// Set the "save" hotkey at a global level instnead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
@@ -730,7 +731,7 @@ require([
 			}
 		}
 	}
-	// TODO There is a bug in the recent files handling somewhere
+
 	function leftPaneFileList(filter){
 		if (leftpane_ignore) {
 			if (leftpane_ignore === 'fwd') {
@@ -813,7 +814,7 @@ require([
 			openlabels.push(editors[j].label);
 		}
 		for (var i = closed_tabs.length - 1; i >= 0 ; i--) {
-			if (counter > 15) {
+			if (counter > max_recent_files_show) {
 				break;
 			}
 			// hide item if they are actually open at the moment
@@ -826,6 +827,7 @@ require([
 				$("<div class='ce_leftnav ce_leftnav_reopen'><i class='icon-" + icon + "'></i> " + htmlEncode(closed_tabs[i].label) + "</div>").attr("file", closed_tabs[i].file).attr("title", closed_tabs[i].file).attr("type", closed_tabs[i].type).appendTo($filelist);
 			}
 		}
+		leftPathChanged();
 	}
 
 	
@@ -1297,7 +1299,8 @@ require([
 			closed_tabs.push({label: ecfg.label, type: ecfg.type, file: ecfg.file});
 		}
 		// trim length
-		if (closed_tabs.length > 30) {
+		// There is a buffer of 10 so we can have things to show if the tabs are opened and thus removed from the list
+		if (closed_tabs.length > (max_recent_files_show + 10)) {
 			closed_tabs.shift();
 		}
 		//persist to localstorage
@@ -2005,7 +2008,9 @@ require([
 		// on page load, log that tabs that were open previously
 		var ce_open_tabs = (JSON.parse(localStorage.getItem('ce_open_tabs')) || []);
 		if (ce_open_tabs.length) {
+			// move any previously open tabs into the close tabs list
 			for (var i = 0; i < ce_open_tabs.length; i++){
+				ce_open_tabs[i].can_reopen = true;
 				logClosedTab(ce_open_tabs[i]);
 			}
 			var $restore = $("<span class='ce_restore_session'><i class='icon-rotate'></i> <span>Restore " + (ce_open_tabs.length === 1 ? "1 tab" : ce_open_tabs.length + " tabs") + "</span></span>").appendTo($tabs);
