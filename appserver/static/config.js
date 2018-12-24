@@ -166,7 +166,7 @@ require([
 				$dirlist.css("top", "100px");
 				elem.addClass("ce_selected");
 				$in.appendTo($ce_tree_pane).focus().on("input ",function(){
-					leftPaneFileList($(this).val().toLowerCase())
+					leftPaneFileList($(this).val().toLowerCase());
 				}).on("keydown", function(e){
 					// select the top item
 					if (e.which === 13) {
@@ -178,7 +178,6 @@ require([
 					}
 				});
 			}
-					
 		} else if (elem.hasClass("ce_show_confs")) {
 			if (elem.hasClass("ce_selected")) {
 				elem.removeClass("ce_selected");
@@ -188,7 +187,6 @@ require([
 				elem.addClass("ce_selected");
 				leftPaneConfList();
 			}			
-		
 		} else if (elem.hasClass("ce_recent_files")) {
 			if (elem.hasClass("ce_selected")) {
 				leftPaneFileList();
@@ -198,12 +196,10 @@ require([
 				leftPaneRecentList();
 				elem.addClass("ce_selected");
 			}
-	
 		} else if (elem.hasClass('ce_app_run')) {
 			runShellCommand();
 		}
-	})
-	
+	});
 	
 	function filterModeOff() {
 		$(".ce_filter").removeClass("ce_selected");
@@ -461,7 +457,8 @@ require([
 	}
 	
 	// Check config
-	function runBToolCheck() {	
+	function runBToolCheck() {
+		var ecfg = createTab('btool-check', 'btool-check', 'btool check ', false);
 		serverActionWithoutFlicker('btool-check').then(function(contents){
 			contents = contents.replace(/^(No spec file for|Checking):.*\r?\n/mg,'').replace(/^\t\t/mg,'').replace(/\n{2,}/g,'\n\n');
 			if ($.trim(contents)) {
@@ -502,7 +499,6 @@ require([
 					} else {
 						reject();
 					}
-					
 				} else {
 					reject();
 				}
@@ -652,6 +648,7 @@ require([
 		}
 		return base;
 	}
+	
 	// Run server action to load a folder
 	function readFolder(path, direction) {
 		//console.log(path, filecache);
@@ -661,7 +658,7 @@ require([
 			readFolderFromServer(path, direction);
 		} else {
 			folderContents = [];
-			for (key in base) {
+			for (var key in base) {
 				if (base.hasOwnProperty(key) && key !== ".") {
 					folderContents.push("D" + key);
 				}
@@ -786,7 +783,6 @@ require([
 		}
 	}
 
-	
 	// The conf file list
 	function leftPaneConfList() {
 		$filelist.empty();
@@ -799,15 +795,12 @@ require([
 		leftPathChanged();
 	}
 
-
 	// Click handler for Recent Files button in top right
 	function leftPaneRecentList() {
 		$filelist.empty();
 		$filePath.removeClass('ce_rtl').empty();
 		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_show_confs, .ce_app_run").addClass("ce_disabled");
 		$("<span>Recent files</span>").appendTo($filePath);
-		
-		var recent = $("<ul class='ce_recent_list'></ul>");
 		var counter = 0;
 		var openlabels = [];
 		for (var j = 0; j < editors.length; j++) {
@@ -829,8 +822,6 @@ require([
 		}
 		leftPathChanged();
 	}
-
-	
 	
 	// Handle clicking an file or folder in the left pane
 	function readFile(path){
@@ -999,7 +990,6 @@ require([
 				timediff,
 				mapper = {},
 				changes = [];
-
 			while(res = rex.exec(contents)) {
 				if (res.length === 8) {
 					item = {
@@ -1069,7 +1059,7 @@ require([
 					}
 					fileshtml += "<div><span class='ce_changelog_buttons'>" + t + "</span>" + changes[i].files[j] + "</div>";
 				}
-				table.append("<tr commitstart='" + changes[i].sha +"' commitend='" + changes[i].last_sha +"'><td class='nobr'>" + changes[i].time.format("YYYY-MM-DD  h:mma") + "</td><td class='nobr'>" + changes[i].time.fromNow() + "</td>" + type + "<td class='nobr'>" + changes[i].user + "</td><td class='ce_changelog_filescol'>" + fileshtml + "</td></tr>")
+				table.append("<tr commitstart='" + changes[i].sha +"' commitend='" + changes[i].last_sha +"'><td class='nobr'>" + changes[i].time.format("YYYY-MM-DD  h:mma") + "</td><td class='nobr'>" + changes[i].time.fromNow() + "</td>" + type + "<td class='nobr'>" + changes[i].user + "</td><td class='ce_changelog_filescol'>" + fileshtml + "</td></tr>");
 			}
 		
 			updateTabHTML(ecfg, $("<div class='ce_changelog'></div>").append(table));
@@ -1165,14 +1155,12 @@ require([
 					str += "<p>" + lines[i]+ "</p>";
 				}
 			}
-			
 			updateTabHTML(ecfg, $("<div class='ce_file_history'></div>").html(str));
 		}).catch(function(){ 
 			closeTabByCfg(ecfg);
 		});
 	}
 
-	
 	function activateTab(idx){
 		hideAllTabs();
 		activeTab = idx;
@@ -1210,7 +1198,6 @@ require([
 			$(".ce_home_tab").append('<span class="ce_pipe_left"></span>');
 		}
 	}
-
 
 	// Check if tab is open with unsaved changes
 	function fileIsOpenAndHasChanges(file) {
@@ -1320,7 +1307,6 @@ require([
 		// if there are still tabs open, find the most recently used tab and activate that one
 		if ($tabs.children().length === 0) {
 			activateTab(-1);
-		
 		// if there is already a tab selected
 		} else if ($tabs.children(".ce_active").length === 0) {
 			var last_used_idx, 
@@ -1384,12 +1370,10 @@ require([
 		ecfg.decorations = [];
 		ecfg.container.empty();
 		ecfg.model = monaco.editor.createModel(contents, language, monaco.Uri.file(ecfg.file));
-
 		// Default things to be ini syntax highlighting rather than none
 		if (ecfg.model.getModeId() === "plaintext" && ! language) {
 			monaco.editor.setModelLanguage(ecfg.model, "ini");
 		}
-
 		ecfg.editor = monaco.editor.create(ecfg.container[0], {
 			automaticLayout: true,
 			model: ecfg.model,
@@ -1398,7 +1382,6 @@ require([
 			//readOnly: ! ecfg.canBeSaved,
 			theme: "vs-dark",
 			glyphMargin: true
-			
 		});
 		ecfg.server_content = ecfg.editor.getValue();
 		if (ecfg.canBeSaved) {
@@ -1418,8 +1401,7 @@ require([
 				// Turn off the glyphs until next save
 				ecfg.decorations = ecfg.editor.deltaDecorations(ecfg.decorations, []);
 			});
-		}      
-	
+		}
 		ecfg.editor.addAction({
 			id: 'save-file',
 			contextMenuOrder: 1,
@@ -1534,7 +1516,6 @@ require([
 			automaticLayout: true,
 			theme: "vs-dark",
 		});
-		
 		ecfg.editor.setModel({
 			original: originalModel,
 			modified: modifiedModel
@@ -1609,7 +1590,7 @@ require([
 					if (r.data.git && r.data.git_status !== 0) {
 						var git_output = "<h2>Warning: Unexpected return code when attempting to autocommit changes to version control. Output is below:</h2>";
 						for (var j = 0; j < r.data.git.length; j++) {
-							git_output += "<div class='ce_gitoutput-" + r.data.git[j].type + "'>" + htmlEncode($.trim(r.data.git[j].content)) + "</div>"
+							git_output += "<div class='ce_gitoutput-" + r.data.git[j].type + "'>" + htmlEncode($.trim(r.data.git[j].content)) + "</div>";
 						}
 						var ecfg = createTab('git', '', 'git output', false);
 						updateTabHTML(ecfg, "<div class='ce_gitoutput'>" + git_output + "</div>");
@@ -1646,7 +1627,6 @@ require([
 		});
 	}
 
-	
 	// After loading a .conf file or after saving and before any changes are made, red or green colour will
 	// be shown in the gutter about if the current line can be found in the output of btool list.
 	function highlightBadConfig(ecfg){
@@ -1744,7 +1724,6 @@ require([
 			currentStanza = "",
 			currentField = "",
 			ret = {"": {"":""}};
-					
 		while(res = rex.exec(contents)) {
 			if (res[2]) {
 				currentField = res[2];
