@@ -43,7 +43,6 @@ require([
 	"splunkjs/mvc/layoutview",
 	"splunkjs/mvc/simplexml/dashboardview",
 	"vs/editor/editor.main",
-	"app/config_explorer/jquery.transit.min",
 	"app/config_explorer/sortable.min",
 	"app/config_explorer/OverlayScrollbars"
 ], function(
@@ -54,7 +53,6 @@ require([
 	LayoutView,
 	Dashboard,
 	wat,
-	transit,
 	Sortable,
 	OverlayScrollbars
 ) {
@@ -615,13 +613,7 @@ require([
 	function showTreePaneSpinner(direction) {
 		if (! leftpane_ignore) {
 			leftpane_ignore = direction || "none";
-			if (direction === 'fwd') {
-				$filelist.transition({ x: '-200px', opacity: 0 });
-			} else if (direction === 'back') {
-				$filelist.transition({ x: '200px', opacity: 0});
-			} else {
-				$filelist.transition({ x: 0, opacity: 0 });
-			} 
+			$filelist.addClass("ce_move_" + leftpane_ignore);
 			$spinner.clone().appendTo($ce_tree_pane);
 			$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_recent_files, .ce_show_confs, .ce_app_run").addClass("ce_disabled");
 		}
@@ -732,14 +724,19 @@ require([
 	function leftPaneFileList(filter){
 		if (leftpane_ignore) {
 			if (leftpane_ignore === 'fwd') {
-				$filelist.css({x: '200px', opacity: 0});
+				$filelist.css({transition: "all 0ms", transform: "translate(200px, 0px)", opacity: 0});
 			} else if (leftpane_ignore === 'back') {
-				$filelist.css({x: '-200px', opacity: 0});
+				$filelist.css({transition: "all 0ms", transform: "translate(-200px, 0px)", opacity: 0});
 			} else {
-				$filelist.css({x: '0px', opacity: 0});
+				$filelist.css({transition: "all 0ms", transform: "", opacity: 0});
 			}
+			$filelist.removeClass("ce_move_none ce_move_fwd ce_move_back");
 			$ce_tree_pane.find(".ce_spinner").remove();
-			$filelist.transition({x:0, opacity:1});
+			setTimeout(function(){
+				$filelist.css({transition: "", transform: "", opacity: ""});				
+			},0);
+
+			//
 			leftpane_ignore = false;	
 		}
 		$filelist.empty();
