@@ -34,7 +34,13 @@
 .dashboard-body a:active {
 	box-shadow: none !important;
 }
-
+.ce_bg_image {
+	position: absolute;
+    right: -37px;
+    opacity: 0.2;
+    width: 450px;
+    bottom: -40px;
+}
 .ce_tab_saving_icon {
 	color: #00A4FD;
 	animation: pulsate 1s infinite linear;
@@ -414,9 +420,13 @@ input[type=text].ce_treesearch_input::placeholder {
 }
 .ce_contents_home {
     position:absolute;
+	overflow: hidden;
     top: 38px;
+	bottom: 0;
+	left: 0;
+	right: 0;
     color: #ccc;
-    padding: 27px;
+    padding: 27px 27px 0 27px;
 }
 .ce_contents {
     top: 38px;
