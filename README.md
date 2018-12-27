@@ -86,4 +86,4 @@ The following third-party libraries are used by this app. Thank you!
 * Monaco Editor - MIT - https://github.com/Microsoft/monaco-editor
 * Sortable - MIT - https://github.com/rubaxa/Sortable.git
 * OverlayScrollbars - MIT - https://github.com/KingSora/OverlayScrollbars
-* Home illustration by Ouch.pics - https://icons8.com
+* Illustration by Ouch.pics - https://icons8.com

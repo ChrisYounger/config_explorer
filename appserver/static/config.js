@@ -134,6 +134,18 @@ require([
 	$(".ce_home_tab").on("click", function(){
 		activateTab(-1);
 	});
+	$(".ce_splunk_reload").on("click", function(){
+		var endpoint = $(this).attr("data-endpoint");
+		// TODO fix localisation url
+		var url = "/en-GB/debug/refresh?";
+		var ecfg = createTab('reload', '', 'Splunk reload', false);
+		if (endpoint) {
+			url += "entity=" + endpoint;
+		}
+		$.post(url, function(data) {
+			updateTabHTML(ecfg, "<pre>" + htmlEncode(data.replace(/'''[\s\S]*'''/,"")) + "</pre>");			
+		});
+	});
 	
 	// Click handlers for New File/New Folder buttons
 	$ce_tree_icons.on("click", "i", function(e){
@@ -1295,6 +1307,8 @@ require([
 		logClosedTab(editors[idx]);
 		if (editors[idx].hasOwnProperty("editor")) {
 			editors[idx].editor.dispose();
+		}
+		if (editors[idx].hasOwnProperty("model")) {
 			editors[idx].model.dispose();
 		}
 		editors[idx].tab.remove();
@@ -1506,8 +1520,8 @@ require([
 	}
 	
 	function updateTabAsDiffer(ecfg, left, right) {
-		var originalModel = monaco.editor.createModel(left, "ini");
-		var modifiedModel = monaco.editor.createModel(right, "ini");
+		var originalModel = monaco.editor.createModel(left);
+		var modifiedModel = monaco.editor.createModel(right);
 		ecfg.container.empty();
 		ecfg.editor = monaco.editor.createDiffEditor(ecfg.container[0],{
 			automaticLayout: true,
