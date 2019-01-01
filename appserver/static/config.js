@@ -1527,7 +1527,25 @@ require([
 					wordWrap: "off"
 				});
 			}
-		}); 
+		});
+		ecfg.editor.addAction({
+			id: 'render-whitespace-on',
+			label: 'Render whitespace on',
+			run: function() {
+				ecfg.editor.updateOptions({
+					renderWhitespace: "all"
+				});
+			}
+		});
+		ecfg.editor.addAction({
+			id: 'render-whitespace-off',
+			label: 'Render whitespace off',
+			run: function() {
+				ecfg.editor.updateOptions({
+					renderWhitespace: "none"
+				});
+			}
+		}); 		
 		openTabsListChanged();
 	}
 	
