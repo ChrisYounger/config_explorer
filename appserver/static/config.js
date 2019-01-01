@@ -138,12 +138,14 @@ require([
 		var endpoint = $(this).attr("data-endpoint");
 		// TODO fix localisation url
 		var url = "/en-GB/debug/refresh?";
-		var ecfg = createTab('reload', '', 'Splunk reload', false);
 		if (endpoint) {
 			url += "entity=" + endpoint;
+		} else {
+			endpoint = "all";
 		}
+		var ecfg = createTab('refresh', endpoint, "<span class='ce-dim'>debug/refresh:</span> " + endpoint, false);
 		$.post(url, function(data) {
-			updateTabHTML(ecfg, "<pre>" + htmlEncode(data.replace(/'''[\s\S]*'''/,"")) + "</pre>");			
+			updateTabHTML(ecfg, "<pre class='ce_pre'>" + htmlEncode(data.replace(/'''[\s\S]*'''/,"")) + "</pre>");			
 		});
 	});
 	
@@ -383,6 +385,42 @@ require([
 			}
 		}
 		localStorage.setItem('ce_open_tabs', JSON.stringify(t));
+		updateUrlHash();
+	}
+
+	function updateUrlHash(){
+		var hashparts = [inFolder],
+			last_used_idx, 
+			newest;
+		for (var i = 0; i < editors.length; i++){
+			if (editors[i].can_reopen) {
+				if (! newest || newest < editors[i].last_opened) {
+					newest = editors[i].last_opened;
+					last_used_idx = (hashparts.length - 1) / 2;
+				}			
+				hashparts.push(editors[i].type)
+				hashparts.push(editors[i].file);
+			}
+		}
+		hashparts.unshift(last_used_idx);
+		if (history.replaceState) {
+			history.replaceState(null, null, '#' + hashparts.join("|"));
+		} else {
+			location.hash = '#' + hashparts.join("|");
+		}		
+	}
+	
+	function readUrlHash(){
+		var parts = document.location.hash.substr(1).split("|");
+		if (parts.length > 1) {
+			inFolder = parts[1];
+			for (var i = 2; (i + 1) < parts.length; i+=2) {
+				reopenTab(parts[i], parts[i+1])
+			}
+			if (parts.length > 2) {
+				activateTab(parts[0]);
+			}
+		}
 	}
 
 	// Run button
@@ -708,13 +746,24 @@ require([
 			}
 			folderContents = contents;
 			leftPathChanged();
-			// If the user changed to the conf files tab, then dump out
 			readFolderLoad(path);
+		}).catch(function(msg){
+			leftPaneRemoveSpinner();
+			$filelist.empty();
+			$filePath.empty();
+			$("<div class='ce_treenothing'><i class='icon-warning'></i>Error occured. <span class='ce_tree_retry'>Retry</span> / <span class='ce_tree_reset'>Home</span></div>").appendTo($filelist);
+			$filelist.find(".ce_tree_retry").on("click", function(){
+				return readFolderFromServer(path, direction);
+			});
+			$filelist.find(".ce_tree_reset").on("click", function(){
+				return readFolderFromServer(".");
+			});
 		});
 	}
 	
 	function readFolderLoad(path){
 		inFolder = path;
+		updateUrlHash();
 		localStorage.setItem('ce_current_path', inFolder);
 		folderContents.sort(function(a, b) {
 			return a.toLowerCase().localeCompare(b.toLowerCase());
@@ -732,8 +781,8 @@ require([
 			}
 		}
 	}
-
-	function leftPaneFileList(filter){
+	
+	function leftPaneRemoveSpinner(){
 		if (leftpane_ignore) {
 			if (leftpane_ignore === 'fwd') {
 				$filelist.css({transition: "all 0ms", transform: "translate(200px, 0px)", opacity: 0});
@@ -748,9 +797,12 @@ require([
 				$filelist.css({transition: "", transform: "", opacity: ""});				
 			},0);
 
-			//
 			leftpane_ignore = false;	
-		}
+		}	
+	}
+
+	function leftPaneFileList(filter){
+		leftPaneRemoveSpinner();
 		$filelist.empty();
 		$filePath.empty();
 		$(".ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_recent_files, .ce_show_confs, .ce_app_run").removeClass("ce_disabled");
@@ -1182,6 +1234,7 @@ require([
 			$(".ce_contents_home").removeClass('ce_hidden');			
 		}
 		doPipeTabSeperators();
+		updateUrlHash();
 	}
 	
 	function hideAllTabs() {
@@ -1516,7 +1569,7 @@ require([
 	}
 	
 	function updateTabHTML(ecfg, contents) {
-		ecfg.container.html(contents);
+		ecfg.container.html(contents).css("overflow", "auto");
 	}
 	
 	function updateTabAsDiffer(ecfg, left, right) {
@@ -1584,10 +1637,6 @@ require([
 						
 					} else if (r.data.status === "error") {
 						errText = "<pre>" + htmlEncode(r.data.result) + "</pre>";
-						if (type === "read" && path === localStorage.getItem('ce_current_path')) {
-							// Folder must have been deleted outside of this
-							readFolder(".");
-						}
 					}
 				}
 				if (errText) {
@@ -2043,6 +2092,8 @@ require([
 		
 		$("body").css("overflow","");
 
+		readUrlHash();
+		
 		// Build the left pane
 		showTreePaneSpinner();
 		if (Number(conf.cache_file_depth) > 0) {
