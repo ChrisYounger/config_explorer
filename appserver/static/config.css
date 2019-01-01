@@ -136,6 +136,11 @@
 .ce_treenothing_text {
 	color: #00A4FD;
 }
+.ce_tree_retry, .ce_tree_reset{
+	color: #00A4FD;
+	text-decoration: underline;
+	cursor: pointer;
+}
 .tooltip.in {
     opacity: 0.95
 }
@@ -261,6 +266,11 @@ input[type=text].ce_treesearch_input::placeholder {
     color: white;
 	font-size: 26px;
     letter-spacing: -1px;
+}
+.ce_app_devlinks {
+    font-size: 16px;
+    margin-top: 50px;
+	font-weight: bold;
 }
 .ce_tagline {
     font-size: 10px;
@@ -728,7 +738,7 @@ input[type=text].ce_treesearch_input::placeholder {
 .ce_gitoutput h2 {
 	color: #dd6a6f;
 }
-
+.ce_pre,
 .ce_gitoutput-out,
 .ce_gitoutput-cmd {
 	word-break: break-all;
@@ -742,6 +752,11 @@ input[type=text].ce_treesearch_input::placeholder {
     letter-spacing: 0px;
 	background-color: #262626;
 	padding: 10px;
+}
+.ce_pre {
+	color: #ccc;
+    background-color: inherit;
+    border: 0 none;
 }
 .ce_gitoutput-cmd {
 	color: #569cd6;	
