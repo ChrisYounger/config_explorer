@@ -13,7 +13,7 @@ window.MonacoEnvironment = {
 }*/ 
 
 // The splunk webserver prepends all scripts with a call to i18n_register() for internationalisation. This fails for web-workers becuase they dont kknow about this function yet.
-// The options are patch the function in on-the-fly like so, or to edit the file on the filesystem (which makes upgrading monaco harder)
+// The options are patch the function on-the-fly like so, or to edit the file on the filesystem (which makes upgrading monaco harder)
 (function() { 
 	var mode = "min"; // or dev
 	require.config({ 
@@ -1573,7 +1573,7 @@ require([
 					}
 				}, function(){
 					ecfg.saving = false;
-					ecfg.tab.find('.icon-alert-circle').remove();
+					ecfg.tab.find('.ce_tab_saving_icon').remove();
 				});
 			}
 			return null;
