@@ -128,6 +128,9 @@ require([
 	$('.ce_app_settings .btn').on('click', function(){
 		readFile("");
 	});
+	$(".ce_theme").on('click', function(){
+		setThemeMode($(this).attr("data-theme"));
+	})
 	$('.ce_app_changelog .btn').on('click', function(){
 		showChangeLog();
 	});
@@ -751,7 +754,7 @@ require([
 			leftPaneRemoveSpinner();
 			$filelist.empty();
 			$filePath.empty();
-			$("<div class='ce_treenothing'><i class='icon-warning'></i>Error occured. <span class='ce_tree_retry'>Retry</span> / <span class='ce_tree_reset'>Home</span></div>").appendTo($filelist);
+			$("<div class='ce_treenothing'><i class='icon-warning'></i>Error occured. <span class='ce_link ce_tree_retry'>Retry</span> / <span class='ce_link ce_tree_reset'>Home</span></div>").appendTo($filelist);
 			$filelist.find(".ce_tree_retry").on("click", function(){
 				return readFolderFromServer(path, direction);
 			});
@@ -1444,7 +1447,6 @@ require([
 			lineNumbersMinChars: 3,
 			ariaLabel: ecfg.file,
 			//readOnly: ! ecfg.canBeSaved,
-			theme: "vs-dark",
 			glyphMargin: true
 		});
 		ecfg.server_content = ecfg.editor.getValue();
@@ -1596,7 +1598,6 @@ require([
 		ecfg.container.empty();
 		ecfg.editor = monaco.editor.createDiffEditor(ecfg.container[0],{
 			automaticLayout: true,
-			theme: "vs-dark",
 		});
 		ecfg.editor.setModel({
 			original: originalModel,
@@ -2019,8 +2020,21 @@ require([
 			scrollbar = OverlayScrollbars($dirlist[0],{ className : "os-theme-light", overflowBehavior : { x: "hidden"} });
 		}		
 	}
+	// "vs" | "vs-dark" (default) | "hc-black"
+	function setThemeMode(mode){
+		// Remove existing theme class from parent
+		$dashboardBody.removeClass(function (index, className) {
+			return (className.match (/(^|\s)ce_theme_\S+/g) || []).join(' ');
+		});
+		$dashboardBody.addClass("ce_theme_" + mode);
+		// Set theme for editors
+		monaco.editor.setTheme(mode);
+		// save to local storage
+		localStorage.setItem('ce_theme', mode);
+	}
 	
 	// Build the list of config files, 
+	// This function is also called after settings are changed.
 	function loadPermissionsAndConfList(){
 		return serverAction('init').then(function(data) {
 			var rex = /^Checking: .*[\/\\]([^\/\\]+?).conf\s*$/gmi,
@@ -2061,6 +2075,8 @@ require([
 	loadPermissionsAndConfList().then(function(){
 		$spinner.detach();
 		$dashboardBody.removeClass("ce_loading");
+		
+		setThemeMode(localStorage.getItem('ce_theme') || "vs-dark");
 
 		// on page load, log that tabs that were open previously
 		var ce_open_tabs = (JSON.parse(localStorage.getItem('ce_open_tabs')) || []);

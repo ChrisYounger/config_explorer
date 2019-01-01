@@ -136,7 +136,7 @@
 .ce_treenothing_text {
 	color: #00A4FD;
 }
-.ce_tree_retry, .ce_tree_reset{
+.ce_link {
 	color: #00A4FD;
 	text-decoration: underline;
 	cursor: pointer;
@@ -267,6 +267,9 @@ input[type=text].ce_treesearch_input::placeholder {
 	font-size: 26px;
     letter-spacing: -1px;
 }
+.ce_theme_vs .ce_app_title {
+	color: black;
+}
 .ce_app_devlinks {
     font-size: 16px;
     margin-top: 50px;
@@ -276,7 +279,7 @@ input[type=text].ce_treesearch_input::placeholder {
     font-size: 10px;
     letter-spacing: 3px;
     margin-bottom: 40px;
-    opacity: 0.2;
+    opacity: 0.3;
 }
 .ce_home_section{
     margin-bottom:20px;
@@ -348,6 +351,17 @@ input[type=text].ce_treesearch_input::placeholder {
 	z-index: 9;
     box-shadow: inset -6px 0 6px 0px #1d1d1d;
 }
+.ce_theme_vs .ce_home_tab.ce_active,
+.ce_theme_vs .ce_tab.ce_active {
+	background-color: #fffffe;
+    box-shadow: inset -6px 0 6px 0px #fffffe;
+	color: black;
+}
+.ce_theme_hc-black .ce_home_tab.ce_active,
+.ce_theme_hc-black .ce_tab.ce_active {
+	background-color: black;
+    box-shadow: inset -6px 0 6px 0px black;	
+}
 .ce_tab .ce_right_icon {
     background-color: #404040;
 	box-shadow: 0 0 4px 4px #404040;
@@ -356,17 +370,24 @@ input[type=text].ce_treesearch_input::placeholder {
     background-color: #1d1d1d;
 	box-shadow: 0 0 4px 4px #1d1d1d;
 }
+.ce_theme_vs .ce_tab.ce_active .ce_right_icon {
+    background-color: #fffffe;
+	box-shadow: 0 0 4px 4px #fffffe;
+}
 .ce_clickable_icon {
 	cursor: pointer;
 	color: white;	
 	font-size: 18px;
 	padding: 5px;
 }
+.ce_theme_vs .ce_active .ce_clickable_icon {
+	color: black;	
+}
 .ce_clickable_icon.ce_disabled {
 	opacity: 0.5;
 	cursor: not-allowed;
 }
-.ce_clickable_icon:not(.ce_disabled):hover {
+.ce_clickable_icon.ce_clickable_icon.ce_clickable_icon:not(.ce_disabled):hover {
 	color: #00A4FD;
 }
 .ce_right_icon {
@@ -438,6 +459,9 @@ input[type=text].ce_treesearch_input::placeholder {
     color: #ccc;
     padding: 27px 27px 0 27px;
 }
+.ce_theme_vs .ce_contents_home {
+	color: #4e4e4e;
+}
 .ce_contents {
     top: 38px;
 	padding-top: 10px;
@@ -445,7 +469,13 @@ input[type=text].ce_treesearch_input::placeholder {
     left: 0;
     right: 0;
     position: absolute;
-    background: #1e1e1e;
+    background-color: #1e1e1e;
+}
+.ce_theme_vs .ce_contents {
+	background-color: #fffffe;
+}
+.ce_theme_hc-black .ce_contents {
+	background-color: black;
 }
 .ce_contents > div {
     height: 100%
@@ -726,15 +756,12 @@ input[type=text].ce_treesearch_input::placeholder {
 	padding: 6px;
 	background-color: rgba(0, 0, 0, 0.2);
 }
-
-
 .ce_gitoutput {
 	padding: 20px;
     color: #d4d4d4;
     overflow-x: auto;
     height: 100%;
 }
-
 .ce_gitoutput h2 {
 	color: #dd6a6f;
 }
@@ -757,6 +784,9 @@ input[type=text].ce_treesearch_input::placeholder {
 	color: #ccc;
     background-color: inherit;
     border: 0 none;
+}
+.ce_theme_vs .ce_pre {
+	color: inherit;
 }
 .ce_gitoutput-cmd {
 	color: #569cd6;	
