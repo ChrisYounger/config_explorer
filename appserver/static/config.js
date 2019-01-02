@@ -12,7 +12,7 @@ window.MonacoEnvironment = {
 	}
 }*/ 
 
-// The splunk webserver prepends all scripts with a call to i18n_register() for internationalisation. This fails for web-workers becuase they dont kknow about this function yet.
+// The splunk webserver prepends all scripts with a call to i18n_register() for internationalisation. This fails for web-workers becuase they dont know about this function yet.
 // The options are patch the function on-the-fly like so, or to edit the file on the filesystem (which makes upgrading monaco harder)
 (function() { 
 	var mode = "min"; // or dev
@@ -72,6 +72,8 @@ require([
     var $container = $(".ce_contents");
 	var $spinner = $(".ce_spinner");
     var $tabs = $(".ce_tabs");
+	var $ce_contents_home = $(".ce_contents_home");
+	var $ce_home_tab = $(".ce_home_tab");	
 	var activeTab = -1;
 	var filecache = {};
 	var conf = {};
@@ -130,11 +132,11 @@ require([
 	});
 	$(".ce_theme").on('click', function(){
 		setThemeMode($(this).attr("data-theme"));
-	})
+	});
 	$('.ce_app_changelog .btn').on('click', function(){
 		showChangeLog();
 	});
-	$(".ce_home_tab").on("click", function(){
+	$ce_home_tab.on("click", function(){
 		activateTab(-1);
 	});
 	$(".ce_splunk_reload").on("click", function(){
@@ -366,10 +368,9 @@ require([
 	// Keep track of what tabs are open in local storage. 
 	function openTabsListChanged(){
 		var t = [];
-		$tabs.children().each(function(i,elem){
-			$(elem).data().tab.position = i;
-		});
-		
+		for (var j = 0; j < editors.length; j++){
+			editors[j].position = editors[j].tab.index();
+		}
 		editors.sort(function(a,b){
 			if (a.position > b.position) { 
 				return 1; 
@@ -379,9 +380,7 @@ require([
 				return 0;
 			}
 		}); 
-		
 		activeTab = $tabs.children(".ce_active").index();
-		
 		for (var i = 0; i < editors.length; i++){
 			if (editors[i].can_reopen) {
 				t.push({label: editors[i].label, type: editors[i].type, file: editors[i].file});
@@ -401,7 +400,7 @@ require([
 					newest = editors[i].last_opened;
 					last_used_idx = (hashparts.length - 1) / 2;
 				}			
-				hashparts.push(editors[i].type)
+				hashparts.push(editors[i].type);
 				hashparts.push(editors[i].file);
 			}
 		}
@@ -418,10 +417,10 @@ require([
 		if (parts.length > 1) {
 			inFolder = parts[1];
 			for (var i = 2; (i + 1) < parts.length; i+=2) {
-				reopenTab(parts[i], parts[i+1])
+				reopenTab(parts[i], parts[i+1]);
 			}
 			if (parts.length > 2) {
-				activateTab(parts[0]);
+				activateTab(Number(parts[0]));
 			}
 		}
 	}
@@ -1226,41 +1225,36 @@ require([
 	}
 
 	function activateTab(idx){
-		hideAllTabs();
+		$container.children().addClass("ce_hidden");
+		$ce_contents_home.addClass("ce_hidden");
+		$tabs.children().removeClass("ce_active");
+		$ce_home_tab.removeClass("ce_active");
 		activeTab = idx;
 		if (idx !== -1) {
-			$tabs.children().eq(idx).addClass('ce_active');
+			editors[idx].tab.addClass('ce_active');
 			editors[idx].container.removeClass('ce_hidden');
 			editors[idx].last_opened = Date.now();  
 		} else {
-			$(".ce_home_tab").addClass('ce_active');
-			$(".ce_contents_home").removeClass('ce_hidden');			
+			$ce_home_tab.addClass('ce_active');
+			$ce_contents_home.removeClass('ce_hidden');			
 		}
 		doPipeTabSeperators();
 		updateUrlHash();
 	}
 	
-	function hideAllTabs() {
-		$container.children().addClass("ce_hidden");
-		$(".ce_contents_home").addClass("ce_hidden");
-		$tabs.children().removeClass("ce_active");
-		$(".ce_home_tab").removeClass("ce_active");
-
-	}
-	
 	// The pipe seperators are between active tabs but not on the currently active tab or the one to its left.
 	function doPipeTabSeperators(){
 		$(".ce_pipe, .ce_pipe_left").remove();
-		$tabs.children().each(function(i){
+		for (var i = 0; i < editors.length; i++) {
 			if ((activeTab - 1) !== i && activeTab !== i) {
-				$(this).append('<span class="ce_pipe"></span>');
+				editors[i].tab.append('<span class="ce_pipe"></span>');
 			}
-		});
-		if (activeTab > 0) {
-			$(".ce_home_tab").append('<span class="ce_pipe"></span>');
 		}
 		if (activeTab >= 0) {
-			$(".ce_home_tab").append('<span class="ce_pipe_left"></span>');
+			$ce_home_tab.append('<span class="ce_pipe_left"></span>');
+			if (activeTab > 0) {
+				$ce_home_tab.append('<span class="ce_pipe"></span>');
+			}
 		}
 	}
 
@@ -2099,7 +2093,7 @@ require([
 			draggable: ".ce_tab",
 			animation: 150,
 			onEnd: function () {
-				// uptohere figure out how things moved and reorder list					
+				// figure out how things moved and reorder list					
 				openTabsListChanged();
 				doPipeTabSeperators();		
 			}

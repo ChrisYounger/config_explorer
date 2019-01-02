@@ -503,6 +503,7 @@ input[type=text].ce_treesearch_input::placeholder {
 }
 .monaco-menu .monaco-action-bar.vertical .action-item:not(.disabled) > a{
 	background-color: inherit !important;
+	color: #ccc !important;
 }
 .monaco-menu .monaco-action-bar.vertical .action-item:not(.disabled) {
 	border-left: 3px solid transparent;
