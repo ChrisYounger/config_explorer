@@ -141,16 +141,29 @@ require([
 	});
 	$(".ce_splunk_reload").on("click", function(){
 		var endpoint = $(this).attr("data-endpoint");
-		// TODO fix localisation url
-		var url = "/en-GB/debug/refresh?";
+		// get localisation url
+		var url = "/" + document.location.pathname.split("/")[1] + "/";
+		var label = "";
 		if (endpoint) {
-			url += "entity=" + endpoint;
+			if (endpoint === "bump") {
+				url += "_bump";
+				label = "<span class='ce-dim'>_</span>bump";
+			} else {
+				url += "debug/refresh?entity=" + endpoint;
+				label = "<span class='ce-dim'>debug/refresh:</span> " + endpoint;
+			}
 		} else {
+			label = "<span class='ce-dim'>debug/refresh:</span> all";
+			url += "debug/refresh";
 			endpoint = "all";
 		}
-		var ecfg = createTab('refresh', endpoint, "<span class='ce-dim'>debug/refresh:</span> " + endpoint, false);
+		var ecfg = createTab('refresh', endpoint, label, false);
 		$.post(url, function(data) {
-			updateTabHTML(ecfg, "<pre class='ce_pre'>" + htmlEncode(data.replace(/'''[\s\S]*'''/,"")) + "</pre>");			
+			if (endpoint === "bump") {
+				updateTabHTML(ecfg, "<pre class='ce_pre'>" + $('<div/>').html(data).text() + "</pre>");
+			} else {
+				updateTabHTML(ecfg, "<pre class='ce_pre'>" + htmlEncode(data.replace(/'''[\s\S]*'''/,"")) + "</pre>");			
+			}
 		});
 	});
 	

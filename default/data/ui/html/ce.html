@@ -14,7 +14,7 @@
 
 <body class="simplexml locale-en" data-splunk-version="7.0.0" data-splunk-product="enterprise" style="overflow:hidden;">
     <header>
-        <a class="navSkip" href="#navSkip" tabindex="1">Screen reader users: I am sorry, aria is too hard for me</a>
+        <a class="navSkip" href="#navSkip" tabindex="1"></a>
         <div class="header splunk-header">
             <div id="placeholder-splunk-bar">
                 <a href="{{SPLUNKWEB_URL_PREFIX}}/app/launcher/home" class="brand" title="splunk > listen to your data">splunk<strong>></strong></a>
@@ -34,12 +34,12 @@
 					<i title='Previous folder' class='ce_clickable_icon ce_folder_up icon-arrow-left'></i>
 					<i title='Refresh' class='ce_clickable_icon ce_refresh_tree icon-rotate-counter'></i>
 					<i title='Filter files' class='ce_clickable_icon ce_filter icon-text'></i>
-					<i title='System conf files' class='ce_show_confs ce_clickable_icon icon-bulb'></i>
+					<i title='Splunk conf files' class='ce_show_confs ce_clickable_icon icon-bulb'></i>
 					<i title='Recent files' class='ce_recent_files ce_clickable_icon icon-list'></i>
 					<!--<i title='Uncommitted changes' class='ce_clickable_icon ce_disabled icon-distributed-environment'></i>-->
 					<i title='Create new folder in current directory' class='ce_add_folder ce_clickable_icon icon-folder'></i>
 					<i title='Create new file in current directory' class='ce_add_file ce_clickable_icon icon-report'></i>
-					<i title='Run command in current directory' class='ce_app_run ce_clickable_icon icon-expand-right'></i>
+					<i title='Run a shell command in current directory' class='ce_app_run ce_clickable_icon icon-expand-right'></i>
 				</div>
 				<div class="ce_file_path"></div>
 				<div class="ce_file_list">
@@ -63,23 +63,26 @@
 							<span class="ce_theme ce_link"  data-theme="vs">light</span> | 
 							<span class="ce_theme ce_link" data-theme="hc-black">high contrast</span>
 					</div>
+					<div class='ce_home_section ce_app_changelog'>
+						<span class='btn'>Change log</span> Review changes made using Config Explorer.
+					</div>					
 					<div class='ce_home_section ce_app_devlinks'>
 						Helpful links for developers
 					</div>
 					<div class='ce_home_section ce_app_errors'>
 						<span class='btn'>Check config</span> Find invalid Splunk configuration using Btool.
 					</div>
-					<div class='ce_home_section ce_app_changelog'>
-						<span class='btn'>Change log</span> Review changes made using Config Explorer.
-					</div>
 					<div class='ce_home_section'>
-						<span class="ce_splunk_reload btn">All</span>
+						<span class="ce_splunk_reload btn">All endpoints</span>
 						<span class="ce_splunk_reload btn" data-endpoint="data/ui/views">Views</span>
 						<span class="ce_splunk_reload btn" data-endpoint="admin/conf-inputs">Inputs</span>
-						Splunk debug refresh
+						Splunk debug refresh.
+					</div>
+					<div class='ce_home_section'>
+						<span class="ce_splunk_reload btn" data-endpoint="bump">Bump</span>Splunk cache buster for css and js files.
 					</div>
 					<div>						
-						<a href="/static/docs/style/style-guide.html" target="_blank">Splunk style guide</a>
+						<a href="/static/docs/style/style-guide.html" target="_blank">Splunk style guide</a> | <a href="https://github.com/ChrisYounger/config_explorer" target="_blank">Config Explorer help</a>
 					</div>
 				</div>
 			</div>

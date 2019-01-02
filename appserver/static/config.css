@@ -4,6 +4,10 @@
 	padding: 0;
 	background-color: #1e1e1e;
 }
+.dashboard-body a,
+.dashboard-body a:hover {
+	color: #00A4FD
+}
 .dashboard-body.ce_loading {
     height: 100%;
     position: absolute;
