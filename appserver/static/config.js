@@ -82,7 +82,6 @@ require([
 	var inFlightRequests = 0;
 	var comparisonLeftFile = null;
 	var tabid = 0;
-	var scrollbar;
 	var leftpane_ignore = false;
 	var max_recent_files_show = 30;
 
@@ -760,7 +759,6 @@ require([
 				}
 			}
 			folderContents = contents;
-			leftPathChanged();
 			readFolderLoad(path);
 		}).catch(function(msg){
 			leftPaneRemoveSpinner();
@@ -868,7 +866,6 @@ require([
 		for (var i = 0; i < confFilesSorted.length; i++) {
 			$("<div class='ce_leftnav ce_conf'></div>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-bulb'></i> ").appendTo($filelist);
 		}
-		leftPathChanged();
 	}
 
 	// Click handler for Recent Files button in top right
@@ -896,7 +893,6 @@ require([
 				$("<div class='ce_leftnav ce_leftnav_reopen'><i class='icon-" + icon + "'></i> " + htmlEncode(closed_tabs[i].label) + "</div>").attr("file", closed_tabs[i].file).attr("title", closed_tabs[i].file).attr("type", closed_tabs[i].type).appendTo($filelist);
 			}
 		}
-		leftPathChanged();
 	}
 	
 	// Handle clicking an file or folder in the left pane
@@ -2022,11 +2018,7 @@ require([
 		self.$modal.modal(options);
 	};
 		
-	function leftPathChanged(){
-		if (typeof scrollbar === "undefined") {
-			scrollbar = OverlayScrollbars($dirlist[0],{ className : "os-theme-light", overflowBehavior : { x: "hidden"} });
-		}		
-	}
+
 	// "vs" | "vs-dark" (default) | "hc-black"
 	function setThemeMode(mode){
 		// Remove existing theme class from parent
@@ -2134,6 +2126,9 @@ require([
 		$("body").css("overflow","");
 
 		readUrlHash();
+		
+		// Left pane styled scrollbar
+		OverlayScrollbars($dirlist[0],{ className : "os-theme-light", overflowBehavior : { x: "hidden"} });
 		
 		// Build the left pane
 		showTreePaneSpinner();
