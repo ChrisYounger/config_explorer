@@ -313,7 +313,8 @@ require([
 		var $menu = $(".ce_context_menu_wrap");
 		$menu.empty().append(actions);		
 		e.preventDefault(); // To prevent the default context menu.
-		$t.css("background-color","rgba(0, 99, 153, 1)");
+		$(".ce_leftnav_highlighted").removeClass("ce_leftnav_highlighted");
+		$t.addClass("ce_leftnav_highlighted");
 		var windowHeight = $(window).height();
 		if((e.clientY + 200) > windowHeight) {
 			$menu.css({opacity:1, left:30 + e.clientX, bottom:$(window).height()-e.clientY, right:"auto", top:"auto"});
@@ -324,7 +325,7 @@ require([
 		$(document).on("click", function () {
 			$menu.removeAttr("style");
 			$(".ce_context_menu_overlap").addClass("ce_hidden");
-			$t.css("background-color","");
+			$t.removeClass("ce_leftnav_highlighted");
 			$(document).off("click");           
 		});
 	});

@@ -94,6 +94,9 @@
     background-color:#2a2d2e;
 	border-left: 3px solid #00A4FD;
 }
+.ce_leftnav_highlighted {
+    background-color: rgba(0, 99, 153, 1) !important;
+}
 .ce_tree_pane {
 	position: absolute;
 	width: 280px;
