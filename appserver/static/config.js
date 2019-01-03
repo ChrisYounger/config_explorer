@@ -139,31 +139,7 @@ require([
 		activateTab(-1);
 	});
 	$(".ce_splunk_reload").on("click", function(){
-		var endpoint = $(this).attr("data-endpoint");
-		// get localisation url
-		var url = "/" + document.location.pathname.split("/")[1] + "/";
-		var label = "";
-		if (endpoint) {
-			if (endpoint === "bump") {
-				url += "_bump";
-				label = "<span class='ce-dim'>_</span>bump";
-			} else {
-				url += "debug/refresh?entity=" + endpoint;
-				label = "<span class='ce-dim'>debug/refresh:</span> " + endpoint;
-			}
-		} else {
-			label = "<span class='ce-dim'>debug/refresh:</span> all";
-			url += "debug/refresh";
-			endpoint = "all";
-		}
-		var ecfg = createTab('refresh', endpoint, label, false);
-		$.post(url, function(data) {
-			if (endpoint === "bump") {
-				updateTabHTML(ecfg, "<pre class='ce_pre'>" + $('<div/>').html(data).text() + "</pre>");
-			} else {
-				updateTabHTML(ecfg, "<pre class='ce_pre'>" + htmlEncode(data.replace(/'''[\s\S]*'''/,"")) + "</pre>");			
-			}
-		});
+		debugRefreshBumpHook($(this).attr("data-endpoint"));
 	});
 	
 	// Click handlers for New File/New Folder buttons
@@ -356,6 +332,43 @@ require([
 	}).on("mouseleave", ".ce_tab", function(){
 		$(this).find('.ce_close_tab').remove();
 	});
+
+	function debugRefreshBumpHook(endpoint){
+		// get localisation url
+		var url = "/" + document.location.pathname.split("/")[1] + "/";
+		var label = "";
+		if (endpoint) {
+			if (endpoint === "bump") {
+				url += "_bump";
+				label = "<span class='ce-dim'>_</span>bump";
+			} else {
+				url += "debug/refresh?entity=" + endpoint;
+				label = "<span class='ce-dim'>debug/refresh:</span> " + endpoint;
+			}
+		} else {
+			label = "<span class='ce-dim'>debug/refresh:</span> all";
+			url += "debug/refresh";
+			endpoint = "all";
+		}
+		var ecfg = createTab('refresh', endpoint, label, false);
+		$.post(url, function(data) {
+			if (endpoint === "bump") {
+				updateTabAsEditor(ecfg, $('<div/>').html(data).text(), false, 'plaintext');
+			} else {
+				updateTabAsEditor(ecfg, data.replace(/'''[\s\S]*'''/,""), false, 'plaintext');
+			}
+			ecfg.editor.addAction({
+				id: 'reload',
+				contextMenuOrder: 1.12,
+				contextMenuGroupId: '1_modification',
+				label: 'Reload',
+				run: function() {
+					closeTabByCfg(ecfg);
+					debugRefreshBumpHook(endpoint);
+				}
+			});
+		});		
+	}
 	
 	// Used by recent files functionality
 	function reopenTab(type, file) {
