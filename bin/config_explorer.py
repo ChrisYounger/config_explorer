@@ -53,9 +53,9 @@ class req(splunk.rest.BaseRestHandler):
 					git_output.append({"type": "out", "content": template.format(type(ex).__name__, ex.args)})
 
 		def confIsTrue(param, defaultValue):
-			if param not in conf["default"]:
+			if param not in conf["global"]:
 				return defaultValue
-			if conf["default"][param].lower().strip() in ("1", "true", "yes", "t", "y"):
+			if conf["global"][param].lower().strip() in ("1", "true", "yes", "t", "y"):
 				return True
 			return False
 
@@ -92,14 +92,14 @@ class req(splunk.rest.BaseRestHandler):
 				if confIsTrue("git_autocommit", False):
 					git_output.append({"type": "out", "content": "cwd = " + os.getcwd() + "\n"})
 					try:
-						git_autocommit_dir = conf["default"]["git_autocommit_dir"].strip("\"")
+						git_autocommit_dir = conf["global"]["git_autocommit_dir"].strip("\"")
 						if git_autocommit_dir != "":
 							env_git["GIT_DIR"] = os.path.join(SPLUNK_HOME, git_autocommit_dir)
 							git_output.append({"type": "out", "content": "GIT_DIR=" + os.path.join(SPLUNK_HOME, git_autocommit_dir)})
 					except KeyError:
 						pass
 					try:
-						git_autocommit_work_tree = conf["default"]["git_autocommit_work_tree"].strip("\"")
+						git_autocommit_work_tree = conf["global"]["git_autocommit_work_tree"].strip("\"")
 						if git_autocommit_work_tree != "":
 							env_git["GIT_WORK_TREE"] = os.path.join(SPLUNK_HOME, git_autocommit_work_tree)
 							git_output.append({"type": "out", "content": "GIT_WORK_TREE=" + os.path.join(SPLUNK_HOME, git_autocommit_work_tree)})
@@ -130,7 +130,7 @@ class req(splunk.rest.BaseRestHandler):
 						if action == 'init':
 							result = {}
 							result['files'] = runCommand([cmd, 'btool', 'check', '--debug'], env_copy)
-							result['conf'] = conf["default"]
+							result['conf'] = conf
 
 						elif action == 'git-log':
 							result = runCommand(['git', 'log', '--stat', '--max-count=200'], env_git)
@@ -214,7 +214,7 @@ class req(splunk.rest.BaseRestHandler):
 
 								result = {}
 								cut = len(SPLUNK_HOME.split(os.path.sep))
-								depth = int(conf["default"]["cache_file_depth"])
+								depth = int(conf["global"]["cache_file_depth"])
 								for root, dirs, files in os.walk(SPLUNK_HOME):
 									paths = root.split(os.path.sep)[cut:]
 									pack(result, paths, dirs, files)
@@ -237,9 +237,9 @@ class req(splunk.rest.BaseRestHandler):
 											
 								else:
 									fsize = os.path.getsize(file_path) / 1000000
-									if fsize > int(conf["default"]["max_file_size"]):
+									if fsize > int(conf["global"]["max_file_size"]):
 										status = "error"
-										result = "File too large to open. File size is " + str(fsize) + " MB and the configured limit is " + conf["default"]["max_file_size"] + " MB"
+										result = "File too large to open. File size is " + str(fsize) + " MB and the configured limit is " + conf["global"]["max_file_size"] + " MB"
 									else:
 										with open(file_path, 'r') as fh:
 											result = fh.read()

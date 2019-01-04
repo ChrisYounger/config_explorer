@@ -43,7 +43,7 @@ hide_settings = false
 # Note you must first configure the git repo using "git init". Please see the documentation.
 # Defaults to false 
 
-#3git_autocommit_dir = 
+#git_autocommit_dir = 
 # Force specific git repository location, relative to SPLUNK_HOME directory.
 # Defaults to empty, meaning normal git rules will apply (search up from current directory)
 

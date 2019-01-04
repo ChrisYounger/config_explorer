@@ -57,12 +57,157 @@ require([
 	OverlayScrollbars
 ) {
 	// globals
-	var service = mvc.createService({ owner: "nobody" });
+	var service = mvc.createService({owner: "nobody"});
 	var editors = [];  
 	var inFolder = (localStorage.getItem('ce_current_path') || './etc/apps');
 	var folderContents;
 	var run_history = (JSON.parse(localStorage.getItem('ce_run_history')) || []);
 	var closed_tabs = (JSON.parse(localStorage.getItem('ce_closed_tabs')) || []);
+	var activeTab = -1;
+	var filecache = {};
+	var conf = {};
+	var confFiles = {};
+	var confFilesSorted = [];
+	var inFlightRequests = 0;
+	var comparisonLeftFile = null;
+	var tabid = 0;
+	var leftpane_ignore = false;
+	var max_recent_files_show = 30;
+	var hooks = [];
+	// Mapping of all the tab types that can be opened
+	// can_rerun - has a right click open for "rerun"
+	// reopen - tracked through hash and in "recent files"
+	// run - 
+	
+	var hooksCfg = {
+		'btool': {
+			can_rerun: true,
+			can_reopen: true,
+			run: function(arg1){
+				runBToolList(arg1, 'btool');
+			}
+		},
+		'btool-hidepaths': {
+			can_rerun: true,
+			can_reopen: true,
+			run: function(arg1){
+				runBToolList(arg1, 'btool-hidepaths');
+			}
+			
+		},
+		'btool-hidedefaults': {
+			can_rerun: true,
+			can_reopen: true,
+			run: function(arg1){
+				runBToolList(arg1, 'btool-hidedefaults');
+			}
+		},
+		'btool-check': {
+			can_rerun: true,
+			can_reopen: false,
+			run: function(arg1){
+				runBToolCheck();
+			}
+		},
+		'spec': {
+			can_rerun: false,
+			can_reopen: true,
+			run: function(arg1){
+				displaySpecFile(arg1);
+			}
+		},
+		'running': {
+			can_rerun: true,
+			can_reopen: true,
+			run: function(arg1){
+				runningVsLayered(arg1, false);
+			}
+		},
+		'run': {
+			can_rerun: true,
+			can_reopen: false,
+			run: function(arg1){
+				runShellCommandNow(arg1);
+			}
+		},
+		'read': {
+			can_rerun: false,
+			can_reopen: true,
+			run: function(arg1){
+				readFile(arg1);
+			}
+		},
+		'settings': {
+			can_rerun: false,
+			can_reopen: false,
+			run: function(arg1){
+				readFile("");
+			}
+		},		
+		'compare': { 
+			can_rerun: false, 
+			can_reopen: false, 
+			run: function(arg1){
+				//TODO
+			} 
+		},
+		'change-log': { 
+			can_rerun: false, 
+			can_reopen: false, 
+			run: function(arg1){
+				//TODO
+			} 
+		},
+		'diff': { 
+			can_rerun: false, 
+			can_reopen: false, 
+			run: function(arg1){
+				//TODO
+			} 
+		},
+		'history': { 
+			can_rerun: false, 
+			can_reopen: false, 
+			run: function(arg1){
+				//TODO
+			} 
+		},
+		'git': { 
+			can_rerun: false, 
+			can_reopen: false, 
+			run: function(arg1){
+				//TODO
+			} 
+		},
+		'live': { 
+			can_rerun: false, 
+			can_reopen: false, 
+			run: function(arg1){
+				runningVsLayered(arg1, false);
+			} 
+		},
+		'live-diff': { 
+			can_rerun: false, 
+			can_reopen: false, 
+			run: function(arg1){
+				runningVsLayered(arg1, true);
+			}
+		},
+		'bump': {
+			can_rerun: true,
+			can_reopen: false,
+			run: function(arg1){
+				debugRefreshBumpHook("bump");
+			}
+		},
+		'refresh': {
+			can_rerun: true,
+			can_reopen: false,
+			run: function(arg1){
+				debugRefreshBumpHook(arg1);
+			}
+		},		
+	};
 	var $dashboardBody = $('.dashboard-body');
 	var $ce_tree_pane = $(".ce_tree_pane");
     var $dirlist = $(".ce_file_list");
@@ -74,17 +219,7 @@ require([
     var $tabs = $(".ce_tabs");
 	var $ce_contents_home = $(".ce_contents_home");
 	var $ce_home_tab = $(".ce_home_tab");	
-	var activeTab = -1;
-	var filecache = {};
-	var conf = {};
-	var confFiles = {};
-	var confFilesSorted = [];
-	var inFlightRequests = 0;
-	var comparisonLeftFile = null;
-	var tabid = 0;
-	var leftpane_ignore = false;
-	var max_recent_files_show = 30;
-
+	
 	// Set the "save" hotkey at a global level instnead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
 		if (event.ctrlKey || event.metaKey) {
@@ -189,6 +324,7 @@ require([
 				leftPaneFileList();
 				
 			} else {
+				filterModeOff();
 				elem.addClass("ce_selected");
 				leftPaneConfList();
 			}			
@@ -223,38 +359,45 @@ require([
 		// click on a conf file
 		if (elem.hasClass("ce_conf")) {
 			runBToolList($(this).attr('file'), 'btool');
-
 		// click on file
 		} else if (elem.hasClass("ce_is_report")) {
 			readFile(elem.attr('file'));
-
 		// recent files list
 		} else if (elem.hasClass("ce_leftnav_reopen")) {
-			reopenTab(elem.attr('type'), elem.attr('file'));	
-
+			hooksCfg[elem.attr('type')].run(elem.attr('file'));
 		// Folder
 		} else {
 			if (! leftpane_ignore) {
 				readFolder(elem.attr('file'), 'fwd');
 			}
 		}
-		
 	// Right click menu for left pane
 	}).on("contextmenu", ".ce_leftnav", function (e) {
 		var $t = $(this);
 		var thisFile = $t.attr('file');
 		var actions = [];
+
+		for (var j = 0; j < hooks.length; j++) {
+			(function(hook) {
+				if (hook._match.test(thisFile)) {					
+					actions.push($("<div></div>").text(replaceTokens(hook.label, thisFile)).on("click", function(){ 
+						runHookUnparsed(hook.action, thisFile); 
+					}));
+				}
+			})(hooks[j]);
+		}
+
 		if ($t.hasClass("ce_leftnav_editable")) {
 			// can rename, can trash
 			actions.push($("<div>Rename</div>").on("click", function(){ fileSystemRename(thisFile); }));
 			actions.push($("<div>Delete</div>").on("click", function(){ filesystemDelete(thisFile); }));
 			
 		} else if ($t.hasClass("ce_conf")) {
-			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ runBToolList(thisFile, 'btool-hidepaths'); }));
-			actions.push($("<div>Show btool (hide 'default' settings)</div>").on("click", function(){ runBToolList(thisFile, 'btool-hidedefaults'); }));
-			actions.push($("<div>Show .spec file</div>").on("click", function(){ displaySpecFile(thisFile); }));
-			actions.push($("<div>Show live (running) config</div>").on("click", function(){ runningVsLayered(thisFile, false); }));
-			actions.push($("<div>Compare live config against btool output</div>").on("click", function(){ runningVsLayered(thisFile, true); }));
+			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ hooksCfg["btool-hidepaths"].run(thisFile); }));
+			actions.push($("<div>Show btool (hide 'default' settings)</div>").on("click", function(){ hooksCfg["btool-hidedefaults"].run(thisFile); }));
+			actions.push($("<div>Show .spec file</div>").on("click", function(){ hooksCfg["spec"].run(thisFile); }));
+			actions.push($("<div>Show live (running) config</div>").on("click", function(){ hooksCfg["live"].run(thisFile); }));
+			actions.push($("<div>Compare live config against btool output</div>").on("click", function(){ hooksCfg["live-diff"].run(thisFile); }));
 			//actions.push($("<div>Refresh endpoint</div>").on("click", function(){  }));
 		}
 
@@ -270,7 +413,7 @@ require([
 			
 			if (comparisonLeftFile && comparisonLeftFile !== thisFile) {
 				actions.push($("<div>Compare to " + htmlEncode(dodgyBasename(comparisonLeftFile)) + "</div>").on("click", function(){
-					var ecfg = createTab('compare', thisFile + " " + comparisonLeftFile, "<span class='ce-dim'>compare:</span> " + thisFile + " " + comparisonLeftFile, false);
+					var ecfg = createTab('compare', thisFile + " " + comparisonLeftFile, "<span class='ce-dim'>compare:</span> " + thisFile + " " + comparisonLeftFile);
 					// get both files 
 					Promise.all([
 						serverActionWithoutFlicker('read', comparisonLeftFile),
@@ -340,7 +483,7 @@ require([
 		if (endpoint) {
 			if (endpoint === "bump") {
 				url += "_bump";
-				label = "<span class='ce-dim'>_</span>bump";
+				label = "bump";
 			} else {
 				url += "debug/refresh?entity=" + endpoint;
 				label = "<span class='ce-dim'>debug/refresh:</span> " + endpoint;
@@ -350,46 +493,33 @@ require([
 			url += "debug/refresh";
 			endpoint = "all";
 		}
-		var ecfg = createTab('refresh', endpoint, label, false);
+		var ecfg = createTab('refresh', endpoint, label);
 		$.post(url, function(data) {
 			if (endpoint === "bump") {
-				updateTabAsEditor(ecfg, $('<div/>').html(data).text(), false, 'plaintext');
+				updateTabAsEditor(ecfg, $('<div/>').html(data).text(), 'plaintext');
 			} else {
-				updateTabAsEditor(ecfg, data.replace(/'''[\s\S]*'''/,""), false, 'plaintext');
+				updateTabAsEditor(ecfg, data.replace(/'''[\s\S]*'''/,""), 'plaintext');
 			}
-			ecfg.editor.addAction({
-				id: 'reload',
-				contextMenuOrder: 1.12,
-				contextMenuGroupId: '1_modification',
-				label: 'Reload',
-				run: function() {
-					closeTabByCfg(ecfg);
-					debugRefreshBumpHook(endpoint);
-				}
-			});
 		});		
 	}
 	
-	// Used by recent files functionality
-	function reopenTab(type, file) {
-		if (type === 'btool-hidepaths') {
-			runBToolList(file, 'btool-hidepaths');
-		} else if (type === 'btool-hidedefaults') {
-			runBToolList(file, 'btool-hidedefaults');
-		} else if (type === 'spec') {
-			displaySpecFile(file);
-		} else if (type === 'running') {
-			runningVsLayered(file, false);
-		} else if (type === 'btool') {
-			runBToolList(file, 'btool');
-		} else if (type === 'btool-check') {
-			runBToolCheck();
-		} else if (type === 'run') {
-			runShellCommandNow(file);
-		} else if (type === 'read') {
-			readFile(file);
-		}		
+	function replaceTokens(str, file){
+		var basefile = dodgyBasename(file);
+		var dirname = dodgyDirname(file);
+		return str.replace(/\$\{FILE\}/g, file).replace(/\$\{BASEFILE\}/g, basefile).replace(/\$\{DIRNAME\}/g, dirname);		
 	}
+	
+	function runHookUnparsed(hook, file) {
+		var actions = hook.split(",");
+		for (var i = 0; i < actions.length; i++) {
+			var parts = actions[i].split(":");
+			if (parts.length > 1) {
+				parts[1] = replaceTokens(parts[1], file);
+			}
+			hooksCfg[parts[0]].run(parts[1]);
+		}
+	}
+
 	
 	// Keep track of what tabs are open in local storage. 
 	function openTabsListChanged(){
@@ -408,7 +538,7 @@ require([
 		}); 
 		activeTab = $tabs.children(".ce_active").index();
 		for (var i = 0; i < editors.length; i++){
-			if (editors[i].can_reopen) {
+			if (hooksCfg[editors[i].type].can_reopen) {
 				t.push({label: editors[i].label, type: editors[i].type, file: editors[i].file});
 			}
 		}
@@ -421,7 +551,7 @@ require([
 			last_used_idx, 
 			newest;
 		for (var i = 0; i < editors.length; i++){
-			if (editors[i].can_reopen) {
+			if (hooksCfg[editors[i].type].can_reopen) {
 				if (! newest || newest < editors[i].last_opened) {
 					newest = editors[i].last_opened;
 					last_used_idx = (hashparts.length - 1) / 2;
@@ -434,19 +564,23 @@ require([
 		if (history.replaceState) {
 			history.replaceState(null, null, '#' + hashparts.join("|"));
 		} else {
-			location.hash = '#' + hashparts.join("|");
+			location.hash = '#' + encodeURIComponent(hashparts.join("|"));
 		}		
 	}
 	
 	function readUrlHash(){
-		var parts = document.location.hash.substr(1).split("|");
+		var parts = decodeURIComponent(document.location.hash.substr(1)).split("|");
 		if (parts.length > 1) {
 			inFolder = parts[1];
 			for (var i = 2; (i + 1) < parts.length; i+=2) {
-				reopenTab(parts[i], parts[i+1]);
+				// check to make sure its allowed first!
+				if (hooksCfg[parts[i]].can_reopen) {
+					hooksCfg[parts[i]].run(parts[i+1]);
+				}
 			}
-			if (parts.length > 2) {
-				activateTab(Number(parts[0]));
+			var tabIdx = parseInt(parts[0],10);
+			if (parts.length > 2 && !isNaN(tabIdx)) {
+				activateTab(tabIdx);
 			}
 		}
 	}
@@ -503,9 +637,8 @@ require([
 	}
 	
 	function runShellCommandNow(command){
-		// save to localstorage
-		// TODO There is a bug here somewhere where teh same command doesnt get rerun properly
-		var ecfg = createTab('run', command, '<span class="ce-dim">$</span> ' + htmlEncode(command), false);
+		// TODO There is a bug here somewhere where the same command doesnt get rerun properly
+		var ecfg = createTab('run', command, '<span class="ce-dim">$</span> ' + htmlEncode(command));
 		//var cancel = $("<div class='ce_cancel ce_internal_link'>Cancel</div>").appendTo(ecfg.container);
 		var timer = $("<div class='ce_timer'></div>").appendTo(ecfg.container);
 		var started = Date.now();
@@ -525,8 +658,9 @@ require([
 			if (command !== run_history[(run_history.length - 1)]) {
 				run_history.push(command);
 			}
+			// save to localstorage
 			localStorage.setItem('ce_run_history', JSON.stringify(run_history));
-			updateTabAsEditor(ecfg, contents, false, 'plaintext');
+			updateTabAsEditor(ecfg, contents, 'plaintext');
 		}).catch(function(){
 			closeTabByCfg(ecfg);
 		});		
@@ -534,11 +668,11 @@ require([
 	
 	// Check config
 	function runBToolCheck() {
-		var ecfg = createTab('btool-check', 'btool-check', 'btool check ', false);
+		var ecfg = createTab('btool-check', 'btool-check', 'btool check ');
 		serverActionWithoutFlicker('btool-check').then(function(contents){
 			contents = contents.replace(/^(No spec file for|Checking):.*\r?\n/mg,'').replace(/^\t\t/mg,'').replace(/\n{2,}/g,'\n\n');
 			if ($.trim(contents)) {
-				updateTabAsEditor(ecfg, contents, false, 'plaintext');
+				updateTabAsEditor(ecfg, contents, 'plaintext');
 			} else {
 				closeTabByCfg(ecfg);
 				showModal({
@@ -583,6 +717,7 @@ require([
 	}
 	
 	function runningVsLayered(path, compare){
+		path = path.replace(/\.conf$/i,"");
 		var type = 'live';
 		var tab_path_fmt = '<span class="ce-dim">live:</span> ' + path;
 		if (compare) {
@@ -590,7 +725,7 @@ require([
 			tab_path_fmt = '<span class="ce-dim">live/fs:</span> ' + path;
 		}
 		if (! tabAlreadyOpen(type, path)) {
-			var ecfg = createTab(type, path, tab_path_fmt, false);
+			var ecfg = createTab(type, path, tab_path_fmt);
 			serverActionWithoutFlicker('btool-list', path).then(function(contents){
 				var c = formatBtoolList(contents, true, false);
 				if ($.trim(c)) {
@@ -602,7 +737,7 @@ require([
 								"# Running config\n" + contents_running
 							);
 						} else {
-							updateTabAsEditor(ecfg, contents_running, false, 'ini');
+							updateTabAsEditor(ecfg, contents_running, 'ini');
 						}
 					}).catch(function(){
 						closeTabByCfg(ecfg);
@@ -627,6 +762,7 @@ require([
 	}
 	
 	function runBToolList(path, type){
+		path = path.replace(/\.conf$/i,"");
 		var ce_btool_default_values = true;
 		var ce_btool_path = true;
 		if (type === 'btool-hidepaths') {
@@ -643,11 +779,11 @@ require([
 			tab_path_fmt += " <span class='ce-dim'>--debug</span>"; 
 		}
 		if (! tabAlreadyOpen(type, path)) {
-			var ecfg = createTab(type, path, tab_path_fmt, true);
+			var ecfg = createTab(type, path, tab_path_fmt);
 			serverActionWithoutFlicker('btool-list', path).then(function(contents){
 				var c = formatBtoolList(contents, ce_btool_default_values, ce_btool_path);
 				if ($.trim(c)) {
-					updateTabAsEditor(ecfg, c, false, 'ini');
+					updateTabAsEditor(ecfg, c, 'ini');
 					ecfg.btoollist = contents;
 					serverAction('spec-hinting', path).then(function(h){
 						ecfg.hinting = buildHintingLookup(path, h);
@@ -667,12 +803,13 @@ require([
 	}	
 	
 	function displaySpecFile(path) {
+		path = path.replace(/\.conf$/i,"");
 		var tab_path_fmt = '<span class="ce-dim">spec:</span> ' + path;
 		if (! tabAlreadyOpen('spec', path)) {
-			var ecfg = createTab('spec', path, tab_path_fmt, true);
+			var ecfg = createTab('spec', path, tab_path_fmt);
 			serverActionWithoutFlicker('spec', path).then(function(contents) {
 				if ($.trim(contents)) {
-					updateTabAsEditor(ecfg, contents, false, 'ini');
+					updateTabAsEditor(ecfg, contents, 'ini');
 				} else {
 					closeTabByCfg(ecfg);
 					showModal({
@@ -708,7 +845,6 @@ require([
 			return base;
 		}
 		for (var i = 1; i < patharray.length; i++) {
-			//console.log(i, patharray[i], base);
 			if (base.hasOwnProperty(patharray[i])) {
 				base = base[patharray[i]];
 			} else {
@@ -721,7 +857,6 @@ require([
 	
 	// Run server action to load a folder
 	function readFolder(path, direction) {
-		//console.log(path, filecache);
 		filterModeReset();
 		var base = getTreeCache(path);
 		if (base === null || ! base.hasOwnProperty(".")){
@@ -904,23 +1039,23 @@ require([
 				if (closed_tabs[i].type !== "read") {
 					icon = "bulb";
 				}
-				$("<div class='ce_leftnav ce_leftnav_reopen'><i class='icon-" + icon + "'></i> " + htmlEncode(closed_tabs[i].label) + "</div>").attr("file", closed_tabs[i].file).attr("title", closed_tabs[i].file).attr("type", closed_tabs[i].type).appendTo($filelist);
+				$("<div class='ce_leftnav ce_leftnav_reopen'><i class='icon-" + icon + "'></i> " + htmlEncode(closed_tabs[i].label).replace(/^read:\s/,"") + "</div>").attr("file", closed_tabs[i].file).attr("title", closed_tabs[i].file).attr("type", closed_tabs[i].type).appendTo($filelist);
 			}
 		}
 	}
 	
 	// Handle clicking an file or folder in the left pane
 	function readFile(path){
-		if (! tabAlreadyOpen('read', path)) {
-			var label = dodgyBasename(path);
-			var can_reopen = true;
-			if (path === "") {
-				label = "Settings";
-				can_reopen = false;
-			}
-			var ecfg = createTab('read', path, label, can_reopen);
+		var label = dodgyBasename(path);
+		var type = "read";
+		if (path === "") {
+			label = "Settings";
+			type = "settings";
+		}		
+		if (! tabAlreadyOpen(type, path)) {
+			var ecfg = createTab(type, path, label);
 			serverActionWithoutFlicker('read', path).then(function(contents){
-				updateTabAsEditor(ecfg, contents, true);
+				updateTabAsEditor(ecfg, contents);
 				if (ecfg.hasOwnProperty('matchedConf')) {
 					highlightBadConfig(ecfg);
 					if (confFiles.hasOwnProperty(ecfg.matchedConf)) {
@@ -962,6 +1097,8 @@ require([
 							serverAction("new" + type, parentPath, fname).then(function(){
 								refreshFolder();
 								showToast('Success');
+							}).catch(function(){
+								refreshFolder();
 							});
 						}
 					}).modal('hide');
@@ -1002,8 +1139,9 @@ require([
 								showToast('Success');
 								// if "path" is open in an editor, it needs to be closed without warning
 								closeTabByName(parentPath);
-						
-							});
+							}).catch(function(){
+								refreshFolder();
+							});;
 						}
 					}).modal('hide');
 				},
@@ -1061,7 +1199,7 @@ require([
 	}
 
 	function showChangeLog() {
-		var ecfg = createTab('change-log', "", "Change log", false);
+		var ecfg = createTab('change-log', "", "Change log");
 		var table = $("<table></table>");
 		serverActionWithoutFlicker("git-log").then(function(contents){
 			// commit 1, datetime 2 user 3 change 4 files 5 additions 6 deletions 7
@@ -1156,7 +1294,7 @@ require([
 					
 				if ($elem.hasClass('icon-number')) {
 					var filecommitstr = $elem.parents("tr").attr("commitstart") + ":./" + filestr;
-					var ecfg = createTab('diff', filestr, "<span class='ce-dim'>diff:</span> " + dodgyBasename(filestr), false);
+					var ecfg = createTab('diff', filestr, "<span class='ce-dim'>diff:</span> " + dodgyBasename(filestr));
 					Promise.all([serverAction("read", filestr), serverAction("git-show", filecommitstr)]).then(function(results) {						
 						updateTabAsDiffer(ecfg, "# " + filecommitstr + "\n" + results[0], "# Current HEAD:./" + filestr + "\n" + results[1]);
 					}).catch(function(){ 
@@ -1175,7 +1313,7 @@ require([
 	
 	// Git history of a specific file optionally between two commit tags
 	function getFileHistory(file, commitstart, commitend){
-		var ecfg = createTab('history', file, "<span class='ce-dim'>history:</span> " + dodgyBasename(file), false);
+		var ecfg = createTab('history', file, "<span class='ce-dim'>history:</span> " + dodgyBasename(file));
 		serverActionWithoutFlicker("git-history", file).then(function(contents){
 			contents = $.trim(contents);
 			if (! contents) {
@@ -1248,6 +1386,9 @@ require([
 	}
 
 	function activateTab(idx){
+		if (idx < -1 || idx > (editors.length - 1)) {
+			return;
+		}
 		$container.children().addClass("ce_hidden");
 		$ce_contents_home.addClass("ce_hidden");
 		$tabs.children().removeClass("ce_active");
@@ -1364,7 +1505,7 @@ require([
 		if (splicy > -1){
 			closed_tabs.splice(splicy, 1);
 		}
-		if (ecfg.can_reopen) {
+		if (hooksCfg[ecfg.type].can_reopen) {
 			closed_tabs.push({label: ecfg.label, type: ecfg.type, file: ecfg.file});
 		}
 		// trim length
@@ -1405,27 +1546,16 @@ require([
 		}		
 	}
 
-	function createLabel(type, file) {
-		if (type === "read"){ 
-			return file; 
-		}
-		return type + ": " + file;
-	}
-	
-	function createTab(type, file, label, can_reopen, contents){
+	function createTab(type, file, label){
 		var ecfg = {
 			type: type, 
 			file: file,
-			label: createLabel(type, file),
-			can_reopen: can_reopen,
+			label: type + ": " + file,
 			id: tabid++
 		};
 		editors.push(ecfg);	
 		ecfg.container = $("<div></div>").appendTo($container);
-		if (contents === undefined) {
-			contents = $spinner.clone();
-		}
-		ecfg.container.append(contents);
+		ecfg.container.append($spinner.clone());
 		// Remove the "restore session" link
 		$(".ce_restore_session").remove();
 		ecfg.tab = $("<div class='ce_tab ce_active'>" + label + "</div>").attr("title", ecfg.label).data({"tab": ecfg}).appendTo($tabs);
@@ -1436,20 +1566,19 @@ require([
 		return ecfg;
 	}
 	
-	function updateTabAsEditor(ecfg, contents, canBeSaved, language) {
+	function updateTabAsEditor(ecfg, contents, language) {
 		// uses the built-in language detection where possible
 		if (! language) {
 			if (/\.(?:conf|meta|spec)/.test(ecfg.file)) {
 				language = "ini";
 			}
 		}
-
 		var re = /([^\/\\]+).conf$/;
 		var found = ecfg.file.match(re);
-		if (found && ecfg.type === 'read' && found[1] !== 'app') {
+		ecfg.canBeSaved = (ecfg.type === "read" || ecfg.type === "settings");
+		if (found && ecfg.canBeSaved && found[1] !== 'app') {
 			ecfg.matchedConf = found[1];
-		}					
-		ecfg.canBeSaved = canBeSaved;
+		}
 		ecfg.saving = false;
 		ecfg.decorations = [];
 		ecfg.container.empty();
@@ -1485,47 +1614,57 @@ require([
 				ecfg.decorations = ecfg.editor.deltaDecorations(ecfg.decorations, []);
 			});
 		}
-		ecfg.editor.addAction({
-			id: 'save-file',
-			contextMenuOrder: 1,
-			contextMenuGroupId: ecfg.canBeSaved ? '1_modification' : null,
-			label: 'Save file',
-			run: function() {
-				saveActiveTab();
-			}
-		});
-		if (ecfg.hasOwnProperty('matchedConf')) {
+		if (ecfg.canBeSaved) {
 			ecfg.editor.addAction({
-				id: 'btool-file',
-				contextMenuOrder: 1.1,
-				contextMenuGroupId: '1_modification',
-				label: 'Run btool on ' + ecfg.matchedConf + '.conf',
+				id: 'save-file',
+				contextMenuOrder: 0.1,
+				contextMenuGroupId: 'navigation',
+				label: 'Save file',
 				run: function() {
-					runBToolList(ecfg.matchedConf, "btool");
-				}
-			});	
-			ecfg.editor.addAction({
-				id: 'spec-file',
-				contextMenuOrder: 1.12,
-				contextMenuGroupId: '1_modification',
-				label: 'Open ' + ecfg.matchedConf + '.conf.spec',
-				run: function() {
-					displaySpecFile(ecfg.matchedConf);
+					saveActiveTab();
 				}
 			});
 		}
-		// add an ability to refresh for btools
-		if (ecfg.type === 'btool' || ecfg.type === 'btool-hidedefaults' || ecfg.type === 'btool-hidepaths' || ecfg.type === 'btool-check' || ecfg.type === 'run') {
+		for (var j = 0; j < hooks.length; j++) {
+			var hook = hooks[j];
+			(function(hook) {
+				if (hook._match.test(ecfg.file)) {
+					var lab = replaceTokens(hook.label, ecfg.file)
+					if (isTrueValue(hook.showWithSave) && ecfg.canBeSaved) {
+						ecfg.editor.addAction({
+							id: "Save and " + lab,
+							contextMenuOrder: 0.2,
+							contextMenuGroupId: 'navigation',
+							label: "Save and " + lab,
+							run: function() {
+								saveActiveTab(function(){
+									runHookUnparsed(hook.action, ecfg.file);
+								});
+							}
+						});						
+					}
+					ecfg.editor.addAction({
+						id: lab,
+						contextMenuOrder: 0.3,
+						contextMenuGroupId: 'navigation',
+						label: lab,
+						run: function() {
+							runHookUnparsed(hook.action, ecfg.file);
+						}
+					});					
+				}
+			})(hook);
+		}
+		// Add a right-click option 
+		if (hooksCfg[ecfg.type].can_rerun) {
 			ecfg.editor.addAction({
-				id: 'reload',
-				contextMenuOrder: 1.12,
-				contextMenuGroupId: '1_modification',
-				label: 'Reload',
+				id: 'rerun',
+				contextMenuOrder: 0.1,
+				contextMenuGroupId: 'navigation',
+				label: 'Rerun',
 				run: function() {
-					var type = ecfg.type;
-					var file = ecfg.file;
 					closeTabByCfg(ecfg);
-					reopenTab(type, file);
+					hooksCfg[ecfg.type].run(ecfg.file);
 				}
 			});
 		}		
@@ -1568,7 +1707,7 @@ require([
 		openTabsListChanged();
 	}
 	
-	function saveActiveTab(){
+	function saveActiveTab(cb){
 		if (activeTab === null || activeTab === -1) {
 			return;
 		}
@@ -1586,9 +1725,11 @@ require([
 					ecfg.tab.find('.icon-alert-circle').remove();
 					ecfg.hasChanges = false;	
 					highlightBadConfig(ecfg);
-					
 					if (ecfg.file === "") {
 						loadPermissionsAndConfList();
+					}
+					if (cb) {
+						cb();
 					}
 				}, function(){
 					ecfg.saving = false;
@@ -1688,7 +1829,7 @@ require([
 						for (var j = 0; j < r.data.git.length; j++) {
 							git_output += "<div class='ce_gitoutput-" + r.data.git[j].type + "'>" + htmlEncode($.trim(r.data.git[j].content)) + "</div>";
 						}
-						var ecfg = createTab('git', '', 'git output', false);
+						var ecfg = createTab('git', '', 'git output');
 						updateTabHTML(ecfg, "<div class='ce_gitoutput'>" + git_output + "</div>");
 					}
 					resolve(r.data.result);	
@@ -1965,6 +2106,9 @@ require([
 	function dodgyBasename(f) {
 		return f.replace(/.*[\/\\]/,'');
 	}
+	function dodgyDirname(f) {
+		return f.replace(/[^\/\\]*$/,'');
+	}
 	
 	//create a in-memory div, set it's inner text(which jQuery automatically encodes)
 	//then grab the encoded contents back out.  The div never exists on the page.
@@ -1980,7 +2124,11 @@ require([
 		if (!conf.hasOwnProperty(param)) {
 			return defaultValue;
 		}
-		return (["1", "true", "yes", "t", "y"].indexOf($.trim(conf[param].toLowerCase())) > -1);
+		return isTrueValue(conf[param]);
+	}
+	
+	function isTrueValue(param) {
+		return (["1", "true", "yes", "t", "y"].indexOf($.trim(param.toLowerCase())) > -1);
 	}
 	
 	function showToast(message) {
@@ -2052,7 +2200,7 @@ require([
 		return serverAction('init').then(function(data) {
 			var rex = /^Checking: .*[\/\\]([^\/\\]+?).conf\s*$/gmi,
 				res;
-			conf = data.conf;
+			conf = data.conf.global;
 			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ');
 			if(confIsTrue('write_access', false)) {
 				$dashboardBody.removeClass('ce_no_write_access');
@@ -2072,6 +2220,31 @@ require([
 			if (! conf.hasOwnProperty('git_group_time_mins') || ! Number.isInteger(conf.git_group_time_mins)) {
 				conf.git_group_time_mins = 60;
 			}
+			// Build the quick access hooks object
+			hooks = [];
+			for (var stanza in data.conf) {
+				if (data.conf.hasOwnProperty(stanza)) {
+					if (stanza.substr(0,7) === "hook://" && ! isTrueValue(data.conf[stanza].disabled)) {
+						if (! hooksCfg.hasOwnProperty(data.conf[stanza].action.split(":")[0])) {
+							console.error("Stanza: [" + stanza + "] has unknown action value and will be ignored.");
+							continue;
+						}
+						try {
+							data.conf[stanza]._match = new RegExp(data.conf[stanza].match, 'i');
+							hooks.push(data.conf[stanza]);
+						} catch (e) {
+							console.error("Stanza: [" + stanza + "] has bad regular expression and will be ignored.");
+						}
+					}
+				}
+			}
+			hooks.sort(function(a, b) {
+				if (a.order < b.order)
+					return -1;
+				if (a.order > b.order)
+					return 1;
+				return 0;
+			});	
 			confFiles = {};
 			confFilesSorted = [];
 			while((res = rex.exec(data.files)) !== null) {
@@ -2096,13 +2269,12 @@ require([
 		if (ce_open_tabs.length) {
 			// move any previously open tabs into the close tabs list
 			for (var i = 0; i < ce_open_tabs.length; i++){
-				ce_open_tabs[i].can_reopen = true;
 				logClosedTab(ce_open_tabs[i]);
 			}
 			var $restore = $("<span class='ce_restore_session'><i class='icon-rotate'></i> <span>Restore " + (ce_open_tabs.length === 1 ? "1 tab" : ce_open_tabs.length + " tabs") + "</span></span>").appendTo($tabs);
 			$restore.on("click", function(){
 				for (var j = 0; j < ce_open_tabs.length; j++) {
-					reopenTab(ce_open_tabs[j].type, ce_open_tabs[j].file);
+					hooksCfg[ce_open_tabs[j].type].run(ce_open_tabs[j].file);
 				}
 			});
 		}

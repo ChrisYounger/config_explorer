@@ -1,3 +1,4 @@
+[global]
 write_access = <bool>
 * This enables saving, creating new files/folders, deleting and renaming. This
   is obviously very dangerous and just like having filesystem access through
@@ -56,3 +57,20 @@ git_group_time_mins = <non-negative integer>
 * In the "Change Log" view, changes to the same file by the same user within this
   time limit will be grouped together into one line entry for display purposes.
 
+[default]
+match = <regular expression>
+* todo
+  e.g. .*/(?:local|default))/[^\/]*\.conf
+showWithSave = <bool>
+* todo
+label = <string>
+* todo
+  e.g. Run btool on ${BASEFILE}
+* todo
+action = <string>
+* todo
+  e.g. btool:${BASEFILE}
+disabled = <bool>
+* sdf
+order = <non-negative integer>
+* sort order

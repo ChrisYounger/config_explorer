@@ -546,9 +546,14 @@ input[type=text].ce_treesearch_input::placeholder {
 	transition: opacity 300ms;
     background-color: #2d2f31;
     padding: 2px;
-    width: 200px;
+    min-width: 200px;
+	max-width: 440px;
+	overflow: hidden;
+	text-overflow: ellipsis;
     box-shadow: 0 2px 8px #000;
+	font-size: 13px;
     color: #bbb;
+	white-space: nowrap;
 	z-index: 13;	
 }
 .ce_context_menu_wrap > div {
