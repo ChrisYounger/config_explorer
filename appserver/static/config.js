@@ -1795,7 +1795,7 @@ require([
 	// Formats the output of "btool list" depending on what checkboxes are selected in the left pane
 	function formatBtoolList(contents, ce_btool_default_values, ce_btool_path) {
 		var indent = 80;
-		return contents.replace(/^.+?splunk[\/\\]etc[\/\\](.*?\.conf)\s+(.+)(\r?\n)/img,function(all, g1, g2, g3){
+		return contents.replace(/\\/g,'/').replace(/^.+?splunk[\/]etc[\/](.*?\.conf)\s+(.+)(\r?\n)/img,function(all, g1, g2, g3){
 			var path = '';
 			// I am pretty sure that stanzas cant be set to default when containing a child that isnt
 			if (! ce_btool_default_values && /[\/\\]default[\/\\]/.test(g1)) {
@@ -1824,6 +1824,7 @@ require([
 					delete ecfg.matchedConf;
 					return;
 				}
+				btoolcontents = btoolcontents.replace(/\\/g,'/');
 				// Build lookup of btool output
 				var lookup = buildBadCodeLookup(btoolcontents);
 				if (debug_gutters) {
@@ -2242,9 +2243,11 @@ require([
 								console.error("Stanza: [" + stanza + "] has unknown action value and will be ignored.");
 								continue;
 							}
-							if (action === "run" && ! confIsTrue('run_commands', false)) {
-								//console.error("Stanza: [" + stanza + "] has 'run' action but run_commands is false");
-								continue;
+							if (action === "run") {
+								if (! confIsTrue('run_commands', false)) {
+									//console.error("Stanza: [" + stanza + "] has 'run' action but run_commands is false");
+									continue;
+								}
 							}				
 							try {
 								data.conf[stanza]._match = new RegExp(data.conf[stanza].match, 'i');
