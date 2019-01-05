@@ -1,3 +1,5 @@
+[global]
+
 write_access = false
 # This enables saving, creating new files/folders, deleting and renaming. This
 # is obviously very dangerous and just like having filesystem access through
@@ -55,3 +57,20 @@ hide_settings = false
 #git_group_time_mins = 60
 # In the "Change Log" view, changes to the same file by the same user within this
 # time limit will be grouped together into one line entry for display purposes.
+
+############################################################################
+#  Custom action hooks                                                     #
+############################################################################
+
+# Custom hooks create right-click actions for files that match a regular expression
+# See etc/apps/config_explorer/default/config_explorer.conf for many examples,
+# and read the .spec file. There are links to both these actions in the right click menu.
+
+#[hook:<unique_name>]
+#match = .*
+#showWithSave = false
+#label = Test
+#action = run:echo ${BASEFILE}
+#disabled = false
+#showWithSave = true 
+#order = 10
