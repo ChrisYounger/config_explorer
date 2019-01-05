@@ -56,7 +56,68 @@ require([
 	Sortable,
 	OverlayScrollbars
 ) {
+	// Mapping of all the tab types
+	// can_rerun - has a right click open in the editor for "rerun". This will close and reopen the tab.  If this is "true" it must also exist in the hooksCfg list with the same name!
+	// reopen - tracked through hash and in "recent files". If this is "true" it must also exist in the hooksCfg list with the same name!
+	var tabCfg = {
+		'btool': 				{ can_rerun: true,  can_reopen: true,  },
+		'btool-hidepaths': 		{ can_rerun: true,  can_reopen: true,  },
+		'btool-hidedefaults': 	{ can_rerun: true,  can_reopen: true,  },
+		'btool-check': 			{ can_rerun: true,  can_reopen: false, },
+		'spec': 				{ can_rerun: false, can_reopen: true,  },
+		'run': 					{ can_rerun: true,  can_reopen: false, },
+		'read': 				{ can_rerun: false, can_reopen: true,  },
+		'settings':				{ can_rerun: false, can_reopen: false, },		
+		'change-log': 			{ can_rerun: false, can_reopen: false, },
+		'diff': 				{ can_rerun: false, can_reopen: false, },
+		'history': 				{ can_rerun: false, can_reopen: false, },
+		'git': 					{ can_rerun: false, can_reopen: false, },
+		'live': 				{ can_rerun: false, can_reopen: false, },
+		'live-diff': 			{ can_rerun: false, can_reopen: false, },
+		'refresh': 				{ can_rerun: true,  can_reopen: false, },				
+	};
+	// This is what will be executed in the following circumstances:
+	//  - the URL hash on load (can_reopen=true above)
+	//  - opening from the Recent file list (can_reopen=true above)
+	//  - Editor>RightClick>Rerun option is chosen  (can_rerun=true above)
+	//  - custom [hook:<unique_name>] right-click option
+	var hooksCfg = {
+		'btool': function(arg1){ 
+			runBToolList(arg1, 'btool'); 
+		},
+		'btool-hidepaths': function(arg1){
+			runBToolList(arg1, 'btool-hidepaths');			
+		},
+		'btool-hidedefaults':function(arg1){
+			runBToolList(arg1, 'btool-hidedefaults');
+		},
+		'btool-check': function(arg1){
+			runBToolCheck();
+		},
+		'spec': function(arg1){
+			displaySpecFile(arg1);
+		},
+		'run': function(arg1){
+			runShellCommandNow(arg1,"");
+		},
+		'read': function(arg1){
+			readFile(arg1);
+		},		
+		'live': function(arg1){
+			runningVsLayered(arg1, false);
+		},
+		'live-diff': function(arg1){
+			runningVsLayered(arg1, true);
+		},
+		'bump': function(){
+			debugRefreshBumpHook("bump");
+		},
+		'refresh': function(arg1){
+			debugRefreshBumpHook(arg1);
+		},		
+	};
 	// globals
+	var debug_gutters = false;
 	var service = mvc.createService({owner: "nobody"});
 	var editors = [];  
 	var inFolder = (localStorage.getItem('ce_current_path') || './etc/apps');
@@ -73,141 +134,7 @@ require([
 	var tabid = 0;
 	var leftpane_ignore = false;
 	var max_recent_files_show = 30;
-	var hooks = [];
-	// Mapping of all the tab types that can be opened
-	// can_rerun - has a right click open for "rerun"
-	// reopen - tracked through hash and in "recent files"
-	// run - 
-	
-	var hooksCfg = {
-		'btool': {
-			can_rerun: true,
-			can_reopen: true,
-			run: function(arg1){
-				runBToolList(arg1, 'btool');
-			}
-		},
-		'btool-hidepaths': {
-			can_rerun: true,
-			can_reopen: true,
-			run: function(arg1){
-				runBToolList(arg1, 'btool-hidepaths');
-			}
-			
-		},
-		'btool-hidedefaults': {
-			can_rerun: true,
-			can_reopen: true,
-			run: function(arg1){
-				runBToolList(arg1, 'btool-hidedefaults');
-			}
-		},
-		'btool-check': {
-			can_rerun: true,
-			can_reopen: false,
-			run: function(arg1){
-				runBToolCheck();
-			}
-		},
-		'spec': {
-			can_rerun: false,
-			can_reopen: true,
-			run: function(arg1){
-				displaySpecFile(arg1);
-			}
-		},
-		'running': {
-			can_rerun: true,
-			can_reopen: true,
-			run: function(arg1){
-				runningVsLayered(arg1, false);
-			}
-		},
-		'run': {
-			can_rerun: true,
-			can_reopen: false,
-			run: function(arg1){
-				runShellCommandNow(arg1);
-			}
-		},
-		'read': {
-			can_rerun: false,
-			can_reopen: true,
-			run: function(arg1){
-				readFile(arg1);
-			}
-		},
-		'settings': {
-			can_rerun: false,
-			can_reopen: false,
-			run: function(arg1){
-				readFile("");
-			}
-		},		
-		'compare': { 
-			can_rerun: false, 
-			can_reopen: false, 
-			run: function(arg1){
-				//TODO
-			} 
-		},
-		'change-log': { 
-			can_rerun: false, 
-			can_reopen: false, 
-			run: function(arg1){
-				//TODO
-			} 
-		},
-		'diff': { 
-			can_rerun: false, 
-			can_reopen: false, 
-			run: function(arg1){
-				//TODO
-			} 
-		},
-		'history': { 
-			can_rerun: false, 
-			can_reopen: false, 
-			run: function(arg1){
-				//TODO
-			} 
-		},
-		'git': { 
-			can_rerun: false, 
-			can_reopen: false, 
-			run: function(arg1){
-				//TODO
-			} 
-		},
-		'live': { 
-			can_rerun: false, 
-			can_reopen: false, 
-			run: function(arg1){
-				runningVsLayered(arg1, false);
-			} 
-		},
-		'live-diff': { 
-			can_rerun: false, 
-			can_reopen: false, 
-			run: function(arg1){
-				runningVsLayered(arg1, true);
-			}
-		},
-		'bump': {
-			can_rerun: true,
-			can_reopen: false,
-			run: function(arg1){
-				debugRefreshBumpHook("bump");
-			}
-		},
-		'refresh': {
-			can_rerun: true,
-			can_reopen: false,
-			run: function(arg1){
-				debugRefreshBumpHook(arg1);
-			}
-		},		
-	};
+	var hooksActive = [];	
 	var $dashboardBody = $('.dashboard-body');
 	var $ce_tree_pane = $(".ce_tree_pane");
     var $dirlist = $(".ce_file_list");
@@ -218,7 +145,8 @@ require([
 	var $spinner = $(".ce_spinner");
     var $tabs = $(".ce_tabs");
 	var $ce_contents_home = $(".ce_contents_home");
-	var $ce_home_tab = $(".ce_home_tab");	
+	var $ce_home_tab = $(".ce_home_tab");
+	var tabCreationCount = 0;
 	
 	// Set the "save" hotkey at a global level instnead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
@@ -257,24 +185,24 @@ require([
 	$(document).on("mouseup",function(e) {
 		$(document).off('mousemove.colresize');
 	});
-
-	$('.ce_app_errors .btn').on('click', function(){
+	
+	$('.ce_app_errors .btn').on('click', function(){ 
 		runBToolCheck();
 	});
-	$('.ce_app_settings .btn').on('click', function(){
+	$('.ce_app_settings .btn').on('click', function(){ 
 		readFile("");
 	});
-	$(".ce_theme").on('click', function(){
+	$(".ce_theme").on('click', function(){ 
 		setThemeMode($(this).attr("data-theme"));
 	});
-	$('.ce_app_changelog .btn').on('click', function(){
+	$('.ce_app_changelog .btn').on('click', function(){ 
 		showChangeLog();
 	});
-	$ce_home_tab.on("click", function(){
-		activateTab(-1);
+	$(".ce_splunk_reload").on("click", function(){ 
+		debugRefreshBumpHook( $(this).attr("data-endpoint") );
 	});
-	$(".ce_splunk_reload").on("click", function(){
-		debugRefreshBumpHook($(this).attr("data-endpoint"));
+	$ce_home_tab.on("click", function(){ 
+		activateTab(-1);
 	});
 	
 	// Click handlers for New File/New Folder buttons
@@ -286,16 +214,12 @@ require([
 		}
 		if (elem.hasClass("ce_add_file")) {
 			fileSystemCreateNew(inFolder, true);
-
 		} else if (elem.hasClass("ce_add_folder")) {
 			fileSystemCreateNew(inFolder, false);
-
 		} else if (elem.hasClass("ce_refresh_tree")) {
 			refreshFolder();
-
 		} else if (elem.hasClass("ce_folder_up")) {
 			readFolder(inFolder.replace(/[\/\\][^\/\\]+$/,''), 'back');
-
 		} else if (elem.hasClass("ce_filter")) {
 			if (elem.hasClass("ce_selected")) {
 				leftPaneFileList();
@@ -353,6 +277,14 @@ require([
 		$(".ce_treesearch_input").val("");
 	}
 	
+	function addHookAction(hook, file, actions) {
+		if (hook._match.test(file)) {					
+			actions.push($("<div></div>").text(replaceTokens(hook.label, file)).on("click", function(){ 
+				runHookUnparsed(hook.action, file); 
+			}));
+		}
+	}
+				
 	// Click handler for left pane items
 	$dirlist.on("click", ".ce_leftnav", function(){
 		var elem = $(this);
@@ -364,7 +296,7 @@ require([
 			readFile(elem.attr('file'));
 		// recent files list
 		} else if (elem.hasClass("ce_leftnav_reopen")) {
-			hooksCfg[elem.attr('type')].run(elem.attr('file'));
+			hooksCfg[elem.attr('type')](elem.attr('file'));
 		// Folder
 		} else {
 			if (! leftpane_ignore) {
@@ -374,55 +306,56 @@ require([
 	// Right click menu for left pane
 	}).on("contextmenu", ".ce_leftnav", function (e) {
 		var $t = $(this);
+		var isFile = $t.hasClass("ce_is_report");
 		var thisFile = $t.attr('file');
 		var actions = [];
-
-		for (var j = 0; j < hooks.length; j++) {
-			(function(hook) {
-				if (hook._match.test(thisFile)) {					
-					actions.push($("<div></div>").text(replaceTokens(hook.label, thisFile)).on("click", function(){ 
-						runHookUnparsed(hook.action, thisFile); 
-					}));
-				}
-			})(hooks[j]);
+		if (isFile) {
+			// Add the custom hook actions
+			for (var j = 0; j < hooksActive.length; j++) {
+				addHookAction(hooksActive[j], thisFile, actions);
+			}
 		}
-
 		if ($t.hasClass("ce_leftnav_editable")) {
 			// can rename, can trash
-			actions.push($("<div>Rename</div>").on("click", function(){ fileSystemRename(thisFile); }));
-			actions.push($("<div>Delete</div>").on("click", function(){ filesystemDelete(thisFile); }));
+			actions.push($("<div>Rename</div>").on("click", function(){ 
+				fileSystemRename(thisFile); 
+			}));
+			actions.push($("<div>Delete</div>").on("click", function(){ 
+				filesystemDelete(thisFile); 
+			}));
 			
 		} else if ($t.hasClass("ce_conf")) {
-			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ hooksCfg["btool-hidepaths"].run(thisFile); }));
-			actions.push($("<div>Show btool (hide 'default' settings)</div>").on("click", function(){ hooksCfg["btool-hidedefaults"].run(thisFile); }));
-			actions.push($("<div>Show .spec file</div>").on("click", function(){ hooksCfg["spec"].run(thisFile); }));
-			actions.push($("<div>Show live (running) config</div>").on("click", function(){ hooksCfg["live"].run(thisFile); }));
-			actions.push($("<div>Compare live config against btool output</div>").on("click", function(){ hooksCfg["live-diff"].run(thisFile); }));
-			//actions.push($("<div>Refresh endpoint</div>").on("click", function(){  }));
+			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ 
+				runBToolList(thisFile, 'btool-hidepaths');
+			}));
+			actions.push($("<div>Show btool (hide 'default' settings)</div>").on("click", function(){ 
+				runBToolList(thisFile, 'btool-hidedefaults');
+			}));
+			actions.push($("<div>Show .spec file</div>").on("click", function(){
+				displaySpecFile(thisFile);
+			}));
+			actions.push($("<div>Show live (running) config</div>").on("click", function(){
+				runningVsLayered(thisFile, false);
+			}));
+			actions.push($("<div>Compare live config against btool output</div>").on("click", function(){
+				runningVsLayered(thisFile, true);
+			}));
 		}
 
-		if ($t.hasClass("ce_is_report")) {
+		if (isFile) {
 			if (confIsTrue('git_autocommit', false)) {
 				// can show history
-				actions.push($("<div>View file history</div>").on("click", function(){ getFileHistory(thisFile); }));
+				actions.push($("<div>View file history</div>").on("click", function(){
+					getFileHistory(thisFile);
+				}));
 			}
 			// can compare
 			actions.push($("<div>Mark for comparison</div>").on("click", function(){ 
 				comparisonLeftFile = thisFile; 
 			}));
-			
 			if (comparisonLeftFile && comparisonLeftFile !== thisFile) {
 				actions.push($("<div>Compare to " + htmlEncode(dodgyBasename(comparisonLeftFile)) + "</div>").on("click", function(){
-					var ecfg = createTab('compare', thisFile + " " + comparisonLeftFile, "<span class='ce-dim'>compare:</span> " + thisFile + " " + comparisonLeftFile);
-					// get both files 
-					Promise.all([
-						serverActionWithoutFlicker('read', comparisonLeftFile),
-						serverActionWithoutFlicker('read', thisFile),
-					]).then(function(contents){
-						updateTabAsDiffer(ecfg, comparisonLeftFile + "\n" + contents[0], thisFile + "\n" + contents[1]);
-					}).catch(function(){ 
-						closeTabByCfg(ecfg);
-					});
+					compareFiles(thisFile, comparisonLeftFile);
 				}));
 			}
 		}
@@ -451,19 +384,15 @@ require([
 
 	// Event handlers for the editor tabs
 	$tabs.on("click", ".ce_close_tab", function(e){
-		var idx = $(this).parent().index();
 		e.stopPropagation();
-		closeTabWithConfirmation(idx);
+		closeTabWithConfirmation($(this).parent().index());
 	
 	// Middle click to close tab
 	}).on("auxclick", ".ce_tab", function(e){
-		if (e.which === 3) {
-			return;
-		}
-		var idx = $(this).index();
-		e.stopPropagation();
-		closeTabWithConfirmation(idx);	
-	
+		if (e.which !== 3) {
+			e.stopPropagation();
+			closeTabWithConfirmation($(this).index());	
+		}	
 	// Clicking tab
 	}).on("click", ".ce_tab", function(){
 		activateTab($(this).index());
@@ -475,7 +404,20 @@ require([
 	}).on("mouseleave", ".ce_tab", function(){
 		$(this).find('.ce_close_tab').remove();
 	});
-
+	
+	function compareFiles(rightFile, leftFile) {
+		var ecfg = createTab('diff', rightFile + " " + leftFile, "<span class='ce-dim'>diff:</span> " + rightFile + " " + leftFile);
+		// get both files 
+		Promise.all([
+			serverActionWithoutFlicker('read', leftFile),
+			serverActionWithoutFlicker('read', rightFile),
+		]).then(function(contents){
+			updateTabAsDiffer(ecfg, leftFile + "\n" + contents[0], rightFile + "\n" + contents[1]);
+		}).catch(function(){ 
+			closeTabByCfg(ecfg);
+		});						
+	}
+	
 	function debugRefreshBumpHook(endpoint){
 		// get localisation url
 		var url = "/" + document.location.pathname.split("/")[1] + "/";
@@ -494,7 +436,7 @@ require([
 			endpoint = "all";
 		}
 		var ecfg = createTab('refresh', endpoint, label);
-		$.post(url, function(data) {
+		$.post(url, function(data){
 			if (endpoint === "bump") {
 				updateTabAsEditor(ecfg, $('<div/>').html(data).text(), 'plaintext');
 			} else {
@@ -509,18 +451,14 @@ require([
 		return str.replace(/\$\{FILE\}/g, file).replace(/\$\{BASEFILE\}/g, basefile).replace(/\$\{DIRNAME\}/g, dirname);		
 	}
 	
-	function runHookUnparsed(hook, file) {
-		var actions = hook.split(",");
-		for (var i = 0; i < actions.length; i++) {
-			var parts = actions[i].split(":");
-			if (parts.length > 1) {
-				parts[1] = replaceTokens(parts[1], file);
-			}
-			hooksCfg[parts[0]].run(parts[1]);
+	function runHookUnparsed(action, file) {
+		var parts = action.split(":");
+		if (parts.length > 1) {
+			parts[1] = replaceTokens(parts[1], file);
 		}
+		hooksCfg[parts[0]](parts[1]);
 	}
 
-	
 	// Keep track of what tabs are open in local storage. 
 	function openTabsListChanged(){
 		var t = [];
@@ -538,7 +476,7 @@ require([
 		}); 
 		activeTab = $tabs.children(".ce_active").index();
 		for (var i = 0; i < editors.length; i++){
-			if (hooksCfg[editors[i].type].can_reopen) {
+			if (tabCfg[editors[i].type].can_reopen) {
 				t.push({label: editors[i].label, type: editors[i].type, file: editors[i].file});
 			}
 		}
@@ -551,7 +489,7 @@ require([
 			last_used_idx, 
 			newest;
 		for (var i = 0; i < editors.length; i++){
-			if (hooksCfg[editors[i].type].can_reopen) {
+			if (tabCfg[editors[i].type].can_reopen) {
 				if (! newest || newest < editors[i].last_opened) {
 					newest = editors[i].last_opened;
 					last_used_idx = (hashparts.length - 1) / 2;
@@ -573,9 +511,9 @@ require([
 		if (parts.length > 1) {
 			inFolder = parts[1];
 			for (var i = 2; (i + 1) < parts.length; i+=2) {
-				// check to make sure its allowed first!
-				if (hooksCfg[parts[i]].can_reopen) {
-					hooksCfg[parts[i]].run(parts[i+1]);
+				// check to make sure its allowed first! This protects against someone crafting a bad url (e.g. a "run" command) and sending it to a victim
+				if (tabCfg[parts[i]].can_reopen) {
+					hooksCfg[parts[i]](parts[i+1]);
 				}
 			}
 			var tabIdx = parseInt(parts[0],10);
@@ -623,7 +561,7 @@ require([
 					$('.modal').one('hidden.bs.modal', function() {
 						var command = $input.val();
 						if (command) {
-							runShellCommandNow(command);
+							runShellCommandNow(command, inFolder);
 						}
 					}).modal('hide');
 				},
@@ -636,8 +574,7 @@ require([
 		});
 	}
 	
-	function runShellCommandNow(command){
-		// TODO There is a bug here somewhere where the same command doesnt get rerun properly
+	function runShellCommandNow(command, fromFolder){
 		var ecfg = createTab('run', command, '<span class="ce-dim">$</span> ' + htmlEncode(command));
 		//var cancel = $("<div class='ce_cancel ce_internal_link'>Cancel</div>").appendTo(ecfg.container);
 		var timer = $("<div class='ce_timer'></div>").appendTo(ecfg.container);
@@ -648,22 +585,23 @@ require([
 				timer.html(tt + " sec");
 			}
 		},1000);
-		serverActionWithoutFlicker("run", command, inFolder).then(function(contents){
+		// trim length
+		if (run_history.length > 50) {
+			run_history.shift();
+		}
+		// only save if the command is different to what was last run
+		if (command !== run_history[(run_history.length - 1)]) {
+			run_history.push(command);
+		}
+		// save to localstorage
+		localStorage.setItem('ce_run_history', JSON.stringify(run_history));		
+		serverActionWithoutFlicker("run", command, fromFolder).then(function(contents){
 			clearInterval(interval);
-			// trim length
-			if (run_history.length > 50) {
-				run_history.shift();
-			}
-			// only save if the command is different to what was last run
-			if (command !== run_history[(run_history.length - 1)]) {
-				run_history.push(command);
-			}
-			// save to localstorage
-			localStorage.setItem('ce_run_history', JSON.stringify(run_history));
 			updateTabAsEditor(ecfg, contents, 'plaintext');
 		}).catch(function(){
+			clearInterval(interval);
 			closeTabByCfg(ecfg);
-		});		
+		});
 	}
 	
 	// Check config
@@ -687,6 +625,7 @@ require([
 	}
 	
 	function getRunningConfig(path) {
+		path = path.replace(/\.conf$/i,"");
 		return new Promise(function(resolve, reject){
 			service.get('/services/configs/conf-' + path, null, function(err, r) {
 				if (err) {
@@ -722,7 +661,7 @@ require([
 		var tab_path_fmt = '<span class="ce-dim">live:</span> ' + path;
 		if (compare) {
 			type = 'live-diff';
-			tab_path_fmt = '<span class="ce-dim">live/fs:</span> ' + path;
+			tab_path_fmt = '<span class="ce-dim">live/btool:</span> ' + path;
 		}
 		if (! tabAlreadyOpen(type, path)) {
 			var ecfg = createTab(type, path, tab_path_fmt);
@@ -797,6 +736,7 @@ require([
 					});
 				}
 			}).catch(function(){ 
+				console.error(arguments);
 				closeTabByCfg(ecfg);
 			});
 		}	
@@ -1141,7 +1081,7 @@ require([
 								closeTabByName(parentPath);
 							}).catch(function(){
 								refreshFolder();
-							});;
+							});
 						}
 					}).modal('hide');
 				},
@@ -1505,7 +1445,7 @@ require([
 		if (splicy > -1){
 			closed_tabs.splice(splicy, 1);
 		}
-		if (hooksCfg[ecfg.type].can_reopen) {
+		if (tabCfg[ecfg.type].can_reopen) {
 			closed_tabs.push({label: ecfg.label, type: ecfg.type, file: ecfg.file});
 		}
 		// trim length
@@ -1566,6 +1506,34 @@ require([
 		return ecfg;
 	}
 	
+	function addHookActionToEditor(hook, ecfg) {
+		if (hook._match.test(ecfg.file)) {
+			var lab = replaceTokens(hook.label, ecfg.file);
+			if (isTrueValue(hook.showWithSave) && ecfg.canBeSaved) {
+				ecfg.editor.addAction({
+					id: "Save and " + lab,
+					contextMenuOrder: 0.2,
+					contextMenuGroupId: 'navigation',
+					label: "Save and " + lab,
+					run: function() {
+						saveActiveTab(function(){
+							runHookUnparsed(hook.action, ecfg.file);
+						});
+					}
+				});						
+			}
+			ecfg.editor.addAction({
+				id: lab,
+				contextMenuOrder: 0.3,
+				contextMenuGroupId: 'navigation',
+				label: lab,
+				run: function() {
+					runHookUnparsed(hook.action, ecfg.file);
+				}
+			});					
+		}
+	}
+			
 	function updateTabAsEditor(ecfg, contents, language) {
 		// uses the built-in language detection where possible
 		if (! language) {
@@ -1582,7 +1550,9 @@ require([
 		ecfg.saving = false;
 		ecfg.decorations = [];
 		ecfg.container.empty();
-		ecfg.model = monaco.editor.createModel(contents, language, monaco.Uri.file(ecfg.file));
+		// The monaco URL must be unique or it will silently close. We use the same file when running different versions of btool and in other circumstances so need to prefix with a unique id.
+		var url = "T" + (tabCreationCount++) + "/" + ecfg.file;
+		ecfg.model = monaco.editor.createModel(contents, language, monaco.Uri.file(url));
 		// Default things to be ini syntax highlighting rather than none
 		if (ecfg.model.getModeId() === "plaintext" && ! language) {
 			monaco.editor.setModelLanguage(ecfg.model, "ini");
@@ -1625,38 +1595,12 @@ require([
 				}
 			});
 		}
-		for (var j = 0; j < hooks.length; j++) {
-			var hook = hooks[j];
-			(function(hook) {
-				if (hook._match.test(ecfg.file)) {
-					var lab = replaceTokens(hook.label, ecfg.file)
-					if (isTrueValue(hook.showWithSave) && ecfg.canBeSaved) {
-						ecfg.editor.addAction({
-							id: "Save and " + lab,
-							contextMenuOrder: 0.2,
-							contextMenuGroupId: 'navigation',
-							label: "Save and " + lab,
-							run: function() {
-								saveActiveTab(function(){
-									runHookUnparsed(hook.action, ecfg.file);
-								});
-							}
-						});						
-					}
-					ecfg.editor.addAction({
-						id: lab,
-						contextMenuOrder: 0.3,
-						contextMenuGroupId: 'navigation',
-						label: lab,
-						run: function() {
-							runHookUnparsed(hook.action, ecfg.file);
-						}
-					});					
-				}
-			})(hook);
+		for (var j = 0; j < hooksActive.length; j++) {
+			var hook = hooksActive[j];
+			addHookActionToEditor(hook, ecfg);
 		}
 		// Add a right-click option 
-		if (hooksCfg[ecfg.type].can_rerun) {
+		if (tabCfg[ecfg.type].can_rerun) {
 			ecfg.editor.addAction({
 				id: 'rerun',
 				contextMenuOrder: 0.1,
@@ -1664,7 +1608,7 @@ require([
 				label: 'Rerun',
 				run: function() {
 					closeTabByCfg(ecfg);
-					hooksCfg[ecfg.type].run(ecfg.file);
+					hooksCfg[ecfg.type](ecfg.file);
 				}
 			});
 		}		
@@ -1863,6 +1807,10 @@ require([
 			return g2 + path + g3;
 		});
 	}
+	
+	function addGutter(newdecorations, i, className, message) {
+		newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: className, glyphMarginHoverMessage: [{value: message }]  }});
+	}										
 
 	// After loading a .conf file or after saving and before any changes are made, red or green colour will
 	// be shown in the gutter about if the current line can be found in the output of btool list.
@@ -1878,6 +1826,12 @@ require([
 				}
 				// Build lookup of btool output
 				var lookup = buildBadCodeLookup(btoolcontents);
+				if (debug_gutters) {
+					console.log("Btool:", lookup);
+					if (ecfg.hasOwnProperty('hinting')) {
+						console.log("Spec:", ecfg.hinting);
+					}
+				}
 				// try to figure out the SPLUNK_HOME value
 				// Its common that in inputs.conf, some stanzas are defined with $SPLUNK_HOME which btool always expands
 				var rexSplunkHome = /^(.+?)[\\\/]etc[\\\/]/;
@@ -1893,9 +1847,18 @@ require([
 					rows = contents.split(/\r?\n/),
 					currentStanza = "",
 					currentStanzaExpandedHome = "",
+					currentStanzaTrimmed = "",
+					// This regex is complex becuase sometimes properties have a unique string on the end of them 
+					// e.g "EVAL-src = whatever"
+					// found[1] will be "EVAL-src"
+					// found[2] will be "EVAL"
 					reProps = /^\s*((\w+)[^=\s]*)\s*=/,
 					newdecorations = [],
-					extra;
+					currentStanzaAsExpectedInBtool,
+					tempStanza,
+					foundSpec,
+					extraProp,
+					extraStanz;
 				for (var i = 0; i < rows.length; i++) {
 					if (rows[i].substr(0,1) === "[") {
 						if (rows[i].substr(0,9) === "[default]") {
@@ -1903,6 +1866,12 @@ require([
 						} else {
 							currentStanza = $.trim(rows[i]);
 						}
+						currentStanzaTrimmed = currentStanza.replace(/^(\[\w+).*$/,"$1");
+						// Stanzas that have $SPLUNK_HOME in them will be expanded by btool (stanzas in inputs.conf often have $SPLUNK_HOME in them)
+						currentStanzaAsExpectedInBtool = currentStanza.replace(/\$SPLUNK_HOME/i, splunk_home);
+						// Stanzas that use relative paths, will be expanded by btool. (e.g. inputs.conf [script://./bin/go.sh] from current script location)
+						currentStanzaAsExpectedInBtool = currentStanzaAsExpectedInBtool.replace(/\/\/\.\//, "//" + splunk_home + ecfg.file.substr(1).replace(/[^\/\\]*\/[^\/\\]*$/,''));
+						
 						if (seenStanzas.hasOwnProperty(currentStanza)) {
 							newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Duplicate Stanza in this file"}]  }});
 						}
@@ -1912,35 +1881,72 @@ require([
 						var found = rows[i].match(reProps);
 						if (found) {
 							if (found[1].substr(0,1) !== "#") {
+								// Check for duplicated key in stanza
 								if (seenProps.hasOwnProperty(found[1])) {
-									newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Duplicate key in stanza"}]  }});
+									addGutter(newdecorations, i, 'ceOrangeLine', "Duplicate key in stanza");
+
 								} else {
 									seenProps[found[1]] = 1;
-									if (lookup.hasOwnProperty(currentStanza) && lookup[currentStanza].hasOwnProperty(found[1]) && lookup[currentStanza][found[1]] === ecfg.file) {
-										if (ecfg.hasOwnProperty('hinting') && found.length > 2) {
-											if (ecfg.hinting[""].hasOwnProperty(found[2]) || (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2]))) {
-												newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output and spec file. Stanza=\"" + currentStanza + "\" or property \"" + found[2] + "\""}]  }});
-											} else {
-												newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceDimGreeenLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output, but not found in spec file. Unexpected stanza \"" + currentStanza + "\" or property \"" + found[2] + "\"" }]  }});
-											}
+									// Look if stanza/property exists in btool
+									if (! lookup.hasOwnProperty(currentStanzaAsExpectedInBtool)){
+										addGutter(newdecorations, i, 'ceRedLine', "Not found in \"btool\" output (btool does not list the stanza \"" + currentStanzaAsExpectedInBtool +"\")");
+
+									} else if (! lookup[currentStanzaAsExpectedInBtool].hasOwnProperty(found[1])){
+										// [default] is a special case and is reflected through all other stanzas in the file
+										if (currentStanzaAsExpectedInBtool !== "") {
+											addGutter(newdecorations, i, 'ceRedLine', "Not found in \"btool\" output (btool with stanza [" + currentStanzaAsExpectedInBtool +"] does not have property \"" + found[1] + "\")");
 										}
+										
+									} else if (lookup[currentStanzaAsExpectedInBtool][found[1]] !== ecfg.file) {
+										addGutter(newdecorations, i, 'ceRedLine', "Not found in \"btool\" output (set in :" + lookup[currentStanzaAsExpectedInBtool][found[1]] + ")");
+
 									} else {
-										// attempt to find the stanza by expanding $SPLUNK_HOME
-										currentStanzaExpandedHome = currentStanza.replace(/\$SPLUNK_HOME/i, splunk_home);
-										if (lookup.hasOwnProperty(currentStanzaExpandedHome) && lookup[currentStanzaExpandedHome].hasOwnProperty(found[1]) && lookup[currentStanzaExpandedHome][found[1]] === ecfg.file) {
-											newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceGreeenLine', glyphMarginHoverMessage: [{value:"Found in \"btool\" output"}]  }});
-										} else {
-											// TODO: attempt to expand stanza [script://./bin/go.sh] from current script location
-											extra = "";
-											if (!lookup.hasOwnProperty(currentStanza)){
-												extra = "(btool does not have stanza \"" + currentStanza +"\")";
-											} else if (! lookup[currentStanza].hasOwnProperty(found[1])){
-												extra = "(btool with stanza [" + currentStanza +"] does not have property \"" + found[1] + "\")";
+										// If a spec file exists
+										// TODO i think there is a bug where there can be slow performance in getting the ecfg.hinting set properly.
+										if (ecfg.hasOwnProperty('hinting') && found.length > 2) {
+											foundSpec = false;
+											// Look in the unstanzaed part of the spec
+											if (ecfg.hinting[""].hasOwnProperty(found[2])) {
+												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"\" Property=\"" + found[2] + "\")");
+												
+											// Look in the stanzaed part of the spec
+											} else if (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2])) {
+												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanza + "\" Property=\"" + found[2] + "\")");
+											
+											// Look for a trimmed version of the stanza in the spec. e.g. [endpoint:blah_rest] might be in the spec as [endpoint]
+											} else if (ecfg.hinting.hasOwnProperty(currentStanzaTrimmed) && ecfg.hinting[currentStanzaTrimmed].hasOwnProperty(found[2])) {
+												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanzaTrimmed + "\" Property=\"" + found[2] + "\")");
+
+											// Now go through those same three checks, but look for the whole thing. For Example in web.conf found[2] is "tools" where as found[1] is "tools.sessions.timeout"
+											} else if (ecfg.hinting[""].hasOwnProperty(found[1])) {
+												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"\" Property=\"" + found[1] + "\")");
+												
+											// Look in the stanzaed part of the spec
+											} else if (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[1])) {
+												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanza + "\" Property=\"" + found[1] + "\")");
+											
+											// Look for a trimmed version of the stanza in the spec. e.g. [endpoint:blah_rest] might be in the spec as [endpoint]
+											} else if (ecfg.hinting.hasOwnProperty(currentStanzaTrimmed) && ecfg.hinting[currentStanzaTrimmed].hasOwnProperty(found[1])) {
+												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanzaTrimmed + "\" Property=\"" + found[1] + "\")");
+												
 											} else {
-												extra = "(set in :" + lookup[currentStanza][found[1]] + ")";
+												if (found[2] === found[1]) {
+													extraProp = "Looked for property \"" + found[2] + "\" ";
+												} else {
+													extraProp = "Looked for property \"" + found[2] + "\" and \"" + found[1] + "\" ";
+												}
+												if (currentStanza === currentStanzaTrimmed) {
+													extraStanz = "in stanza \"\", \"" + currentStanza + "\"";
+												} else {
+													extraStanz = "in stanzas \"\", \"" + currentStanza + "\" and \"" + currentStanzaTrimmed + "\"";
+												}												
+												addGutter(newdecorations, i, 'ceDimGreeenLine', "Found in \"btool\" output, but not found in spec file. "+ extraProp + extraStanz);
+
 											}
-											newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceRedLine', glyphMarginHoverMessage: [{value:"Not found in \"btool\" output " + extra + ""}] }});
-										}
+										} else {
+											// No spec file exists 
+											addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output");
+										}										
 									}
 								}
 							}
@@ -1982,6 +1988,7 @@ require([
 	
 	// parse the spec file and build a lookup to use for code completion
 	function buildHintingLookup(conf, contents){
+		// left side is for properties, right size for stanzas
 		var rex = /^(?:([\w\.]+).*=|(\[\w+))?.*$/gm,
 			res,
 			currentStanza = "",
@@ -2003,7 +2010,9 @@ require([
 						currentStanza = res[2];
 					}
 					currentField = "";
-					confFiles[conf][currentStanza] = {"":{t:"", c:""}};
+					if (! confFiles[conf].hasOwnProperty(currentStanza)) {
+						confFiles[conf][currentStanza] = {"":{t:"", c:""}};
+					}
 				}
 				confFiles[conf][currentStanza][currentField].t = res[0];
 			} else {
@@ -2220,25 +2229,34 @@ require([
 			if (! conf.hasOwnProperty('git_group_time_mins') || ! Number.isInteger(conf.git_group_time_mins)) {
 				conf.git_group_time_mins = 60;
 			}
-			// Build the quick access hooks object
-			hooks = [];
+			// Build the quick access hooksActive object
+			hooksActive = [];
+			var hookDefaults = data.conf.hook || {};
 			for (var stanza in data.conf) {
 				if (data.conf.hasOwnProperty(stanza)) {
-					if (stanza.substr(0,7) === "hook://" && ! isTrueValue(data.conf[stanza].disabled)) {
-						if (! hooksCfg.hasOwnProperty(data.conf[stanza].action.split(":")[0])) {
-							console.error("Stanza: [" + stanza + "] has unknown action value and will be ignored.");
-							continue;
-						}
-						try {
-							data.conf[stanza]._match = new RegExp(data.conf[stanza].match, 'i');
-							hooks.push(data.conf[stanza]);
-						} catch (e) {
-							console.error("Stanza: [" + stanza + "] has bad regular expression and will be ignored.");
+					if (stanza.substr(0,5) === "hook:") {
+						data.conf[stanza] = $.extend({}, hookDefaults, data.conf[stanza]);
+						if (! isTrueValue(data.conf[stanza].disabled)) {
+							var action = data.conf[stanza].action.split(":")[0];
+							if (! hooksCfg.hasOwnProperty(action)) {
+								console.error("Stanza: [" + stanza + "] has unknown action value and will be ignored.");
+								continue;
+							}
+							if (action === "run" && ! confIsTrue('run_commands', false)) {
+								//console.error("Stanza: [" + stanza + "] has 'run' action but run_commands is false");
+								continue;
+							}				
+							try {
+								data.conf[stanza]._match = new RegExp(data.conf[stanza].match, 'i');
+								hooksActive.push(data.conf[stanza]);
+							} catch (e) {
+								console.error("Stanza: [" + stanza + "] has bad regular expression and will be ignored.");
+							}
 						}
 					}
 				}
 			}
-			hooks.sort(function(a, b) {
+			hooksActive.sort(function(a, b) {
 				if (a.order < b.order)
 					return -1;
 				if (a.order > b.order)
@@ -2274,7 +2292,7 @@ require([
 			var $restore = $("<span class='ce_restore_session'><i class='icon-rotate'></i> <span>Restore " + (ce_open_tabs.length === 1 ? "1 tab" : ce_open_tabs.length + " tabs") + "</span></span>").appendTo($tabs);
 			$restore.on("click", function(){
 				for (var j = 0; j < ce_open_tabs.length; j++) {
-					hooksCfg[ce_open_tabs[j].type].run(ce_open_tabs[j].file);
+					hooksCfg[ce_open_tabs[j].type](ce_open_tabs[j].file);
 				}
 			});
 		}
