@@ -100,6 +100,9 @@ require([
 		'run': function(arg1){
 			runShellCommandNow(arg1,"");
 		},
+		'run-safe': function(arg1){
+			runShellCommand(arg1, true);
+		},
 		'read': function(arg1){
 			readFile(arg1);
 		},		
@@ -524,18 +527,31 @@ require([
 	}
 
 	// Run button
-	function runShellCommand() {
+	function runShellCommand(contents, useSHOME) {
 		var history_idx = run_history.length,
 			in_progress_cmd = '',
-			$input;
+			$input,
+			cwd = "";
+		if (inFolder !== "."){
+			cwd = "<p>Working directory:</p>"+
+				"<div><label><input type='radio' name='ce_cwd' value='0' " + (useSHOME ? "checked='checked'" : "") + "class='ce_run_cwd_radio ce_run_cwd_radio_shome'>$SPLUNK_HOME</label></div>"+
+				"<div><label><input type='radio' name='ce_cwd' value='1' " + (useSHOME ? "" : "checked='checked'") + "class='ce_run_cwd_radio'>" + htmlEncode(inFolder) + "</label></div><br>";	
+		}
 		showModal({
 			title: "Run ",
 			size: 600,
-			body: "<div>Enter command to run on the server<br><br><input type='text' value='' class='ce_prompt_input input input-text' style='width: 100%; background-color: #3d424d; color: #cccccc;'/></div>",
+			body: "<div>Enter command to run on the server<br><br>" +
+					cwd +
+					"<input type='text' value='' class='ce_prompt_input input input-text' style='width: 100%; background-color: #3d424d; color: #cccccc;'/>"+
+					"</div>",
 			onShow: function(){ 
 				$input = $('.ce_prompt_input');
+				if (contents) {
+					$input.val(contents);
+				}
 				// Provide a history of run commands
 				$input.focus().on('keydown', function(e) {
+					// on enter, submit form
 					if (e.which === 13) {
 						$('.modal').find('button:first-child').click();
 					} else if (e.which === 38) {// up arrow
@@ -558,10 +574,15 @@ require([
 			},
 			actions: [{
 				onClick: function(){
+					var runDir = $(".ce_run_cwd_radio_shome:checked").length;
 					$('.modal').one('hidden.bs.modal', function() {
 						var command = $input.val();
 						if (command) {
-							runShellCommandNow(command, inFolder);
+							if (runDir) {
+								runShellCommandNow(command, "");
+							} else {
+								runShellCommandNow(command, inFolder);
+							}
 						}
 					}).modal('hide');
 				},
@@ -1903,7 +1924,6 @@ require([
 
 									} else {
 										// If a spec file exists
-										// TODO i think there is a bug where there can be slow performance in getting the ecfg.hinting set properly.
 										if (ecfg.hasOwnProperty('hinting') && found.length > 2) {
 											foundSpec = false;
 											// Look in the unstanzaed part of the spec
