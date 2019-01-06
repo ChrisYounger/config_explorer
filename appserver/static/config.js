@@ -2263,12 +2263,14 @@ require([
 								console.error("Stanza: [" + stanza + "] has unknown action value and will be ignored.");
 								continue;
 							}
-							if (action === "run") {
+							if (action.substr(0,3) === "run") {
 								if (! confIsTrue('run_commands', false)) {
 									//console.error("Stanza: [" + stanza + "] has 'run' action but run_commands is false");
 									continue;
 								}
-								data.conf[stanza].label = "$" + data.conf[stanza].label;
+								if (action === "run") {
+									data.conf[stanza].label = "$" + data.conf[stanza].label;
+								}
 							}				
 							try {
 								data.conf[stanza]._match = new RegExp(data.conf[stanza].match, 'i');

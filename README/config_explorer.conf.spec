@@ -71,6 +71,7 @@ action = <string>
 * The action name to run, full colon, then the argument (if required). Example: "run:ls -l ${FILENAME}"
 * The following actions currently exist:
     run:(1) - Run a custom shell command. Requires that "run_commands=true".
+    run-safe:(1) - Run a custom shell command but first shows the prompt so it can be edited. Requires that "run_commands=true".
     bump:(0) - Trigger the _bump endpoint to expire the cache..
     refresh:(1) - Trigger the specified debug/refresh endpoint. With no argument it will do all endpoints. 
     btool:(1) - Run btool on the specified conf file (--debug mode).
