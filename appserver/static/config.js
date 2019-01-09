@@ -454,12 +454,11 @@ require([
 		return str.replace(/\$\{FILE\}/g, file).replace(/\$\{BASEFILE\}/g, basefile).replace(/\$\{DIRNAME\}/g, dirname);		
 	}
 	
-	function runHookUnparsed(action, file) {
-		var parts = action.split(":");
-		if (parts.length > 1) {
-			parts[1] = replaceTokens(parts[1], file);
-		}
-		hooksCfg[parts[0]](parts[1]);
+	function runHookUnparsed(actionStr, file) {
+		var parts = actionStr.split(":");
+		var action = parts.shift();
+		var args = replaceTokens(parts.join(":"), file);
+		hooksCfg[action](args);
 	}
 
 	// Keep track of what tabs are open in local storage. 
