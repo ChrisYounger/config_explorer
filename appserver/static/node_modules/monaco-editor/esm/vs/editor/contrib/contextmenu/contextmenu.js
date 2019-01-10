@@ -86,14 +86,14 @@ var ContextMenuController = /** @class */ (function () {
             this._editor.setPosition(e.target.position);
         }
         // Unless the user triggerd the context menu through Shift+F10, use the mouse position as menu position
-        var forcedPosition;
+        var anchor;
         if (e.target.type !== 1 /* TEXTAREA */) {
-            forcedPosition = { x: e.event.posx, y: e.event.posy + 1 };
+            anchor = { x: e.event.posx - 1, width: 2, y: e.event.posy - 1, height: 2 };
         }
         // Show the context menu
-        this.showContextMenu(forcedPosition);
+        this.showContextMenu(anchor);
     };
-    ContextMenuController.prototype.showContextMenu = function (forcedPosition) {
+    ContextMenuController.prototype.showContextMenu = function (anchor) {
         if (!this._editor.getConfiguration().contribInfo.contextmenu) {
             return; // Context menu is turned off through configuration
         }
@@ -105,7 +105,7 @@ var ContextMenuController = /** @class */ (function () {
         var menuActions = this._getMenuActions();
         // Show menu if we have actions to show
         if (menuActions.length > 0) {
-            this._doShowContextMenu(menuActions, forcedPosition);
+            this._doShowContextMenu(menuActions, anchor);
         }
     };
     ContextMenuController.prototype._getMenuActions = function () {
@@ -122,9 +122,9 @@ var ContextMenuController = /** @class */ (function () {
         result.pop(); // remove last separator
         return result;
     };
-    ContextMenuController.prototype._doShowContextMenu = function (actions, forcedPosition) {
+    ContextMenuController.prototype._doShowContextMenu = function (actions, anchor) {
         var _this = this;
-        if (forcedPosition === void 0) { forcedPosition = null; }
+        if (anchor === void 0) { anchor = null; }
         // Disable hover
         var oldHoverSetting = this._editor.getConfiguration().contribInfo.hover;
         this._editor.updateOptions({
@@ -132,7 +132,6 @@ var ContextMenuController = /** @class */ (function () {
                 enabled: false
             }
         });
-        var anchor = forcedPosition;
         if (!anchor) {
             // Ensure selection is visible
             this._editor.revealPosition(this._editor.getPosition(), 1 /* Immediate */);

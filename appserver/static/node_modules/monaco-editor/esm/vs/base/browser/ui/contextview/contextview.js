@@ -95,6 +95,10 @@ var ContextView = /** @class */ (function (_super) {
         this.delegate = delegate;
         // Layout
         this.doLayout();
+        // Focus
+        if (this.delegate.focus) {
+            this.delegate.focus();
+        }
     };
     ContextView.prototype.layout = function () {
         if (!this.isVisible()) {
@@ -141,7 +145,7 @@ var ContextView = /** @class */ (function (_super) {
         var viewSizeHeight = DOM.getTotalHeight(this.view);
         var anchorPosition = this.delegate.anchorPosition || 0 /* BELOW */;
         var anchorAlignment = this.delegate.anchorAlignment || 0 /* LEFT */;
-        var verticalAnchor = { offset: around.top, size: around.height, position: anchorPosition === 0 /* BELOW */ ? 0 /* Before */ : 1 /* After */ };
+        var verticalAnchor = { offset: around.top - window.pageYOffset, size: around.height, position: anchorPosition === 0 /* BELOW */ ? 0 /* Before */ : 1 /* After */ };
         var horizontalAnchor;
         if (anchorAlignment === 0 /* LEFT */) {
             horizontalAnchor = { offset: around.left, size: 0, position: 0 /* Before */ };
@@ -149,7 +153,7 @@ var ContextView = /** @class */ (function (_super) {
         else {
             horizontalAnchor = { offset: around.left + around.width, size: 0, position: 1 /* After */ };
         }
-        var top = layout(window.innerHeight, viewSizeHeight, verticalAnchor);
+        var top = layout(window.innerHeight, viewSizeHeight, verticalAnchor) + window.pageYOffset;
         // if view intersects vertically with anchor, shift it horizontally
         if (Range.intersects({ start: top, end: top + viewSizeHeight }, { start: verticalAnchor.offset, end: verticalAnchor.offset + verticalAnchor.size })) {
             horizontalAnchor.size = around.width;

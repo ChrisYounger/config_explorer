@@ -37,6 +37,7 @@ var ContextMenuHandler = /** @class */ (function () {
                 return; // Don't render an empty context menu
             }
             _this.focusToReturn = document.activeElement;
+            var menu;
             _this.contextViewService.showContextView({
                 getAnchor: function () { return delegate.getAnchor(); },
                 canRelayout: false,
@@ -50,7 +51,7 @@ var ContextMenuHandler = /** @class */ (function () {
                     var actionRunner = delegate.actionRunner || new ActionRunner();
                     actionRunner.onDidBeforeRun(_this.onActionRun, _this, menuDisposables);
                     actionRunner.onDidRun(_this.onDidActionRun, _this, menuDisposables);
-                    var menu = new Menu(container, actions, {
+                    menu = new Menu(container, actions, {
                         actionItemProvider: delegate.getActionItem,
                         context: delegate.getActionsContext ? delegate.getActionsContext() : null,
                         actionRunner: actionRunner,
@@ -60,8 +61,10 @@ var ContextMenuHandler = /** @class */ (function () {
                     menu.onDidCancel(function () { return _this.contextViewService.hideContextView(true); }, null, menuDisposables);
                     menu.onDidBlur(function () { return _this.contextViewService.hideContextView(true); }, null, menuDisposables);
                     domEvent(window, EventType.BLUR)(function () { _this.contextViewService.hideContextView(true); }, null, menuDisposables);
-                    menu.focus(!!delegate.autoSelectFirstItem);
                     return combinedDisposable(menuDisposables.concat([menu]));
+                },
+                focus: function () {
+                    menu.focus(!!delegate.autoSelectFirstItem);
                 },
                 onHide: function (didCancel) {
                     if (delegate.onHide) {
