@@ -1,6 +1,6 @@
 # Config Explorer
 
-![screenshot](README/screenshot1.png)
+![screenshot](static/screenshot.png)
 
 This app provides a modern editor interface for viewing and editing Splunk files. It has code completion and 
 tooltip hinting for '.conf' files (by loading the Splunk '.spec' files). The code gutter highlights if the 
