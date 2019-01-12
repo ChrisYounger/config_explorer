@@ -859,3 +859,6 @@ html .ce_spinner {
 input.ce_run_cwd_radio[type=radio] {
 	margin: 0 10px;
 }
+.ce_disclaimer {
+	font-size: 10px;
+}

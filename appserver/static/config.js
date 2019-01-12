@@ -2359,6 +2359,38 @@ require([
 		// Left pane styled scrollbar
 		OverlayScrollbars($dirlist[0],{ className : "os-theme-light", overflowBehavior : { x: "hidden"} });
 		
+		// Show a warning the first time someone opens the app
+		if (! localStorage.getItem('ce_seen_warning')) {
+			localStorage.setItem('ce_seen_warning', "1");
+			showModal({
+				title: "Dragons ahead!",
+				size: 600,
+				body: 
+					"<div>Warning: This is designed for advanced users.<br><br>This app can allow you to change Splunk files on the "+
+					"filesystem. When you change files, if you don't know what you are doing, then you may break your Splunk environment. <br><br>" +
+					(!(confIsTrue('write_access', false) || confIsTrue('hide_settings', false)) ? "By default, <code>write_access=false</code> so files cannot be saved. Open the '<a href='#' class='ce_quicksettings'>Settings</a>' screen to enable.<br><br>" : "") + 
+					'<br><br><span class="ce_disclaimer">THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR ' +
+					'IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, ' +
+					'FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE ' +
+					'AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER ' +
+					'LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, ' +
+					'OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE ' +
+					'SOFTWARE.</span>' +
+					"</div>",
+				onShow: function(){ 
+					$('.ce_quicksettings').on("click",function(e){
+						e.preventDefault();
+						readFile("");
+						$(".modal").modal('hide');
+					});
+				},
+				actions: [{
+					onClick: function(){ $(".modal").modal('hide'); },
+					cssClass: 'btn-primary',
+					label: "OK"
+				}]
+			});
+		}
 		// Build the left pane
 		showTreePaneSpinner();
 		if (Number(conf.cache_file_depth) > 0) {
