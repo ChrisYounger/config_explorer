@@ -68,8 +68,12 @@ class req(splunk.rest.BaseRestHandler):
 			git_status_codes = [0]
 			payload = parse_qs(self.request['payload'])
 			action = payload['action'][0]
-			action_item = payload['path'][0]
-			param1 = payload['param1'][0]
+			action_item = ""
+			if 'path' in payload:
+				action_item = payload['path'][0]
+			param1 = ""
+			if 'param1' in payload:
+				param1 = payload['param1'][0]
 			
 			server_response, server_content = splunk.rest.simpleRequest('/services/authentication/current-context?output_mode=json', sessionKey=sessionKey, raiseAllErrors=True)
 			transforms_content = json.loads(server_content)
