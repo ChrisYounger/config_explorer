@@ -28,26 +28,32 @@ class req(splunk.rest.BaseRestHandler):
 			return logger
 		logger = setup_logging()
         
-		def runCommand(cmds, this_env, use_shell=False, status_codes=[]):
-			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=use_shell, env=this_env)
+		def runCommand(cmds, this_env, status_codes=[]):
+			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=False, env=this_env)
 			o = p.communicate()
 			status_codes.append(p.returncode)
-			return str(o[0]) + "\n" + str(o[1]) + "\n"
+			return str(o[0]) + "\n"
+
+		def runCommandCustom(cmds):
+			# TODO timeout after: int(conf["global"]["run_timeout"])
+			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, env=env_copy)
+			o = p.communicate()
+			return str(o[0]) + "\n"
 
 		def git(message, git_status_codes, git_output, file1, file2=None):
 			if confIsTrue("git_autocommit", False):
 				try:
 					if file2 == None:
 						git_output.append({"type": "cmd", "content": '$git add ' + file1})
-						git_output.append({"type": "out", "content": runCommand(['git','add', file1], env_git, False, git_status_codes)})
+						git_output.append({"type": "out", "content": runCommand(['git','add', file1], env_git, git_status_codes)})
 					else:
 						git_output.append({"type": "cmd", "content": '$git add ' + file1 + " " + file2})
-						git_output.append({"type": "out", "content": runCommand(['git','add', file1, file2], env_git, False, git_status_codes)})
+						git_output.append({"type": "out", "content": runCommand(['git','add', file1, file2], env_git, git_status_codes)})
 
 					git_output.append({"type": "cmd", "content": '$git commit -m ' + message})
-					#git_output_tmp = runCommand(['git','commit','-m', message], env_git, False, git_status_codes)
+					#git_output_tmp = runCommand(['git','commit','-m', message], env_git, git_status_codes)
 					#git_output.append({"type": "cmd", "content": re.sub(r"On branch \S*\s*\nUntracked [\s\S]+ but untracked files present", '', git_output_tmp)})
-					git_output.append({"type": "out", "content": runCommand(['git','commit','-m', message], env_git, False, git_status_codes)})
+					git_output.append({"type": "out", "content": runCommand(['git','commit','-m', message], env_git, git_status_codes)})
 				except Exception as ex:
 					template = "{0}: {1!r}"
 					git_output.append({"type": "desc", "content": "Git failed. Is git installed and configured correctly?"})
@@ -161,7 +167,7 @@ class req(splunk.rest.BaseRestHandler):
 							# dont need to check if we are inside Splunk dir. User can do anything with run command anyway.
 							file_path = os.path.join(SPLUNK_HOME, param1)
 							os.chdir(file_path)
-							result = runCommand(action_item, env_copy, True)
+							result = runCommandCustom(action_item)
 							
 						status = "success"
 

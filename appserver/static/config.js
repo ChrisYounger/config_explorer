@@ -539,7 +539,7 @@ require([
 		showModal({
 			title: "Run ",
 			size: 600,
-			body: "<div>Enter command to run on the server<br><br>" +
+			body: "<div>Enter a command to run on the server. <span class='red bold'>Warning:</span> Be careful with commands that do not exit as they will become orphaned processes. This does not have a timeout.<br><br>" +
 					cwd +
 					"<input type='text' value='' class='ce_prompt_input input input-text' style='width: 100%; background-color: #3d424d; color: #cccccc;'/>"+
 					"</div>",
@@ -2366,7 +2366,7 @@ require([
 				title: "Dragons ahead!",
 				size: 600,
 				body: 
-					"<div>Warning: This is designed for advanced users.<br><br>This app can allow you to change Splunk files on the "+
+					"<div><span class='red bold'>Warning:</span> This is designed for advanced users.<br><br>This app can allow you to change Splunk files on the "+
 					"filesystem. When you change files, if you don't know what you are doing, then you may break your Splunk environment. <br><br>" +
 					(!(confIsTrue('write_access', false) || confIsTrue('hide_settings', false)) ? "By default, <code>write_access=false</code> so files cannot be saved. Open the '<a href='#' class='ce_quicksettings'>Settings</a>' screen to enable.<br><br>" : "") + 
 					'<br><br><span class="ce_disclaimer">THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR ' +

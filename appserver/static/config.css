@@ -1,3 +1,9 @@
+.red {
+	color: #dd6a6f;
+}
+.bold {
+	font-weight: bold;
+}
 .dashboard-body {
 	height: 100%;
 	margin: 0;
@@ -321,7 +327,7 @@ input[type=text].ce_treesearch_input::placeholder {
 .ce_pipe_left  {
     position: absolute;
     left: 0px;
-    margin-top: 4px;
+    margin-top: 6px;
     border-left: 1px solid #262626;
     height: 21px;
     width: 0px;
