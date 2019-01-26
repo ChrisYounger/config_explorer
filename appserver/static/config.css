@@ -541,6 +541,7 @@ input[type=text].ce_treesearch_input::placeholder {
 	bottom: 0;
 	left: 0;
 	right: 0;
+	z-index: 12;
 }
 .ce_context_menu_wrap {
 	position: absolute;

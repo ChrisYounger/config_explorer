@@ -281,14 +281,28 @@ require([
 		$(".ce_treesearch_input").val("");
 	}
 	
-	function addHookAction(hook, file, actions) {
-		if (hook._match.test(file)) {					
+	function addHookAction(hook, file, actions, matchtype) {
+		if (hook._match.test(file) && hook.matchtype == matchtype) {					
 			actions.push($("<div></div>").text(replaceTokens(hook.label, file)).on("click", function(){ 
 				runHookUnparsed(hook.action, file); 
 			}));
 		}
 	}
-				
+	
+	// add folder hooks to the path display
+	$filePath.on("contextmenu", function (e) {
+		var actions = [];
+		for (var j = 0; j < hooksActive.length; j++) {
+			addHookAction(hooksActive[j], inFolder, actions, "folder");
+		}
+		if (confIsTrue('git_autocommit', false) && conf.git_autocommit_work_tree === "") {
+			actions.push($("<div>Show change log</div>").on("click", function(){ 
+				showChangeLog();
+			}));			
+		}
+		buildLeftContextMenu(actions, e);
+	});
+	
 	// Click handler for left pane items
 	$dirlist.on("click", ".ce_leftnav", function(){
 		var elem = $(this);
@@ -309,17 +323,22 @@ require([
 		}
 	// Right click menu for left pane
 	}).on("contextmenu", ".ce_leftnav", function (e) {
-		var $t = $(this);
-		var isFile = $t.hasClass("ce_is_report");
-		var thisFile = $t.attr('file');
+		var $leftnavElem = $(this);
+		var isFile = $leftnavElem.hasClass("ce_is_report");
+		var thisFile = $leftnavElem.attr('file');
 		var actions = [];
 		if (isFile) {
 			// Add the custom hook actions
 			for (var j = 0; j < hooksActive.length; j++) {
-				addHookAction(hooksActive[j], thisFile, actions);
+				addHookAction(hooksActive[j], thisFile, actions, "file");
 			}
 		}
-		if ($t.hasClass("ce_leftnav_editable")) {
+		if ($leftnavElem.hasClass("ce_is_folder")) {
+			for (var j = 0; j < hooksActive.length; j++) {
+				addHookAction(hooksActive[j], thisFile, actions, "folder");
+			}			
+		}
+		if ($leftnavElem.hasClass("ce_leftnav_editable")) {
 			// can rename, can trash
 			actions.push($("<div>Rename</div>").on("click", function(){ 
 				fileSystemRename(thisFile); 
@@ -328,7 +347,11 @@ require([
 				filesystemDelete(thisFile); 
 			}));
 			
-		} else if ($t.hasClass("ce_conf")) {
+		}
+		if ($leftnavElem.hasClass("ce_conf")) {
+			for (var j = 0; j < hooksActive.length; j++) {
+				addHookAction(hooksActive[j], thisFile, actions, "conf");
+			}				
 			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ 
 				runBToolList(thisFile, 'btool-hidepaths');
 			}));
@@ -350,7 +373,7 @@ require([
 			if (confIsTrue('git_autocommit', false)) {
 				// can show history
 				actions.push($("<div>View file history</div>").on("click", function(){
-					getFileHistory(thisFile, "", inFolder);
+					getFileHistory(thisFile, inFolder);
 				}));
 			}
 			// can compare
@@ -363,27 +386,8 @@ require([
 				}));
 			}
 		}
-		if (! actions.length) {
-			return;
-		}
-		var $menu = $(".ce_context_menu_wrap");
-		$menu.empty().append(actions);		
-		e.preventDefault(); // To prevent the default context menu.
-		$(".ce_leftnav_highlighted").removeClass("ce_leftnav_highlighted");
-		$t.addClass("ce_leftnav_highlighted");
-		var windowHeight = $(window).height();
-		if((e.clientY + 200) > windowHeight) {
-			$menu.css({opacity:1, left:30 + e.clientX, bottom:$(window).height()-e.clientY, right:"auto", top:"auto"});
-		} else {
-			$menu.css({opacity:1, left:30 + e.clientX, bottom:"auto", right:"auto", top: e.clientY - 30});
-		}
-		$(".ce_context_menu_overlap").removeClass("ce_hidden");
-		$(document).on("click", function () {
-			$menu.removeAttr("style");
-			$(".ce_context_menu_overlap").addClass("ce_hidden");
-			$t.removeClass("ce_leftnav_highlighted");
-			$(document).off("click");           
-		});
+
+		buildLeftContextMenu(actions, e, $leftnavElem);
 	});
 
 	// Event handlers for the editor tabs
@@ -408,6 +412,36 @@ require([
 	}).on("mouseleave", ".ce_tab", function(){
 		$(this).find('.ce_close_tab').remove();
 	});
+	
+	function buildLeftContextMenu(actions, e, $t) {
+		e.preventDefault(); // To prevent the default context menu.
+		if (! actions.length) {
+			return;
+		}
+		e.stopPropagation();
+		var $menu = $(".ce_context_menu_wrap");
+		$menu.empty().append(actions);		
+		$(".ce_leftnav_highlighted").removeClass("ce_leftnav_highlighted");
+		if ($t) {
+			$t.addClass("ce_leftnav_highlighted");
+		}
+		var windowHeight = $(window).height();
+		if((e.clientY + 200) > windowHeight) {
+			$menu.css({opacity:1, left:30 + e.clientX, bottom:$(window).height()-e.clientY, right:"auto", top:"auto"});
+		} else {
+			$menu.css({opacity:1, left:30 + e.clientX, bottom:"auto", right:"auto", top: e.clientY - 30});
+		}
+		$(".ce_context_menu_overlap").removeClass("ce_hidden");
+		$(document).on("click contextmenu", function(e2) {
+			$menu.removeAttr("style");
+			$(".ce_context_menu_overlap").addClass("ce_hidden");
+			if ($t) {
+				$t.removeClass("ce_leftnav_highlighted");
+			}
+			$(document).off("click");
+			e2.preventDefault();
+		});	
+	}
 	
 	function compareFiles(rightFile, leftFile) {
 		var ecfg = createTab('diff', rightFile + " " + leftFile, "<span class='ce-dim'>diff:</span> " + rightFile + " " + leftFile);
@@ -1161,136 +1195,17 @@ require([
 
 	function showChangeLog() {
 		var ecfg = createTab('change-log', "", "Change log");
-		var table = $("<table></table>");
-		var prependFolder = "";
-		if (conf.git_autocommit_work_tree == "") {
-			prependFolder = inFolder  + "/";
-		}
 		serverActionWithoutFlicker("git-log", inFolder).then(function(contents){
-			var ecfg2 = createTab('internal', "", "Change log");
-			updateTabAsEditor(ecfg2, contents)
-			
-			// commit 1, datetime 2 user 3 change 4 files 5 additions 6 deletions 7
-			var rex = /commit\s+(\S+)[\s\S]*?Date:\s+\S+\s+(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+([^\r\n]+)(?: +(\S+))?\s+([\s\S]+?)\d+\s+files? changed,(?: (\d+) insertions?\(\+\))?(?: (\d+) deletions?\(\-\))?/g,
-				res, 
-				type,
-				f,
-				t,
-				files,
-				item,
-				fileshtml,
-				timediff,
-				mapper = {},
-				changes = [];
-			while(res = rex.exec(contents)) {
-				if (res.length === 8) {
-					item = {
-						sha: res[1],
-						time: moment(new Date(res[2])),
-						files: [],
-						user: res[3],
-						change: res[4],
-						adds: Number(res[6] || 0),
-						dels: Number(res[7] || 0),
-						duration: 0,
-						last_sha: "",
-						count: 1
-					};
-					// etc/apps/config_explorer/README.md  | 484 ++++++++++++++++++++++++++++++++++++
-					// etc/apps/config_explorer/README.md2 | 484 ------------------------------------
-					if (item.change === "renamed") {
-						var foundadd = res[5].match(/([^\/]+) +\| +\d+ \+/);
-						var founddels = res[5].match(/\s*([^\n]+) +\| +\d+ -/);
-						if (foundadd && founddels) {
-							item.files.push(founddels[1] + " <i class='icon-arrow-right'></i> " + foundadd[1]);
-						}
-					} else {
-						files = res[5].split(/ +\|.+\r?\n */);
-						for (var k = 0; k < files.length; k++) {
-							f = $.trim(files[k]);
-							if (f) {
-								item.files.push(f);
-							}
-						}
-					}
-					if (item.files.length === 1 && item.change === 'save') {
-						if (mapper.hasOwnProperty(item.files[0]) && mapper[item.files[0]].user === item.user) {
-							timediff = mapper[ item.files[0] ].time.diff(item.time, 'minutes');
-							if (timediff < conf.git_group_time_mins) {
-								changes[ mapper[ item.files[0] ].pointer ].count++;
-								changes[ mapper[ item.files[0] ].pointer ].duration += timediff;
-								changes[ mapper[ item.files[0] ].pointer ].last_sha = item.sha;
-								changes[ mapper[ item.files[0] ].pointer ].adds += item.adds;
-								changes[ mapper[ item.files[0] ].pointer ].dels += item.dels;
-								mapper[ item.files[0] ].time = item.time;
-								continue;
-							}
-						}
-						mapper[ item.files[0] ] = {time: item.time, user: item.user, pointer: changes.length};
-					}
-					changes.push(item);
-				}
-			}			
-			for (var i = 0; i < changes.length; i ++) {
-				if (! changes[i].change) {
-					type = "<td colspan='3'></td>";
-				} else if (changes[i].change === "new") {
-					type = "<td class='nobr ar' colspan='3'><i class='icon-report'></i> " + changes[i].change + "</td>";
-				} else if (changes[i].change === "deleted") {
-					type = "<td class='nobr ar' colspan='3'><i class='icon-trash'></i> " + changes[i].change + "</td>";
-				} else if (changes[i].change === "renamed") {
-					type = "<td class='nobr ar' colspan='3'><i class='icon-pencil'></i> " + changes[i].change + "</td>";
-				} else {
-					type = "<td class='nobr ar' title='File was saved " + changes[i].count + " times in " + changes[i].duration + " minutes'>" + (changes[i].count > 1 ? ("[" + (changes[i].count) + "]") : "") + "</td><td class='nobr ar'><i class='icon-plus-circle green'></i> " + changes[i].adds + '</td><td class="nobr ar"><i class="icon-minus-circle red"></i> ' + changes[i].dels + "</td>";
-				}
-				fileshtml = "";
-				for (var j = 0; j < changes[i].files.length; j++) {
-					t = "";
-					if (! changes[i].change || changes[i].change === "save") {
-						t = "<i title='Show changes in this commit' class='icon-speech-bubble ce_clickable_icon'></i> <i title='Compare this version to current' class='icon-number ce_clickable_icon'></i> ";
-					}
-					fileshtml += "<div><span class='ce_changelog_buttons'>" + t + "</span>" + changes[i].files[j] + "</div>";
-				}
-				table.append("<tr commitstart='" + changes[i].sha +"' commitend='" + changes[i].last_sha +"'><td class='nobr'>" + changes[i].time.format("YYYY-MM-DD  h:mma") + "</td><td class='nobr'>" + changes[i].time.fromNow() + "</td>" + type + "<td class='nobr'>" + changes[i].user + "</td><td class='ce_changelog_filescol'>" + fileshtml + "</td></tr>");
-			}
-		
-			updateTabHTML(ecfg, $("<div class='ce_changelog'></div>").append(table));
-
-			table.on("click", ".ce_clickable_icon", function(){
-				var $elem = $(this),
-					filestr = $.trim($elem.parent().parent().text());
-					
-				if ($elem.hasClass('icon-number')) {
-					var filecommitstr = $elem.parents("tr").attr("commitstart") + ":./" + filestr;
-					var ecfg = createTab('diff', filestr, "<span class='ce-dim'>diff:</span> " + dodgyBasename(filestr));
-					Promise.all([serverAction("read", prependFolder + filestr), serverAction("git-show", filecommitstr, prependFolder)]).then(function(results) {						
-						updateTabAsDiffer(ecfg, "# " + filecommitstr + "\n" + results[0], "# Current HEAD:./" + filestr + "\n" + results[1]);
-					}).catch(function(){ 
-						closeTabByCfg(ecfg);
-					});
-				} else if ($elem.hasClass('icon-speech-bubble')) {
-					var filecommitstrstart = $elem.parents("tr").attr("commitstart");
-					var filecommitstrend = $elem.parents("tr").attr("commitend");
-					getFileHistory(filestr, filecommitstrstart + ":" + filecommitstrend, prependFolder);
-				}
-			});			
+			updateTabAsEditor(ecfg, contents, "git-log");
 		}).catch(function(){ 
 			closeTabByCfg(ecfg);
 		});
 	}
 	
 	// Git history of a specific file optionally between two commit tags
-	function getFileHistory(file, commitstartend, currFolder){
+	function getFileHistory(file, folder){
 		var ecfg = createTab('history', file, "<span class='ce-dim'>history:</span> " + dodgyBasename(file));
-		var commitstart = "";
-		var commitend = "";
-		var parts = commitstartend.split(":");
-		if (parts.length == 2) {
-			commitstart = parts[0];
-			commitend = parts[1];
-		}
-		console.log("history", parts);
-		serverActionWithoutFlicker("git-history", file, currFolder).then(function(contents){
+		serverActionWithoutFlicker("git-history", file, folder).then(function(contents){
 			contents = $.trim(contents);
 			if (! contents) {
 				showModal({
@@ -1301,61 +1216,7 @@ require([
 				closeTabByCfg(ecfg);
 				return;
 			}
-			var lines = htmlEncode(contents).split(/\r?\n/);
-			var str = "";
-			var firstThree;
-			var time;
-			var hash;
-			var capturing = false;
-			var stopOnNext = false;
-			var closeBlock = false;
-			if (! commitstart) {
-				capturing = true;
-			}
-			for (var i = 0; i < lines.length; i++) {
-				firstThree = lines[i].substr(0,3);
-				if (firstThree === "com") {
-					if (stopOnNext) {
-						break;
-					}
-					hash = lines[i].substr(7);
-					if (commitstart && hash === commitstart) {
-						capturing = true;
-					} else if (capturing && commitend && hash === commitend) {
-						stopOnNext = true;
-					}
-				}
-				//commit 2498c5b83158307ac7210dd1fd77abfda5fe21fb
-				if (! capturing || firstThree === "Aut" || firstThree === "---" || firstThree === "+++"|| firstThree === "ind"|| firstThree === "dif") {
-					continue;
-				}
-				if (lines[i].substr(0,4) === "Date") {
-					if (closeBlock) {
-						str += "</div>";
-						closeBlock = false;
-					}					
-					time = moment(new Date(lines[i].substr(5)));
-					str += "<p><h1>" + time.fromNow() + " <span>(" + time.format("YYYY-MM-DD  h:mma") + ") - " + lines[i+2] + "</span></h1></p>";
-					i+=3;
-				} else if (lines[i].substr(0,2) === "@@") {
-					if (closeBlock) {
-						str += "</div>";
-					}					
-					str += "<p>" + lines[i].replace(/^(.* @@)(.*)$/, "$1</p><div class='ce_diff_change'><p>$2</p>");
-					closeBlock = true;
-				} else if (lines[i].substr(0,1) === "+") {
-					if (lines[i].length > 1) {
-						str += "<p class='ce_diff_addition'>" + lines[i].substr(1) + "</p>";
-					}
-				} else if (lines[i].substr(0,1) === "-"){
-					if (lines[i].length > 1) {
-						str += "<p class='ce_diff_deletion'>" + lines[i].substr(1) + "</p>";
-					}
-				} else {
-					str += "<p>" + lines[i]+ "</p>";
-				}
-			}
-			updateTabHTML(ecfg, $("<div class='ce_file_history'></div>").html(str));
+			updateTabAsEditor(ecfg, contents, "git-diff");
 		}).catch(function(){ 
 			closeTabByCfg(ecfg);
 		});
@@ -1543,7 +1404,7 @@ require([
 	}
 	
 	function addHookActionToEditor(hook, ecfg) {
-		if (hook._match.test(ecfg.file)) {
+		if (hook._match.test(ecfg.file) && hook.matchtype == "file") {
 			var lab = replaceTokens(hook.label, ecfg.file);
 			if (isTrueValue(hook.showWithSave) && ecfg.canBeSaved) {
 				ecfg.editor.addAction({
@@ -1806,13 +1667,13 @@ require([
 					// if there was some unexpected git output, then open a window to display it
 					
 					if (r.data.git && r.data.git_status !== -1) {
-						var git_autocommit_show_output = "onerror";
+						var git_autocommit_show_output = "auto";
 						if (conf.hasOwnProperty("git_autocommit_show_output")) {
 							git_autocommit_show_output = conf['git_autocommit_show_output'].toLowerCase();
 						}
-						if (git_autocommit_show_output === "true" || (git_autocommit_show_output === "onerror" && r.data.git_status > 0)) {
+						if (git_autocommit_show_output === "true" || (git_autocommit_show_output === "auto" && r.data.git_status > 0)) {
 							var git_output = "<h2>";
-							if (git_autocommit_show_output === "onerror") {
+							if (git_autocommit_show_output === "auto") {
 								git_output = "Warning: Unexpected return code when attempting to autocommit changes to version control. ";
 							}
 							git_output = "Git output is below:</h2>";
@@ -2157,7 +2018,32 @@ require([
 			return { suggestions: [] };
 		}
 	});	
-		
+	
+	// Register a new simple language for prettying up git diffs
+	monaco.languages.register({ id: 'git-diff' });
+	monaco.languages.setMonarchTokensProvider('git-diff', {
+		tokenizer: {
+			root: [
+				[/^\+[^\n]+/, "comment"], // additions
+				[/^\-[^\n]+/, "metatag"], // deletions
+				[/^(?:commit|Author|Date)[^\n]+/, "strong"], // important messages 
+				[/@@.+?@@/, "constant"],   // line number
+				[/^\s[^\n]+/, "delimiter.xml"], // other lines
+			]
+		}
+	});
+	
+	// Register a new simple language for prettying up git log
+	monaco.languages.register({ id: 'git-log' });
+	monaco.languages.setMonarchTokensProvider('git-log', {
+		tokenizer: {
+			root: [
+				[/^commit[^\n]+/, "constant"], // additions
+				[/(?:\++(?=[\-\s]*$)|\(\+\))/, "comment"], // plus (?:\++(?=[\-\s]*$)|(?<=\()\+(?=\)))
+				[/(?:(\-+)\s*$|\(\-\))/, "metatag"], // minus (?:(\-+)\s*$|(?<=\()\-(?=\)))
+			]
+		}
+	});		
     // dubious
 	function dodgyBasename(f) {
 		return f.replace(/.*[\/\\]/,'');
@@ -2257,30 +2143,25 @@ require([
 			var rex = /^Checking: .*[\/\\]([^\/\\]+?).conf\s*$/gmi,
 				res;
 			conf = data.conf.global;
-			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ');
-			if(confIsTrue('write_access', false)) {
-				$dashboardBody.removeClass('ce_no_write_access');
-			}
-			if(confIsTrue('run_commands', false)) {
-				$dashboardBody.removeClass('ce_no_run_access');
-			}
-			if(! confIsTrue('hide_settings', false)) {
-				$dashboardBody.removeClass('ce_no_settings_access');
-			}
-			if(confIsTrue('git_autocommit', false)) {
-				$dashboardBody.removeClass('ce_no_git_access');
-			}
-			if (conf.hasOwnProperty('git_group_time_mins')) {
-				conf.git_group_time_mins = parseFloat($.trim(conf.git_group_time_mins));
-			}
-			if (! conf.hasOwnProperty('git_group_time_mins') || ! Number.isInteger(conf.git_group_time_mins)) {
-				conf.git_group_time_mins = 60;
-			}
 			if (! conf.hasOwnProperty('git_autocommit_work_tree')) {
 				conf.git_autocommit_work_tree = "";
 			} else {
 				conf.git_autocommit_work_tree = $.trim(conf.git_autocommit_work_tree);
+			}			
+			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ');
+			if (confIsTrue('write_access', false)) {
+				$dashboardBody.removeClass('ce_no_write_access');
 			}
+			if (confIsTrue('run_commands', false)) {
+				$dashboardBody.removeClass('ce_no_run_access');
+			}
+			if (! confIsTrue('hide_settings', false)) {
+				$dashboardBody.removeClass('ce_no_settings_access');
+			}
+			if (confIsTrue('git_autocommit', false) && conf.git_autocommit_work_tree !== "") {
+				$dashboardBody.removeClass('ce_no_git_access');
+			}
+
 			// Build the quick access hooksActive object
 			hooksActive = [];
 			var hookDefaults = data.conf.hook || {};

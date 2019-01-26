@@ -44,6 +44,13 @@ git_autocommit = <bool>
   Note you must first configure the git repo using "git init". Please see the documentation.
 * Defaults to false 
 
+git_autocommit_show_output = <string>
+* When autocommit is enabled, when should we show the commit log
+   true = Always show git messages
+   false = Never show git output
+   auto = Only show git messages when there is a non-zero status code
+* Defaults to auto
+
 git_autocommit_dir = <string>
 * Force specific git repository location, relative to SPLUNK_HOME directory.
 * Defaults to empty, meaning normal git rules will apply (search up from current directory)
@@ -52,10 +59,6 @@ git_autocommit_work_tree = <string>
 * Force root location from where changes are tracked, relative to SPLUNK_HOME directory
   Set to "etc/" to track all changes beneath etc folder.
 * Defaults to empty, meaning the normal git behavior will apply.
-
-git_group_time_mins = <non-negative integer>
-* In the "Change Log" view, changes to the same file by the same user within this
-  time limit will be grouped together into one line entry for display purposes.
 
 
 [hook]
@@ -66,6 +69,11 @@ git_group_time_mins = <non-negative integer>
 match = <regular expression>
 * A regular expression matching the files that this action should apply to. 
   e.g. /(?:local|default))/[^\/]*\.conf$
+
+matchtype = <string>
+* The type of of tree element to match. Can be either "file", "folder", "conf" (the conf files screen).
+* Default is "file"
+	
 
 action = <string>
 * The action name to run, full colon, then the argument (if required). Example: "run:ls -l ${FILENAME}"

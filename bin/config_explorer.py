@@ -168,16 +168,13 @@ class req(splunk.rest.BaseRestHandler):
 
 						elif action == 'git-log':
 							os.chdir(action_item)
-							result = runCommand(['git', 'log', '--stat', '--max-count=200', '--word-diff=porcelain'], env_git)
+							result = runCommand(['git', 'log', '--stat', '--max-count=100'], env_git)
 
 						elif action == 'git-history':
 							os.chdir(os.path.join(SPLUNK_HOME, param1))
-							result += runCommand(['git', 'log', '--follow', '-p', '--', action_item], env_git)
+							result += runCommand(['git', 'log', '--follow', '-p', '--', os.path.join(SPLUNK_HOME, action_item)], env_git)
 
-						elif action == 'git-show':
-							os.chdir(os.path.join(SPLUNK_HOME, param1))
-							result = runCommand(['git', 'show', action_item], env_git)
-													
+						
 						elif action == 'run':
 							# dont need to check if we are inside Splunk dir. User can do anything with run command anyway.
 							file_path = os.path.join(SPLUNK_HOME, param1)
