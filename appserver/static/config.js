@@ -74,7 +74,8 @@ require([
 		'git': 					{ can_rerun: false, can_reopen: false, },
 		'live': 				{ can_rerun: false, can_reopen: false, },
 		'live-diff': 			{ can_rerun: false, can_reopen: false, },
-		'refresh': 				{ can_rerun: true,  can_reopen: false, },				
+		'refresh': 				{ can_rerun: true,  can_reopen: false, },
+		'internal': 			{ can_rerun: false, can_reopen: false, },
 	};
 	// This is what will be executed in the following circumstances:
 	//  - the URL hash on load (can_reopen=true above)
@@ -349,7 +350,7 @@ require([
 			if (confIsTrue('git_autocommit', false)) {
 				// can show history
 				actions.push($("<div>View file history</div>").on("click", function(){
-					getFileHistory(thisFile);
+					getFileHistory(thisFile, "", inFolder);
 				}));
 			}
 			// can compare
@@ -1161,9 +1162,16 @@ require([
 	function showChangeLog() {
 		var ecfg = createTab('change-log', "", "Change log");
 		var table = $("<table></table>");
-		serverActionWithoutFlicker("git-log").then(function(contents){
+		var prependFolder = "";
+		if (conf.git_autocommit_work_tree == "") {
+			prependFolder = inFolder  + "/";
+		}
+		serverActionWithoutFlicker("git-log", inFolder).then(function(contents){
+			var ecfg2 = createTab('internal', "", "Change log");
+			updateTabAsEditor(ecfg2, contents)
+			
 			// commit 1, datetime 2 user 3 change 4 files 5 additions 6 deletions 7
-			var rex = /commit\s+(\S+)[\s\S]*?Date:\s+\S+\s+(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+(\S+)(?: +(\S+))?\s+([\s\S]+?)\d+\s+files? changed,(?: (\d+) insertions?\(\+\))?(?: (\d+) deletions?\(\-\))?/g,
+			var rex = /commit\s+(\S+)[\s\S]*?Date:\s+\S+\s+(\S+\s+\S+\s+\S+\s+\S+\s+\S+)\s+([^\r\n]+)(?: +(\S+))?\s+([\s\S]+?)\d+\s+files? changed,(?: (\d+) insertions?\(\+\))?(?: (\d+) deletions?\(\-\))?/g,
 				res, 
 				type,
 				f,
@@ -1255,7 +1263,7 @@ require([
 				if ($elem.hasClass('icon-number')) {
 					var filecommitstr = $elem.parents("tr").attr("commitstart") + ":./" + filestr;
 					var ecfg = createTab('diff', filestr, "<span class='ce-dim'>diff:</span> " + dodgyBasename(filestr));
-					Promise.all([serverAction("read", filestr), serverAction("git-show", filecommitstr)]).then(function(results) {						
+					Promise.all([serverAction("read", prependFolder + filestr), serverAction("git-show", filecommitstr, prependFolder)]).then(function(results) {						
 						updateTabAsDiffer(ecfg, "# " + filecommitstr + "\n" + results[0], "# Current HEAD:./" + filestr + "\n" + results[1]);
 					}).catch(function(){ 
 						closeTabByCfg(ecfg);
@@ -1263,7 +1271,7 @@ require([
 				} else if ($elem.hasClass('icon-speech-bubble')) {
 					var filecommitstrstart = $elem.parents("tr").attr("commitstart");
 					var filecommitstrend = $elem.parents("tr").attr("commitend");
-					getFileHistory(filestr, filecommitstrstart, filecommitstrend);
+					getFileHistory(filestr, filecommitstrstart + ":" + filecommitstrend, prependFolder);
 				}
 			});			
 		}).catch(function(){ 
@@ -1272,9 +1280,17 @@ require([
 	}
 	
 	// Git history of a specific file optionally between two commit tags
-	function getFileHistory(file, commitstart, commitend){
+	function getFileHistory(file, commitstartend, currFolder){
 		var ecfg = createTab('history', file, "<span class='ce-dim'>history:</span> " + dodgyBasename(file));
-		serverActionWithoutFlicker("git-history", file).then(function(contents){
+		var commitstart = "";
+		var commitend = "";
+		var parts = commitstartend.split(":");
+		if (parts.length == 2) {
+			commitstart = parts[0];
+			commitend = parts[1];
+		}
+		console.log("history", parts);
+		serverActionWithoutFlicker("git-history", file, currFolder).then(function(contents){
 			contents = $.trim(contents);
 			if (! contents) {
 				showModal({
@@ -1788,13 +1804,24 @@ require([
 					reject(Error("error"));
 				} else {
 					// if there was some unexpected git output, then open a window to display it
-					if (r.data.git && r.data.git_status !== 0) {
-						var git_output = "<h2>Warning: Unexpected return code when attempting to autocommit changes to version control. Output is below:</h2>";
-						for (var j = 0; j < r.data.git.length; j++) {
-							git_output += "<div class='ce_gitoutput-" + r.data.git[j].type + "'>" + htmlEncode($.trim(r.data.git[j].content)) + "</div>";
+					
+					if (r.data.git && r.data.git_status !== -1) {
+						var git_autocommit_show_output = "onerror";
+						if (conf.hasOwnProperty("git_autocommit_show_output")) {
+							git_autocommit_show_output = conf['git_autocommit_show_output'].toLowerCase();
 						}
-						var ecfg = createTab('git', '', 'git output');
-						updateTabHTML(ecfg, "<div class='ce_gitoutput'>" + git_output + "</div>");
+						if (git_autocommit_show_output === "true" || (git_autocommit_show_output === "onerror" && r.data.git_status > 0)) {
+							var git_output = "<h2>";
+							if (git_autocommit_show_output === "onerror") {
+								git_output = "Warning: Unexpected return code when attempting to autocommit changes to version control. ";
+							}
+							git_output = "Git output is below:</h2>";
+							for (var j = 0; j < r.data.git.length; j++) {
+								git_output += "<div class='ce_gitoutput-" + r.data.git[j].type + "'>" + htmlEncode($.trim(r.data.git[j].content)) + "</div>";
+							}
+							var ecfg = createTab('git', '', 'git output');
+							updateTabHTML(ecfg, "<div class='ce_gitoutput'>" + git_output + "</div>");
+						}
 					}
 					resolve(r.data.result);	
 				}
@@ -2248,6 +2275,11 @@ require([
 			}
 			if (! conf.hasOwnProperty('git_group_time_mins') || ! Number.isInteger(conf.git_group_time_mins)) {
 				conf.git_group_time_mins = 60;
+			}
+			if (! conf.hasOwnProperty('git_autocommit_work_tree')) {
+				conf.git_autocommit_work_tree = "";
+			} else {
+				conf.git_autocommit_work_tree = $.trim(conf.git_autocommit_work_tree);
 			}
 			// Build the quick access hooksActive object
 			hooksActive = [];

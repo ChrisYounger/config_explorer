@@ -34,6 +34,11 @@ class req(splunk.rest.BaseRestHandler):
 			status_codes.append(p.returncode)
 			return str(o[0]) + "\n"
 
+		def runCommandGit(git_output, git_status_codes, cmds):
+			git_output.append({"type": "cmd", "content": '$ ' + " ".join(cmds)}) 
+			git_output.append({"type": "out", "content": runCommand(cmds, env_git, git_status_codes)})
+			git_output.append({"type": "cmd", "content": 'Ended with code: ' + str(git_status_codes[-1])})
+			
 		def runCommandCustom(cmds):
 			# TODO timeout after: int(conf["global"]["run_timeout"])
 			p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, env=env_copy)
@@ -43,21 +48,29 @@ class req(splunk.rest.BaseRestHandler):
 		def git(message, git_status_codes, git_output, file1, file2=None):
 			if confIsTrue("git_autocommit", False):
 				try:
-					if file2 == None:
-						git_output.append({"type": "cmd", "content": '$git add ' + file1})
-						git_output.append({"type": "out", "content": runCommand(['git','add', file1], env_git, git_status_codes)})
+					files = [file1]
+					if file2 != None:
+						files.append(file2)
+					
+					cmds = ['git','diff','--no-ext-diff','--quiet','--exit-code']
+					cmds.extend(files)
+					runCommandGit(git_output, git_status_codes, cmds)
+					
+					if git_status_codes.pop() == 1:
+						git_output[-1]['content'] += ' (There are changes)'
+						cmds = ['git','add']
+						cmds.extend(files)
+						runCommandGit(git_output, git_status_codes, cmds)
+						cmds = ['git','commit','-uno','-m', message]
+						runCommandGit(git_output, git_status_codes, cmds)
 					else:
-						git_output.append({"type": "cmd", "content": '$git add ' + file1 + " " + file2})
-						git_output.append({"type": "out", "content": runCommand(['git','add', file1, file2], env_git, git_status_codes)})
+						git_output[-1]['content'] += ' (No changes)'
 
-					git_output.append({"type": "cmd", "content": '$git commit -m ' + message})
-					#git_output_tmp = runCommand(['git','commit','-m', message], env_git, git_status_codes)
-					#git_output.append({"type": "cmd", "content": re.sub(r"On branch \S*\s*\nUntracked [\s\S]+ but untracked files present", '', git_output_tmp)})
-					git_output.append({"type": "out", "content": runCommand(['git','commit','-m', message], env_git, git_status_codes)})
 				except Exception as ex:
 					template = "{0}: {1!r}"
 					git_output.append({"type": "desc", "content": "Git failed. Is git installed and configured correctly?"})
 					git_output.append({"type": "out", "content": template.format(type(ex).__name__, ex.args)})
+					git_status_codes.append(1)
 
 		def confIsTrue(param, defaultValue):
 			if param not in conf["global"]:
@@ -71,7 +84,7 @@ class req(splunk.rest.BaseRestHandler):
 			status = ""
 			debug = ""
 			git_output = []
-			git_status_codes = [0]
+			git_status_codes = [-1]
 			payload = parse_qs(self.request['payload'])
 			action = payload['action'][0]
 			action_item = ""
@@ -144,16 +157,6 @@ class req(splunk.rest.BaseRestHandler):
 							result['files'] = runCommand([cmd, 'btool', 'check', '--debug'], env_copy)
 							result['conf'] = conf
 
-						elif action == 'git-log':
-							result = runCommand(['git', 'log', '--stat', '--max-count=200'], env_git)
-
-						elif action == 'git-history':
-							debug = action_item
-							result = runCommand(['git', 'log', '--follow', '-p', '--', action_item], env_git)
-
-						elif action == 'git-show':
-							result = runCommand(['git', 'show', action_item], env_git)
-							
 						elif action == 'btool-check':
 							result = runCommand([cmd, 'btool', 'check', '--debug'], env_copy)
 							result = result + runCommand([cmd, 'btool', 'find-dangling'], env_copy)
@@ -162,7 +165,19 @@ class req(splunk.rest.BaseRestHandler):
 							
 						elif action == 'btool-list':
 							result = runCommand([cmd, 'btool', action_item, 'list', '--debug'], env_copy)	
-						
+
+						elif action == 'git-log':
+							os.chdir(action_item)
+							result = runCommand(['git', 'log', '--stat', '--max-count=200', '--word-diff=porcelain'], env_git)
+
+						elif action == 'git-history':
+							os.chdir(os.path.join(SPLUNK_HOME, param1))
+							result += runCommand(['git', 'log', '--follow', '-p', '--', action_item], env_git)
+
+						elif action == 'git-show':
+							os.chdir(os.path.join(SPLUNK_HOME, param1))
+							result = runCommand(['git', 'show', action_item], env_git)
+													
 						elif action == 'run':
 							# dont need to check if we are inside Splunk dir. User can do anything with run command anyway.
 							file_path = os.path.join(SPLUNK_HOME, param1)
