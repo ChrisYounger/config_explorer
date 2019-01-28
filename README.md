@@ -33,14 +33,14 @@ There is some basic audit logging here: `index=_internal source="*config_explore
 
 
 Copyright (C) 2018 Chris Younger
-I am a Splunk Professional Services consultant working for JDS Australia (https://www.jds.net.au), in Brisbane Australia. 
+I am a Splunk Professional Services consultant working for [JDS Australia](https://www.jds.net.au), in Brisbane Australia. 
 
 
-[Source code(https://github.com/ChrisYounger/config_explorer)] 
+[Source code](https://github.com/ChrisYounger/config_explorer)
 
-[Feature requests and bugs(https://github.com/ChrisYounger/config_explorer/issues)] 
+[Feature requests and bugs](https://github.com/ChrisYounger/config_explorer/issues)
 
-[Splunkbase(http://path_to_splunkbase)]
+[Splunkbase](https://splunkbase.splunk.com/app/4353/)
 
 
   

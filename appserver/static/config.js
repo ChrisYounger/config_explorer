@@ -1621,7 +1621,8 @@ require([
 		return new Promise(function(resolve, reject) {
 			inFlightRequests++;
 			$('.ce_saving_icon').removeClass('ce_hidden');
-			service.post('/services/config_explorer', {action: type, path: path, param1: param1}, function(err, r) {
+			console.log({action: type, path: (typeof path === "undefined" ? "" : path), param1: (typeof param1 === "undefined" ? "" : param1)});
+			service.post('/services/config_explorer', {action: type, path: (typeof path === "undefined" ? "" : path), param1: (typeof param1 === "undefined" ? "" : param1)}, function(err, r) {
 				inFlightRequests--;
 				if (inFlightRequests === 0) {
 					$('.ce_saving_icon').addClass('ce_hidden');
