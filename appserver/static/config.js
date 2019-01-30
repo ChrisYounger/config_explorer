@@ -98,8 +98,8 @@ require([
 		'spec': function(arg1){
 			displaySpecFile(arg1);
 		},
-		'run': function(arg1){
-			runShellCommandNow(arg1,"");
+		'run': function(arg1, arg2){
+			runShellCommandNow(arg1, arg2);
 		},
 		'run-safe': function(arg1){
 			runShellCommand(arg1, true);
@@ -649,7 +649,8 @@ require([
 			run_history.push(command);
 		}
 		// save to localstorage
-		localStorage.setItem('ce_run_history', JSON.stringify(run_history));		
+		localStorage.setItem('ce_run_history', JSON.stringify(run_history));
+		ecfg.fromFolder = fromFolder;
 		serverActionWithoutFlicker("run", command, fromFolder).then(function(contents){
 			clearInterval(interval);
 			updateTabAsEditor(ecfg, contents, 'plaintext');
@@ -1505,7 +1506,7 @@ require([
 				label: 'Rerun',
 				run: function() {
 					closeTabByCfg(ecfg);
-					hooksCfg[ecfg.type](ecfg.file);
+					hooksCfg[ecfg.type](ecfg.file, ecfg.fromFolder);
 				}
 			});
 		}		
