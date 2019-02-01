@@ -24,6 +24,7 @@
 }
 .ce_no_write_access .ce_add_file,
 .ce_no_write_access .ce_add_folder,
+.ce_no_write_access .ce_upload_file,
 .ce_no_write_access .ce_rename_icon,
 .ce_no_write_access .ce_delete_icon {
 	display: none;

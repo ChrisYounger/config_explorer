@@ -220,6 +220,8 @@ require([
 			fileSystemCreateNew(inFolder, true);
 		} else if (elem.hasClass("ce_add_folder")) {
 			fileSystemCreateNew(inFolder, false);
+		} else if (elem.hasClass("ce_upload_file")) {
+			fileSystemUpload(inFolder);
 		} else if (elem.hasClass("ce_refresh_tree")) {
 			refreshFolder();
 		} else if (elem.hasClass("ce_folder_up")) {
@@ -447,8 +449,8 @@ require([
 		var ecfg = createTab('diff', rightFile + " " + leftFile, "<span class='ce-dim'>diff:</span> " + rightFile + " " + leftFile);
 		// get both files 
 		Promise.all([
-			serverActionWithoutFlicker('read', leftFile),
-			serverActionWithoutFlicker('read', rightFile),
+			serverActionWithoutFlicker({action: 'read', path: leftFile}),
+			serverActionWithoutFlicker({action: 'read', path: rightFile}),
 		]).then(function(contents){
 			updateTabAsDiffer(ecfg, leftFile + "\n" + contents[0], rightFile + "\n" + contents[1]);
 		}).catch(function(){ 
@@ -650,8 +652,8 @@ require([
 		}
 		// save to localstorage
 		localStorage.setItem('ce_run_history', JSON.stringify(run_history));
-		ecfg.fromFolder = fromFolder;
-		serverActionWithoutFlicker("run", command, fromFolder).then(function(contents){
+		ecfg.fromFolder = fromFolder;	
+		serverActionWithoutFlicker({action: 'run', path: command, param1: fromFolder}).then(function(contents){
 			clearInterval(interval);
 			updateTabAsEditor(ecfg, contents, 'plaintext');
 		}).catch(function(){
@@ -663,7 +665,7 @@ require([
 	// Check config
 	function runBToolCheck() {
 		var ecfg = createTab('btool-check', 'btool-check', 'btool check ');
-		serverActionWithoutFlicker('btool-check').then(function(contents){
+		serverActionWithoutFlicker({action: 'btool-check'}).then(function(contents){
 			contents = contents.replace(/^(No spec file for|Checking):.*\r?\n/mg,'').replace(/^\t\t/mg,'').replace(/\n{2,}/g,'\n\n');
 			if ($.trim(contents)) {
 				updateTabAsEditor(ecfg, contents, 'plaintext');
@@ -721,7 +723,7 @@ require([
 		}
 		if (! tabAlreadyOpen(type, path)) {
 			var ecfg = createTab(type, path, tab_path_fmt);
-			serverActionWithoutFlicker('btool-list', path).then(function(contents){
+			serverActionWithoutFlicker({action: 'btool-list', path: path}).then(function(contents){
 				var c = formatBtoolList(contents, true, false);
 				if ($.trim(c)) {
 					getRunningConfig(path).then(function(contents_running){
@@ -775,12 +777,12 @@ require([
 		}
 		if (! tabAlreadyOpen(type, path)) {
 			var ecfg = createTab(type, path, tab_path_fmt);
-			serverActionWithoutFlicker('btool-list', path).then(function(contents){
+			serverActionWithoutFlicker({action: 'btool-list', path: path}).then(function(contents){
 				var c = formatBtoolList(contents, ce_btool_default_values, ce_btool_path);
 				if ($.trim(c)) {
 					updateTabAsEditor(ecfg, c, 'ini');
 					ecfg.btoollist = contents;
-					serverAction('spec-hinting', path).then(function(h){
+					serverAction({action: 'spec-hinting', path: path}).then(function(h){
 						ecfg.hinting = buildHintingLookup(path, h);
 					});
 				} else {
@@ -803,7 +805,7 @@ require([
 		var tab_path_fmt = '<span class="ce-dim">spec:</span> ' + path;
 		if (! tabAlreadyOpen('spec', path)) {
 			var ecfg = createTab('spec', path, tab_path_fmt);
-			serverActionWithoutFlicker('spec', path).then(function(contents) {
+			serverActionWithoutFlicker({action: 'spec', path: path}).then(function(contents) {
 				if ($.trim(contents)) {
 					updateTabAsEditor(ecfg, contents, 'ini');
 				} else {
@@ -875,7 +877,7 @@ require([
 	
 	function readFolderFromServer(path, direction) {
 		showTreePaneSpinner(direction);
-		return serverAction('read', path).then(function(contents){
+		return serverAction({action: 'read', path: path}).then(function(contents){
 			// if filecache is null it means user turned it off by setting conf to -1
 			if (filecache !== null) {
 				var base = getTreeCache(path);
@@ -1050,12 +1052,12 @@ require([
 		}		
 		if (! tabAlreadyOpen(type, path)) {
 			var ecfg = createTab(type, path, label);
-			serverActionWithoutFlicker('read', path).then(function(contents){
+			serverActionWithoutFlicker({action: 'read', path: path}).then(function(contents){
 				updateTabAsEditor(ecfg, contents);
 				if (ecfg.hasOwnProperty('matchedConf')) {
 					highlightBadConfig(ecfg);
 					if (confFiles.hasOwnProperty(ecfg.matchedConf)) {
-						serverAction('spec-hinting', ecfg.matchedConf).then(function(c){
+						serverAction({action: 'spec-hinting', path: ecfg.matchedConf}).then(function(c){
 							ecfg.hinting = buildHintingLookup(ecfg.matchedConf, c);
 						});
 					}
@@ -1090,7 +1092,7 @@ require([
 						var fname = $('.ce_prompt_input').val();
 						if (fname) {
 							showTreePaneSpinner();
-							serverAction("new" + type, parentPath, fname).then(function(){
+							serverAction({action: 'new' + type, path: parentPath, param1: fname}).then(function(){
 								refreshFolder();
 								showToast('Success');
 							}).catch(function(){
@@ -1108,6 +1110,41 @@ require([
 		});
 	}
 	
+	function fileSystemUpload(parentPath){
+		showModal({
+			title: "File upload ",
+			size: 300,
+			body: "<div>Select file:<br><br>"+
+					// There is no option to auto extract the files becuase this would be a git headache
+					"<input type='file' style='width: 100%;' class='ce_file_upload_input'/><br><br>"+
+					"</div>",
+			actions: [{
+				onClick: function(){
+					$('.modal').one('hidden.bs.modal', function() {
+						var file = $('.ce_file_upload_input')[0].files[0];
+						var reader = new FileReader();
+						reader.onloadend = function() {
+							var upFileB64 = reader.result;
+							showTreePaneSpinner();
+							serverAction({action: 'fileupload', path: parentPath, param1: file.name, file: upFileB64}).then(function(){
+								showToast('Success');
+								refreshFolder();
+							}).catch(function(contents){
+								refreshFolder();
+							});
+						}
+						reader.readAsDataURL(file);
+					}).modal('hide');
+				},
+				cssClass: 'btn-primary',
+				label: "Upload"
+			},{
+				onClick: function(){ $(".modal").modal('hide'); },
+				label: "Cancel"
+			}]
+		});
+	}
+
 	// Rename a file or folder with a prompt window
 	function fileSystemRename(parentPath) {
 		if (fileIsOpenAndHasChanges(parentPath)) { return; }
@@ -1130,7 +1167,7 @@ require([
 						var newname = $('.ce_prompt_input').val();
 						if (newname && newname !== bn) {
 							showTreePaneSpinner();
-							serverAction("rename", parentPath, newname).then(function(){
+							serverAction({action: 'rename', path: parentPath, param1: newname}).then(function(){
 								refreshFolder();
 								showToast('Success');
 								// if "path" is open in an editor, it needs to be closed without warning
@@ -1177,7 +1214,7 @@ require([
 					}
 					$('.modal').one('hidden.bs.modal', function() {
 						showTreePaneSpinner();
-						serverAction("delete", file).then(function(){
+						serverAction({action: 'delete', path: file}).then(function(){
 							refreshFolder();
 							showToast('Success');
 							// if "path" is open in an editor, it needs to be closed without warning
@@ -1196,7 +1233,7 @@ require([
 
 	function showChangeLog() {
 		var ecfg = createTab('change-log', "", "Change log");
-		serverActionWithoutFlicker("git-log", inFolder).then(function(contents){
+		serverActionWithoutFlicker({action: 'git-log', path: inFolder}).then(function(contents){
 			updateTabAsEditor(ecfg, contents, "git-log");
 		}).catch(function(){ 
 			closeTabByCfg(ecfg);
@@ -1206,7 +1243,7 @@ require([
 	// Git history of a specific file optionally between two commit tags
 	function getFileHistory(file, folder){
 		var ecfg = createTab('history', file, "<span class='ce-dim'>history:</span> " + dodgyBasename(file));
-		serverActionWithoutFlicker("git-history", file, folder).then(function(contents){
+		serverActionWithoutFlicker({action: 'git-history', path: file, param1: folder}).then(function(contents){
 			contents = $.trim(contents);
 			if (! contents) {
 				showModal({
@@ -1559,7 +1596,7 @@ require([
 				var saved_value = ecfg.editor.getValue();
 				ecfg.saving = true;
 				ecfg.tab.append("<i class='ce_right_icon ce_right_two ce_tab_saving_icon icon-two-arrows-cycle' title='Saving...'></i>");
-				serverAction('save', ecfg.file, saved_value).then(function(){
+				serverAction({action: 'save', path: ecfg.file, file: saved_value}).then(function(){
 					ecfg.saving = false;
 					ecfg.tab.find('.ce_tab_saving_icon').remove();
 					showToast('Saved');
@@ -1606,8 +1643,8 @@ require([
 	}	
 	
 	// Make sure the server action that results in a tab open, takes a minimum amount of time so as not to flicker and look dumb
-	function serverActionWithoutFlicker(type, path, param1) {
-		var promise = serverAction(type, path, param1);
+	function serverActionWithoutFlicker(postData) {
+		var promise = serverAction(postData);
 		var promiseTimeout = new Promise(function(resolve) {
 			setTimeout(resolve, 800);
 		});
@@ -1618,12 +1655,12 @@ require([
 	}
 	
 	// Make a rest call to our backend python script
-	function serverAction(type, path, param1) {
+	function serverAction(postData) {
 		return new Promise(function(resolve, reject) {
 			inFlightRequests++;
 			$('.ce_saving_icon').removeClass('ce_hidden');
-			console.log({action: type, path: (typeof path === "undefined" ? "" : path), param1: (typeof param1 === "undefined" ? "" : param1)});
-			service.post('/services/config_explorer', {action: type, path: (typeof path === "undefined" ? "" : path), param1: (typeof param1 === "undefined" ? "" : param1)}, function(err, r) {
+			console.log(postData);
+			service.post('/services/config_explorer', postData, function(err, r) {
 				inFlightRequests--;
 				if (inFlightRequests === 0) {
 					$('.ce_saving_icon').addClass('ce_hidden');
@@ -1640,23 +1677,23 @@ require([
 					if (! r.data) {
 						errText = "<pre>Error communicating with Splunk</pre>";
 						
-					} else if (! r.data.hasOwnProperty('status')) {
+					} else if (! (r.data.hasOwnProperty('result') || r.data.hasOwnProperty('reason'))) {
 						errText = "<pre>" + htmlEncode(r.data) + "</pre>";
 						
-					} else if (r.data.status === "missing_perm_read") {
+					} else if (r.data.reason === "missing_perm_read") {
 						errText = "<p>To use this application you must be have the capability \"<strong>admin_all_objects</strong>\" via a <a href='/manager/config_explorer/authorization/roles'>role</a>.</p>";
 
-					} else if (r.data.status === "missing_perm_run") {
+					} else if (r.data.reason === "missing_perm_run") {
 						errText = "<p>You must enable the <code>run_commands</code> setting</p>";
 						
-					} else if (r.data.status === "missing_perm_write") {
+					} else if (r.data.reason === "missing_perm_write") {
 						errText = "<p>You must enable the <code>write_access</code> setting</p>";
 						
-					} else if (r.data.status === "config_locked") {
+					} else if (r.data.reason === "config_locked") {
 						errText = "<p>Unable to write to the settings file becuase it is locked and must be edited externally: <code>etc/apps/config_explorer/local/config_explorer.conf</code></p>";
 						
-					} else if (r.data.status === "error") {
-						errText = "<pre>" + htmlEncode(r.data.result) + "</pre>";
+					} else if (r.data.reason !== "") {
+						errText = "<pre>" + htmlEncode(r.data.reason) + "</pre>";
 					}
 				}
 				if (errText) {
@@ -1729,7 +1766,7 @@ require([
 			return;
 		}
 		if (ecfg.hasOwnProperty('matchedConf')) {
-			serverAction('btool-list', ecfg.matchedConf).then(function(btoolcontents){
+			serverAction({action: 'btool-list', path: ecfg.matchedConf}).then(function(btoolcontents){
 				if (! $.trim(btoolcontents)) {
 					delete ecfg.matchedConf;
 					return;
@@ -2141,7 +2178,7 @@ require([
 	// Build the list of config files, 
 	// This function is also called after settings are changed.
 	function loadPermissionsAndConfList(){
-		return serverAction('init').then(function(data) {
+		return serverAction({action:'init'}).then(function(data) {
 			var rex = /^Checking: .*[\/\\]([^\/\\]+?).conf\s*$/gmi,
 				res;
 			conf = data.conf.global;
@@ -2309,7 +2346,7 @@ require([
 		// Build the left pane
 		showTreePaneSpinner();
 		if (Number(conf.cache_file_depth) > 0) {
-			serverAction('fs').then(function(contents){
+			serverAction({action:'fs'}).then(function(contents){
 				filecache = contents;
 				readFolder(inFolder);
 			});	

@@ -23,10 +23,6 @@ hide_settings = false
 #max_file_size = 10
 # The maximum file size in megabytes that can be opened. 
 
-############################################################################
-#  Experimental features                                                   #
-############################################################################
-
 #cache_file_depth = 6
 # Cache the list of files and folders for the left pane to this many levels deep. 
 # This makes navigation much faster (especially on windows) but uses more memory, 
@@ -36,13 +32,14 @@ hide_settings = false
 
 #conf_validate_on_save = true
 # Show a green or red indicator in the code gutter of each line if it appears
-# in the btool list output or not. There are a lot of edge cases where this 
-# doesn't work properly
+# in the btool list output or not. Note: There are some of edge cases where this 
+# doesn't work properly, so run btool yourself to confirm.
 # Defaults to true
 
 #git_autocommit = false
 # Track all file saves by automatically committing them to git with a generic message. 
 # Note you must first configure the git repo using "git init". Please see the documentation.
+# Autocommitting is a 'best effort' and not guaranteed. 
 # Defaults to false 
 
 #git_autocommit_show_output = auto
@@ -60,7 +57,6 @@ hide_settings = false
 # Force root location from where changes are tracked, relative to SPLUNK_HOME directory
 # Set to "etc/" to track all changes beneath etc folder.
 # Defaults to empty, meaning the normal git behavior will apply.
-
 
 ############################################################################
 #  Custom action hooks                                                     #

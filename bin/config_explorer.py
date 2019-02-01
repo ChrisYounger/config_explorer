@@ -1,14 +1,14 @@
 # Copyright (C) 2018 Chris Younger
 
-import splunk, sys, os, time, json, re, shutil, subprocess, platform, logging, logging.handlers
+import splunk, base64, sys, os, time, json, re, shutil, subprocess, platform, logging, logging.handlers
 
 if sys.platform == "win32":
-    import msvcrt
-    # Binary mode is required for persistent mode on Windows.
-    msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
-    msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
-    msvcrt.setmode(sys.stderr.fileno(), os.O_BINARY)
-	
+	import msvcrt
+	# Binary mode is required for persistent mode on Windows.
+	msvcrt.setmode(sys.stdin.fileno(), os.O_BINARY)
+	msvcrt.setmode(sys.stdout.fileno(), os.O_BINARY)
+	msvcrt.setmode(sys.stderr.fileno(), os.O_BINARY)
+
 from splunk.persistconn.application import PersistentServerConnectionApplication
 from splunk.clilib.cli_common import getMergedConf
 
@@ -24,17 +24,18 @@ def setup_logging():
 	logger.setLevel("DEBUG");
 	return logger
 logger = setup_logging()
-textchars = bytearray({7,8,9,10,12,13,27} | set(range(0x20, 0x100)) - {0x7f})
-is_binary_string = lambda bytes: bool(bytes.translate(None, textchars))	
-			
+
 class req(PersistentServerConnectionApplication):	
 	def __init__(self, command_line, command_arg):
 		PersistentServerConnectionApplication.__init__(self)
 
 	def handle(self, in_string):
-		debug = ''
-		user = ''
-		log_param = ''
+		textchars = bytearray({7,8,9,10,12,13,27} | set(range(0x20, 0x100)) - {0x7f})
+		is_binary_string = lambda bytes: bool(bytes.translate(None, textchars))	
+		debug = ""
+		user = ""
+		result = ""
+		reason = ""				
 		form = {"action": "", "path": "", "param1": ""}
 		try:
 			conf = getMergedConf(app_name)
@@ -66,11 +67,11 @@ class req(PersistentServerConnectionApplication):
 						files = [file1]
 						if file2 != None:
 							files.append(file2)
-						
+
 						cmds = ['git','diff','--no-ext-diff','--quiet','--exit-code']
 						cmds.extend(files)
 						runCommandGit(git_output, git_status_codes, env_git, cmds)
-						
+
 						if git_status_codes.pop() == 1:
 							git_output[-1]['content'] += ' (There are changes)'
 							cmds = ['git','add']
@@ -94,28 +95,22 @@ class req(PersistentServerConnectionApplication):
 					return True
 				return False
 
-			result = ""
-			status = ""
-			reason = ""		
 			git_output = []
 			git_status_codes = [-1]
 			for formParam in in_payload['form']:
 				form[formParam[0]] = formParam[1]
 
-			if form['action'] != 'save':
-				log_param = form['param1']
-
 			user = in_payload['session']['user']
-					
+
 			# dont allow write or run access unless the user makes the effort to change the setting
 			if form['action'] == 'run' and not confIsTrue("run_commands", False):
-				status = "missing_perm_run"
+				reason = "missing_perm_run"
 					
-			elif ((form['action'] in ['delete', 'rename', 'newfolder', 'newfile']) or (form['action'] == "save" and form['path'] != "")) and not confIsTrue("write_access", False):
-				status = "missing_perm_write"
-			
+			elif ((form['action'] in ['delete', 'rename', 'newfolder', 'newfile', 'fileupload', 'fileuploade']) or (form['action'] == "save" and form['path'] != "")) and not confIsTrue("write_access", False):
+				reason = "missing_perm_write"
+
 			elif form['action'] == "save" and form['path'] == "" and confIsTrue("hide_settings", False):
-				status = "config_locked"
+				reason = "config_locked"
 				
 			else:
 				env_copy = os.environ.copy()
@@ -136,7 +131,7 @@ class req(PersistentServerConnectionApplication):
 							git_output.append({"type": "out", "content": "GIT_WORK_TREE=" + os.path.join(SPLUNK_HOME, git_autocommit_work_tree)})
 					except KeyError:
 						pass
-					
+
 				# when calling read or write with an empty argument it means we are trying to change the config
 				if (form['action'] == 'read' or form['action'] == 'save') and form['path'] == "":
 					localfolder = os.path.join(os.path.dirname( __file__ ), '..', 'local')
@@ -145,19 +140,18 @@ class req(PersistentServerConnectionApplication):
 						os.makedirs(localfolder)
 					if not os.path.exists(form['path']):
 						shutil.copyfile(os.path.join(os.path.dirname( __file__ ), '..','default', app_name + '.conf.example'), form['path'])
-					
+
 				if form['action'][:5] == 'btool' or form['action'] == 'run' or form['action'] == 'init' or form['action'][:3] == 'git':
 					system = platform.system()
 					os.chdir(SPLUNK_HOME)
 					if system != "Windows" and system != "Linux":
-						status = "error"
 						reason = "Unable to run commands on this operating system: " + system
 					else:
 						if system == "Windows":
 							cmd = "bin\\splunk"
 						elif system == "Linux":
 							cmd = "./bin/splunk"
-							
+
 						if form['action'] == 'init':
 							result = {}
 							result['files'] = runCommand([cmd, 'btool', 'check', '--debug'], env_copy)
@@ -168,7 +162,7 @@ class req(PersistentServerConnectionApplication):
 							result = result + runCommand([cmd, 'btool', 'find-dangling'], env_copy)
 							result = result + runCommand([cmd, 'btool', 'validate-strptime'], env_copy)
 							result = result + runCommand([cmd, 'btool', 'validate-regex'], env_copy)
-							
+
 						elif form['action'] == 'btool-list':
 							result = runCommand([cmd, 'btool', form['path'], 'list', '--debug'], env_copy)	
 
@@ -187,51 +181,43 @@ class req(PersistentServerConnectionApplication):
 							os.chdir(file_path)
 							result = runCommandCustom(form['path'], env_copy)
 							
-						status = "success"
-
 				else:
 					if form['action'][:4] == 'spec':
 						spec_path = os.path.join(SPLUNK_HOME, 'etc', 'system', 'README', form['path'] + '.conf.spec')
 						if os.path.exists(spec_path):
 							with open(spec_path, 'r') as fh:
 								result = fh.read()
-								
+
 						apps_path = os.path.join(SPLUNK_HOME, 'etc', 'apps')
 						for d in os.listdir(apps_path):
 							spec_path = os.path.join(apps_path, d, 'README', form['path'] + '.conf.spec')
 							if os.path.exists(spec_path):
 								with open(spec_path, 'r') as fh:
 									result = result + fh.read()
-						
-						status = "success"
-						
+
 					else:
 						base_path_abs = str(os.path.abspath(os.path.join(SPLUNK_HOME)))
 						file_path = os.path.join(SPLUNK_HOME, form['path'])
 						file_path_abs = str(os.path.abspath(file_path))
 						if file_path_abs.find(base_path_abs) != 0:
-							status = "error" 
 							reason = "Unable to access path [" + file_path_abs + "] out of splunk directory [" + base_path_abs + "]"
-							
+
 						else:
 							if form['action'] == 'save':
 								if os.path.isdir(file_path):
-									status = "error" 
 									reason = "Cannot save file as a folder"
-									
+
 								elif not os.path.exists(file_path):
-									status = "error" 
 									reason = "Cannot save to a file that does not exist"
-								
+
 								else:
 									os.chdir(os.path.dirname(file_path))
 									git_output.append({"type": "desc", "content": "Committing file before saving changes"})
 									git("unknown", git_status_codes, git_output, file_path)
 									with open(file_path, "wb") as fh:
-										fh.write(form['param1'])
+										fh.write(form['file'])
 									git_output.append({"type": "desc", "content": "Committing file after saving changes"})
 									git(user + " save ", git_status_codes, git_output, file_path)
-									status = "success" 
 
 							elif form['action'] == 'fs':
 								def pack(base, path, dirs, files):
@@ -251,8 +237,6 @@ class req(PersistentServerConnectionApplication):
 									if len(paths) >= depth:
 										del dirs[:]
 
-								status = "success"
-				
 							elif form['action'] == 'read':
 								if os.path.isdir(file_path):
 
@@ -263,44 +247,50 @@ class req(PersistentServerConnectionApplication):
 											result.append("D" + f)
 										else:
 											result.append("F" + f)
-									status = "success"
-											
+
 								else:
 									fsize = os.path.getsize(file_path) / 1000000
 									if fsize > int(conf["global"]["max_file_size"]):
-										status = "error"
 										reason = "File too large to open. File size is " + str(fsize) + " MB and the configured limit is " + conf["global"]["max_file_size"] + " MB"
 									else:
 										with open(file_path, 'r') as fh:
 											result = fh.read()
-											status = "success"
 									if is_binary_string(result):
 										reason = "unable to open binary file"
-										status = "error"
-										
+
 							elif form['action'] == 'delete':
 								os.chdir(os.path.dirname(file_path))
 								git_output.append({"type": "desc", "content": "Committing file before it is deleted"})
 								git("unknown", git_status_codes, git_output, file_path)
 								if os.path.isdir(file_path):
 									shutil.rmtree(file_path)
-									
+
 								else:
 									os.remove(file_path)
 								git_output.append({"type": "desc", "content": "Deleting file"})
 								git(user + " deleted ", git_status_codes, git_output, file_path)
-								status = "success"
-								
+
+							elif form['action'] == 'fileupload':
+								os.chdir(file_path)
+								if os.path.exists(form['param1']):
+									reason = "File already exists"
+								#elif re.search(r'[^A-Za-z0-9_\- \.\(\)]', form['param1']):
+								#	reason = "Uploaded filename contains invalid characters"
+								else:
+									with open(form['param1'], "wb") as fh:
+										idx = form['file'].index(',')
+										fh.write(base64.b64decode(form['file'][idx:]))
+									git_output.append({"type": "desc", "content": "Adding uploaded file"})
+									git(user + " uploaded ", git_status_codes, git_output, form['param1'])
+
 							else:
-								if re.search(r'[^A-Za-z0-9_\- \.]', form['param1']):
+								if re.search(r'[^A-Za-z0-9_\- \.\(\)]', form['param1']):
 									reason = "New name contains invalid characters"
-									status = "error"
 									
 								elif form['action'] == 'rename':
 									new_path = os.path.join(os.path.dirname(file_path), form['param1'])
 									if os.path.exists(new_path):
 										reason = "That already exists"
-										status = "error"
 										
 									else:
 										os.chdir(os.path.dirname(file_path))
@@ -309,30 +299,33 @@ class req(PersistentServerConnectionApplication):
 										os.rename(file_path, new_path)
 										git_output.append({"type": "desc", "content": "Committing renamed file"})
 										git(user + " renamed", git_status_codes, git_output, new_path, file_path)
-										status = "success"
 										
 								else:
 									new_path = os.path.join(file_path, form['param1'])
 									if os.path.exists(new_path):
 										reason = "That already exists"
-										status = "error"
 										
 									elif form['action'] == 'newfolder':
 										os.makedirs(new_path)
-										status = "success"
 										
 									elif form['action'] == 'newfile':
 										open(new_path, 'w').close()
 										os.chdir(os.path.dirname(new_path))
 										git(user + " new", git_status_codes, git_output, new_path)
-										status = "success"
 
-			logger.info('user={} action={} item="{}" param1="{}" status={} reason="{}"'.format(user, form['action'], form['path'], log_param, status, reason))
-			return {'payload': {'result': result, 'status': status, 'debug': debug, 'git': git_output, 'git_status': max(git_status_codes)}, 'status': 200}
-			
+			# result may contain binary if there is an attempted read on a binary file. This will break the json
+			if reason != "":
+				result = ""
+			if not confIsTrue("git_autocommit", False):
+				git_output = ""
+			logger.info('user={} action={} item="{}" param1="{}" reason="{}"'.format(user, form['action'], form['path'], form['param1'], reason))
+			returnobj = {'payload': {'result': result, 'reason': reason, 'debug': debug, 'git': git_output, 'git_status': max(git_status_codes)}, 'status': 200}
+			logger.info(returnobj)
+			return returnobj
+
 		except Exception as ex:
 			template = "An exception of type {0} occurred. Arguments:\n{1!r}"
 			message = template.format(type(ex).__name__, ex.args)
-			logger.info('user={} action={} item="{}" param1="{}"'.format(user, form['action'], form['path'], log_param))
+			logger.info('user={} action={} item="{}" param1="{}"'.format(user, form['action'], form['path'], form['param1']))
 			logger.warn('caught error {} debug={}'.format(message, debug))
-			return {'payload': {'result': message, 'status': 'error', 'debug': debug}, 'status': 200}
+			return {'payload': {'reason': message, 'debug': debug}, 'status': 200}
