@@ -652,6 +652,9 @@ require([
 		}
 		// save to localstorage
 		localStorage.setItem('ce_run_history', JSON.stringify(run_history));
+		if (typeof fromFolder === "undefined") {
+			fromFolder = "";
+		}
 		ecfg.fromFolder = fromFolder;	
 		serverActionWithoutFlicker({action: 'run', path: command, param1: fromFolder}).then(function(contents){
 			clearInterval(interval);
