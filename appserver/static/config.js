@@ -340,7 +340,7 @@ require([
 				addHookAction(hooksActive[j], thisFile, actions, "folder");
 			}			
 		}
-		if ($leftnavElem.hasClass("ce_leftnav_editable")) {
+		if ($leftnavElem.hasClass("ce_leftnav_editable") && confIsTrue('write_access', false)) {
 			// can rename, can trash
 			actions.push($("<div>Rename</div>").on("click", function(){ 
 				fileSystemRename(thisFile); 
@@ -388,8 +388,9 @@ require([
 				}));
 			}
 		}
-
-		buildLeftContextMenu(actions, e, $leftnavElem);
+		if (actions.length) {
+			buildLeftContextMenu(actions, e, $leftnavElem);
+		}
 	});
 
 	// Event handlers for the editor tabs
@@ -1225,6 +1226,8 @@ require([
 							showToast('Success');
 							// if "path" is open in an editor, it needs to be closed without warning
 							closeTabByName(file);
+						}).catch(function(){
+							refreshFolder();
 						});
 					}).modal('hide');
 				},
