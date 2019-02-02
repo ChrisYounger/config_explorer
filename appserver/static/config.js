@@ -1043,6 +1043,9 @@ require([
 				$("<div class='ce_leftnav ce_leftnav_reopen'><i class='icon-" + icon + "'></i> " + htmlEncode(closed_tabs[i].label).replace(/^read:\s/,"") + "</div>").attr("file", closed_tabs[i].file).attr("title", closed_tabs[i].file).attr("type", closed_tabs[i].type).appendTo($filelist);
 			}
 		}
+		if (counter === 0) {
+			$("<div class='ce_treeempty'><i class='icon-warning'></i>Nothing here</div>").appendTo($filelist);
+		}
 	}
 	
 	// Handle clicking an file or folder in the left pane
