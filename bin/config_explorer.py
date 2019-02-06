@@ -144,12 +144,12 @@ class req(PersistentServerConnectionApplication):
 				if form['action'][:5] == 'btool' or form['action'] == 'run' or form['action'] == 'init' or form['action'][:3] == 'git':
 					system = platform.system()
 					os.chdir(SPLUNK_HOME)
-					if system != "Windows" and system != "Linux":
+					if system != "Windows" and system != "Linux" and system != "Darwin":
 						reason = "Unable to run commands on this operating system: " + system
 					else:
 						if system == "Windows":
 							cmd = "bin\\splunk"
-						elif system == "Linux":
+						else:
 							cmd = "./bin/splunk"
 
 						if form['action'] == 'init':

@@ -87,3 +87,4 @@ The following third-party libraries are used by this app. Thank you!
 * Sortable - MIT - https://github.com/rubaxa/Sortable.git
 * OverlayScrollbars - MIT - https://github.com/KingSora/OverlayScrollbars
 * Illustration by Ouch.pics - https://icons8.com
+* Font Awesome - CC BY 4.0 License - https://fontawesome.com/
