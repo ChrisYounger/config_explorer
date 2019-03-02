@@ -28,7 +28,7 @@ hide_settings = false
 # This makes navigation much faster (especially on windows) but uses more memory, 
 # causes slightly slower startup, and will not follow symbolic links. Set to 0 to 
 # disable cache but allow caching of visited directories. Set -1 to disable all caching.
-# Defaults to 6
+# Defaults to 5
 
 #conf_validate_on_save = true
 # Show a green or red indicator in the code gutter of each line if it appears
