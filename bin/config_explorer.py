@@ -21,7 +21,7 @@ def setup_logging():
 	formatter = logging.Formatter("%(created)f %(levelname)s pid=%(process)d %(message)s")
 	file_handler.setFormatter(formatter)
 	logger.addHandler(file_handler)	
-	logger.setLevel("DEBUG");
+	logger.setLevel("INFO");
 	return logger
 logger = setup_logging()
 
@@ -319,9 +319,7 @@ class req(PersistentServerConnectionApplication):
 			if not confIsTrue("git_autocommit", False):
 				git_output = ""
 			logger.info('user={} action={} item="{}" param1="{}" reason="{}"'.format(user, form['action'], form['path'], form['param1'], reason))
-			returnobj = {'payload': {'result': result, 'reason': reason, 'debug': debug, 'git': git_output, 'git_status': max(git_status_codes)}, 'status': 200}
-			logger.info(returnobj)
-			return returnobj
+			return {'payload': {'result': result, 'reason': reason, 'debug': debug, 'git': git_output, 'git_status': max(git_status_codes)}, 'status': 200}
 
 		except Exception as ex:
 			template = "An exception of type {0} occurred. Arguments:\n{1!r}"
