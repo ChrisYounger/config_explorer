@@ -151,7 +151,7 @@ require([
 	var $ce_contents_home = $(".ce_contents_home");
 	var $ce_home_tab = $(".ce_home_tab");
 	var tabCreationCount = 0;
-	
+
 	// Set the "save" hotkey at a global level instnead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
 		if (event.ctrlKey || event.metaKey) {
@@ -956,7 +956,7 @@ require([
 				$filelist.css({transition: "all 0ms", transform: "", opacity: 0});
 			}
 			$filelist.removeClass("ce_move_none ce_move_fwd ce_move_back");
-			$ce_tree_pane.find(".ce_spinner").remove();
+			$ce_tree_pane.find(".ce_spinner, .ce_fs_slow_message").remove();
 			setTimeout(function(){
 				$filelist.css({transition: "", transform: "", opacity: ""});				
 			},0);
@@ -2355,10 +2355,17 @@ require([
 		// Build the left pane
 		showTreePaneSpinner();
 		if (Number(conf.cache_file_depth) > 0) {
+			var fsCompleted = false;
 			serverAction({action:'fs'}).then(function(contents){
 				filecache = contents;
 				readFolder(inFolder);
+				fsCompleted = true;
 			});	
+			setTimeout(function(){
+				if (!fsCompleted) {
+					$("<div class='ce_fs_slow_message'><div>Taking too long?</div>Reduce <code>cache_file_depth</code> in Settings</div>").appendTo($ce_tree_pane);
+				}
+			}, 3000);
 		} else {
 			if (Number(conf.cache_file_depth) === -1) {
 				filecache = null;

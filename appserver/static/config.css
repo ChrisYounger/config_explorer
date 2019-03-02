@@ -870,3 +870,10 @@ input.ce_run_cwd_radio[type=radio] {
 .ce_disclaimer {
 	font-size: 10px;
 }
+.ce_fs_slow_message{
+    margin-top: 200px;
+    text-align: center;
+}
+.ce_fs_slow_message > div{
+    margin-bottom: 10px;
+}
