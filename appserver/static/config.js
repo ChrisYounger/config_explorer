@@ -151,6 +151,7 @@ require([
 	var $ce_contents_home = $(".ce_contents_home");
 	var $ce_home_tab = $(".ce_home_tab");
 	var tabCreationCount = 0;
+	var approvedPostSaveHooks = {};
 
 	// Set the "save" hotkey at a global level instnead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
@@ -284,7 +285,7 @@ require([
 	}
 	
 	function addHookAction(hook, file, actions, matchtype) {
-		if (hook._match.test(file) && hook.matchtype == matchtype) {					
+		if (hook._match.test(file) && hook.matchtype == matchtype) {	
 			actions.push($("<div></div>").text(replaceTokens(hook.label, file)).on("click", function(){ 
 				runHookUnparsed(hook.action, file); 
 			}));
@@ -567,6 +568,84 @@ require([
 				activateTab(tabIdx);
 			}
 		}
+	}
+
+	// This is an action that will occur after saving the file
+	function setPostSaveAction() {
+		var ecfg = editors[activeTab];
+		var suggestions = [];
+		for (var j = 0; j < hooksActive.length; j++) {
+			if (hooksActive[j]._match.test(ecfg.file) && hooksActive[j].matchtype == "file" && isTrueValue(hooksActive[j].showWithSave)) {
+				suggestions.push("Suggest: <code style='color:#333'>" + htmlEncode(replaceTokens(hooksActive[j].action, ecfg.file)) + "</code><br>");
+			}
+		}
+		showModal({
+			title: "Set post-save action",
+			size: 600,
+			body: "<div>Enter a command to automatically run after successful save of this file only. This action will be saved in your browser local storage "+
+						"(it will not affect other users or other browsers you use, but it will be remembered after browser refresh). "+
+						"Run commands will be executed from the SPLUNK_HOME directory.<br><br>"+
+					"File: <code>" + htmlEncode(ecfg.file) + "</code>"+
+					"<br><br>"+
+					suggestions.join('') + 
+					"<br><br><div class='ce_autohookoptions'>" +
+						"<select class='ce_postsave_arg0'>"+
+							"<option value='nothing' selected='selected'>No action</option>"+
+							"<option value='run'>Run command</option>"+
+							"<option value='run-safe'>Run command with prompt</option>"+
+							"<option value='bump'>Bump Splunk cache</option>"+
+							"<option value='refresh'>Debug/Refresh endpoint/s</option>"+
+							"<option value='btool'>Btool list</option>"+
+							"<option value='btool-hidepaths'>Btool list (no paths)</option>"+
+							"<option value='btool-hidedefaults'>Btool list (no defaults)</option>"+
+							"<option value='spec'>Open Spec file</option>"+
+							"<option value='read'>Open file</option>"+
+							"<option value='live'>Show running config</option>"+
+							"<option value='live-diff'>Show running config as diff</option>"+
+						"</select>"+
+						"<input type='text' value='' class='ce_postsave_arg1 ce_prompt_input input input-text' style='margin-left:6px;width:270px;'/></div>"+
+					"</div>"+
+				  "</div>",
+			onShow: function(){
+				// On load set the fields to the current values
+				var p = getPostSave(ecfg.file);
+				if (p !== null) {
+					$(".ce_postsave_arg0").val(p[0]);
+					$(".ce_postsave_arg1").val(p[1]);
+				}
+			}, 
+			actions: [{
+				onClick: function(){
+					var postsave = (JSON.parse(localStorage.getItem('ce_postsave')) || {});
+					var arg0 = $(".ce_postsave_arg0").val();
+					var arg1 = $(".ce_postsave_arg1").val();
+					if (arg0 === "nothing") {
+						delete postsave[ecfg.file];
+					} else {
+						postsave[ecfg.file] = arg0 + ":" + arg1;
+					}
+					localStorage.setItem('ce_postsave', JSON.stringify(postsave));
+					$(".modal").modal('hide');
+				},
+				cssClass: 'btn-primary',
+				label: "Save"
+			},{
+				onClick: function(){ $(".modal").modal('hide'); },
+				label: "Cancel"
+			}]
+		});
+	}
+
+	// Read local storage to get any post-save action that exists for this file
+	function getPostSave(file) {
+		var postsave = (JSON.parse(localStorage.getItem('ce_postsave')) || {});
+		if (postsave.hasOwnProperty(file)){
+			var parts = postsave[file].split(":");
+			var action = parts.shift();
+			var args = replaceTokens(parts.join(":"), file);
+			return [action,args];
+		}
+		return null;
 	}
 
 	// Run button
@@ -1544,6 +1623,15 @@ require([
 					saveActiveTab();
 				}
 			});
+			ecfg.editor.addAction({
+				id: 'save-file-action',
+				contextMenuOrder: 0.1,
+				contextMenuGroupId: 'navigation',
+				label: 'Set post-save action',
+				run: function() {
+					setPostSaveAction();
+				}
+			});
 		}
 		for (var j = 0; j < hooksActive.length; j++) {
 			var hook = hooksActive[j];
@@ -1624,6 +1712,31 @@ require([
 					}
 					if (cb) {
 						cb();
+					}
+					// Run any post-save hook
+					var p = getPostSave(ecfg.file);
+					if (p !== null) {
+						if (p[0] === "run" && ! approvedPostSaveHooks.hasOwnProperty(p[0] + "|" + p[1])) {
+							showModal({
+								title: "Confirm post-save action ",
+								body: "<div>The following action is configured to run after every save:<br><br><code>" + htmlEncode(p[0]) + ":" + htmlEncode(p[1]) + "</code></div>",
+								size: 500,
+								actions: [{
+									onClick: function(){
+										$(".modal").modal('hide');
+										hooksCfg[p[0]](p[1]);
+										approvedPostSaveHooks[p[0] + "|" + p[1]] = true;
+									},
+									cssClass: 'btn-primary',
+									label: "Approve"
+								},{
+									onClick: function(){ $(".modal").modal('hide'); },
+									label: "Cancel"
+								}]
+							});
+						} else {
+							hooksCfg[p[0]](p[1]);
+						}
 					}
 				}, function(){
 					ecfg.saving = false;
