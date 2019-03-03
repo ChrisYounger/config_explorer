@@ -483,7 +483,13 @@ require([
 			} else {
 				updateTabAsEditor(ecfg, data.replace(/'''[\s\S]*'''/,""), 'plaintext');
 			}
-		});		
+		}).fail(function(jqXHR, textStatus, errorThrown) {
+			closeTabByCfg(ecfg);
+			showModal({
+				title: "Error",
+				body: "<div class='alert alert-error'><i class='icon-alert'></i>" + label + " - Error occurred!<br><br>Status code: " + jqXHR.status + "<br><br><pre>" + htmlEncode(errorThrown) + "</pre></div>",
+			});			
+		});
 	}
 	
 	function replaceTokens(str, file){
