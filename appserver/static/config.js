@@ -1832,6 +1832,8 @@ require([
 						currentStanzaTrimmed = currentStanza.replace(/^(\[\w+).*$/,"$1");
 						// Stanzas that have $SPLUNK_HOME in them will be expanded by btool (stanzas in inputs.conf often have $SPLUNK_HOME in them)
 						currentStanzaAsExpectedInBtool = currentStanza.replace(/\$SPLUNK_HOME/i, splunk_home);
+						// Stanzas with windows path seperators are converted to unix seperators by btool
+						currentStanzaAsExpectedInBtool = currentStanzaAsExpectedInBtool.replace(/\\/g, '/');
 						// Stanzas that use relative paths, will be expanded by btool. (e.g. inputs.conf [script://./bin/go.sh] from current script location)
 						currentStanzaAsExpectedInBtool = currentStanzaAsExpectedInBtool.replace(/\/\/\.\//, "//" + splunk_home + ecfg.file.substr(1).replace(/[^\/\\]*\/[^\/\\]*$/,''));
 						
