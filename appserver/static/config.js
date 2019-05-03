@@ -154,7 +154,7 @@ require([
 	var tabCreationCount = 0;
 	var approvedPostSaveHooks = {};
 
-	// Set the "save" hotkey at a global level instnead of on the editor, this way the editor doesnt need to have focus.
+	// Set the "save" hotkey at a global level instead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
 		if (event.ctrlKey || event.metaKey) {
 			switch (String.fromCharCode(event.which).toLowerCase()) {
@@ -465,7 +465,7 @@ require([
 		// get localisation url
 		var url = "/" + document.location.pathname.split("/")[1] + "/";
 		var label = "";
-		if (endpoint) {
+		if (endpoint && endpoint !== "all") {
 			if (endpoint === "bump") {
 				url += "_bump";
 				label = "bump";
