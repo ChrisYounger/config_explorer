@@ -1707,6 +1707,18 @@ require([
 			var hook = hooksActive[j];
 			addHookActionToEditor(hook, ecfg);
 		}
+		if (ecfg.type === "read") {
+			ecfg.editor.addAction({
+				id: 'reload',
+				contextMenuOrder: 0.2,
+				contextMenuGroupId: 'navigation',
+				label: 'Reload from disk',
+				run: function() {
+					closeTabByCfg(ecfg);
+					hooksCfg[ecfg.type](ecfg.file, ecfg.fromFolder);
+				}
+			});
+		}
 		// Add a right-click option 
 		if (tabCfg[ecfg.type].can_rerun) {
 			ecfg.editor.addAction({
