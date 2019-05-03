@@ -128,6 +128,7 @@ require([
 	var folderContents;
 	var run_history = (JSON.parse(localStorage.getItem('ce_run_history')) || []);
 	var closed_tabs = (JSON.parse(localStorage.getItem('ce_closed_tabs')) || []);
+	var preferences = (JSON.parse(localStorage.getItem('ce_preferences')) || []);
 	var activeTab = -1;
 	var filecache = {};
 	var conf = {};
@@ -568,6 +569,54 @@ require([
 				activateTab(tabIdx);
 			}
 		}
+	}
+
+	// This is an action that will occur after saving the file
+	function openPreferences() {
+		var ecfg = editors[activeTab];
+		showModal({
+			title: "Preferences",
+			size: 500,
+			body: "<div>Preferences will only affect sessions from this browser."+
+					"<br><br><span class='ce_pref_item'>Enable word-wrap <label class='ce_pref_label'><input type='checkbox' class='ce_word_wrap'></label></span>"+
+					"<br><br><span class='ce_pref_item'>Enable visible whitespace <label class='ce_pref_label'><input type='checkbox' class='ce_whitespace'></label></span>"+
+					"<br><br><span class='ce_pref_item'>Reuse tabs for post-commit actions <label class='ce_pref_label'><input type='checkbox' class='ce_reuse'></label></span>"+
+				  "</div>",
+			onShow: function(){
+				// On load set the fields to the current values 
+				var preferences = (JSON.parse(localStorage.getItem('ce_preferences')) || {});
+				for (var item in preferences) {
+					if (preferences.hasOwnProperty(item) && preferences[item]){
+						$(".ce_pref_label ." + item).prop('checked', true);
+					}
+				}
+			}, 
+			actions: [{
+				onClick: function(){
+					preferences = {};
+					$(".ce_pref_label input:checked").each(function(){
+						var t = $(this);
+						preferences[ t.attr("class") ] = true;
+					});
+					localStorage.setItem('ce_preferences', JSON.stringify(preferences));
+					// Update all currently open windows
+					for (var i = 0; i < editors.length; i++) {
+						if (editors[i].hasOwnProperty("editor")) {
+							editors[i].editor.updateOptions({
+								wordWrap: (preferences.hasOwnProperty("ce_word_wrap") && preferences.ce_word_wrap) ? "on" : "off",
+								renderWhitespace: (preferences.hasOwnProperty("ce_whitespace") && preferences.ce_whitespace) ? "all" : "none",
+							});
+						}
+					}						
+					$(".modal").modal('hide');
+				},
+				cssClass: 'btn-primary',
+				label: "Save"
+			},{
+				onClick: function(){ $(".modal").modal('hide'); },
+				label: "Cancel"
+			}]
+		});
 	}
 
 	// This is an action that will occur after saving the file
@@ -1263,7 +1312,7 @@ require([
 								refreshFolder();
 								showToast('Success');
 								// if "path" is open in an editor, it needs to be closed without warning
-								closeTabByName(parentPath);
+								closeTabByName("read", parentPath);
 							}).catch(function(){
 								refreshFolder();
 							});
@@ -1310,7 +1359,7 @@ require([
 							refreshFolder();
 							showToast('Success');
 							// if "path" is open in an editor, it needs to be closed without warning
-							closeTabByName(file);
+							closeTabByName("read", file);
 						}).catch(function(){
 							refreshFolder();
 						});
@@ -1418,12 +1467,22 @@ require([
 		}		
 	}
 	
-	function closeTabByName(file) {
+	function closeTabByName(type, file) {
 		for (var i = 0; i < editors.length; i++) {
-			if (editors[i].file === file) {
+			if (editors[i].file === file && editors[i].type === type) {
 				closeTabNow(i);
 				return;
 			}
+		}
+	}
+
+	function closeTabByHookDetails(arg0, arg1) {
+		if (arg0 === "bump") {
+			closeTabByName("refresh", "bump")
+		} else if (arg0 === "run-safe") {
+			closeTabByName("run", arg1)
+		} else {
+			closeTabByName(arg0, arg1);
 		}
 	}
 	
@@ -1592,6 +1651,8 @@ require([
 			lineNumbersMinChars: 3,
 			ariaLabel: ecfg.file,
 			//readOnly: ! ecfg.canBeSaved,
+			wordWrap: (preferences.hasOwnProperty("ce_word_wrap") && preferences.ce_word_wrap) ? "on" : "off",
+			renderWhitespace: (preferences.hasOwnProperty("ce_whitespace") && preferences.ce_whitespace) ? "all" : "none",
 			glyphMargin: true
 		});
 		ecfg.server_content = ecfg.editor.getValue();
@@ -1625,14 +1686,23 @@ require([
 			});
 			ecfg.editor.addAction({
 				id: 'save-file-action',
-				contextMenuOrder: 0.1,
-				contextMenuGroupId: 'navigation',
+				contextMenuOrder: 1,
+				contextMenuGroupId: '99_prefs',
 				label: 'Set post-save action',
 				run: function() {
 					setPostSaveAction();
 				}
 			});
 		}
+		ecfg.editor.addAction({
+			id: 'open-prefs-action',
+			contextMenuOrder: 2,
+			contextMenuGroupId: '99_prefs',
+			label: 'Preferences',
+			run: function() {
+				openPreferences();
+			}
+		});
 		for (var j = 0; j < hooksActive.length; j++) {
 			var hook = hooksActive[j];
 			addHookActionToEditor(hook, ecfg);
@@ -1649,43 +1719,7 @@ require([
 					hooksCfg[ecfg.type](ecfg.file, ecfg.fromFolder);
 				}
 			});
-		}		
-		ecfg.editor.addAction({
-			id: 'word-wrap-on',
-			label: 'Word wrap on',
-			run: function() {
-				ecfg.editor.updateOptions({
-					wordWrap: "on"
-				});
-			}
-		});  
-        ecfg.editor.addAction({
-			id: 'word-wrap-off',
-			label: 'Word wrap off',
-			run: function() {
-				ecfg.editor.updateOptions({
-					wordWrap: "off"
-				});
-			}
-		});
-		ecfg.editor.addAction({
-			id: 'render-whitespace-on',
-			label: 'Render whitespace on',
-			run: function() {
-				ecfg.editor.updateOptions({
-					renderWhitespace: "all"
-				});
-			}
-		});
-		ecfg.editor.addAction({
-			id: 'render-whitespace-off',
-			label: 'Render whitespace off',
-			run: function() {
-				ecfg.editor.updateOptions({
-					renderWhitespace: "none"
-				});
-			}
-		}); 		
+		}		 		
 		openTabsListChanged();
 	}
 	
@@ -1724,6 +1758,7 @@ require([
 								actions: [{
 									onClick: function(){
 										$(".modal").modal('hide');
+										closeTabByHookDetails(p[0], p[1]);
 										hooksCfg[p[0]](p[1]);
 										approvedPostSaveHooks[p[0] + "|" + p[1]] = true;
 									},
@@ -1735,6 +1770,7 @@ require([
 								}]
 							});
 						} else {
+							closeTabByHookDetails(p[0], p[1]);
 							hooksCfg[p[0]](p[1]);
 						}
 					}

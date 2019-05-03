@@ -877,3 +877,9 @@ input.ce_run_cwd_radio[type=radio] {
 .ce_fs_slow_message > div{
     margin-bottom: 10px;
 }
+.ce_pref_label {
+    display: inline-block;
+    margin-left: 20px;
+	transform: translateY(-2px);
+
+}
