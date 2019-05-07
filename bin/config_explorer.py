@@ -20,30 +20,30 @@ def setup_logging():
 	file_handler = logging.handlers.RotatingFileHandler(os.path.join(SPLUNK_HOME, 'var', 'log', 'splunk', app_name + ".log"), mode='a', maxBytes=25000000, backupCount=2)
 	formatter = logging.Formatter("%(created)f %(levelname)s pid=%(process)d %(message)s")
 	file_handler.setFormatter(formatter)
-	logger.addHandler(file_handler)	
+	logger.addHandler(file_handler)
 	logger.setLevel("INFO");
 	return logger
 logger = setup_logging()
 
-class req(PersistentServerConnectionApplication):	
+class req(PersistentServerConnectionApplication):
 	def __init__(self, command_line, command_arg):
 		PersistentServerConnectionApplication.__init__(self)
 
 	def handle(self, in_string):
 		textchars = bytearray({7,8,9,10,12,13,27} | set(range(0x20, 0x100)) - {0x7f})
-		is_binary_string = lambda bytes: bool(bytes.translate(None, textchars))	
+		is_binary_string = lambda bytes: bool(bytes.translate(None, textchars))
 		debug = ""
 		user = ""
 		result = ""
-		reason = ""				
+		reason = ""
 		form = {"action": "", "path": "", "param1": ""}
 		try:
 			conf = getMergedConf(app_name)
 			in_payload = json.loads(in_string)
-			
+
 			if in_payload['method'] != "POST":
 				return {'payload': {"message": "Webservice is working but it must be called via POST"}, 'status': 200 }
-							
+
 			def runCommand(cmds, this_env, status_codes=[]):
 				p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=False, env=this_env)
 				o = p.communicate()
@@ -111,10 +111,12 @@ class req(PersistentServerConnectionApplication):
 
 			elif form['action'] == "save" and form['path'] == "" and confIsTrue("hide_settings", False):
 				reason = "config_locked"
-				
+
 			else:
 				env_copy = os.environ.copy()
 				env_git = env_copy.copy()
+				# inject the auth token so any shell'ed CLI commands will inherit permissions correctly
+				env_copy["SPLUNK_TOK"] = in_payload['session']['authtoken']
 				if confIsTrue("git_autocommit", False):
 					git_output.append({"type": "out", "content": "cwd = " + os.getcwd() + "\n"})
 					try:
@@ -291,7 +293,7 @@ class req(PersistentServerConnectionApplication):
 									new_path = os.path.join(os.path.dirname(file_path), form['param1'])
 									if os.path.exists(new_path):
 										reason = "That already exists"
-										
+
 									else:
 										os.chdir(os.path.dirname(file_path))
 										git_output.append({"type": "desc", "content": "Committing file before renaming"})	
@@ -299,7 +301,7 @@ class req(PersistentServerConnectionApplication):
 										os.rename(file_path, new_path)
 										git_output.append({"type": "desc", "content": "Committing renamed file"})
 										git(user + " renamed", git_status_codes, git_output, new_path, file_path)
-										
+
 								else:
 									new_path = os.path.join(file_path, form['param1'])
 									if os.path.exists(new_path):
