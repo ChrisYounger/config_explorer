@@ -288,7 +288,7 @@ require([
 	function addHookAction(hook, file, actions, matchtype) {
 		if (hook._match.test(file) && hook.matchtype == matchtype) {	
 			actions.push($("<div></div>").text(replaceTokens(hook.label, file)).on("click", function(){ 
-				runHookUnparsed(hook.action, file); 
+				runAction(hook.action, file); 
 			}));
 		}
 	}
@@ -500,10 +500,13 @@ require([
 		return str.replace(/\$\{FILE\}/g, file).replace(/\$\{BASEFILE\}/g, basefile).replace(/\$\{DIRNAME\}/g, dirname);		
 	}
 	
-	function runHookUnparsed(actionStr, file) {
+	function runAction(actionStr, file) {
 		var parts = actionStr.split(":");
 		var action = parts.shift();
-		var args = replaceTokens(parts.join(":"), file);
+		var args = parts.join(":");
+		if (file !== undefined) {
+			args = replaceTokens(args, file);
+		}
 		hooksCfg[action](args);
 	}
 
@@ -1605,7 +1608,7 @@ require([
 					label: "Save and " + lab,
 					run: function() {
 						saveActiveTab(function(){
-							runHookUnparsed(hook.action, ecfg.file);
+							runAction(hook.action, ecfg.file);
 						});
 					}
 				});						
@@ -1616,7 +1619,7 @@ require([
 				contextMenuGroupId: 'navigation',
 				label: lab,
 				run: function() {
-					runHookUnparsed(hook.action, ecfg.file);
+					runAction(hook.action, ecfg.file);
 				}
 			});					
 		}
@@ -2417,7 +2420,50 @@ require([
 				if (a.order > b.order)
 					return 1;
 				return 0;
-			});	
+			});
+
+			var actions = [];
+			var actionDefaults = data.conf.action || {};
+			var ce_custom_actions = $(".ce_custom_actions");
+			// Build the actions buttons on the home tab
+			if (! confIsTrue('run_commands', false)) {
+				ce_custom_actions.parent().css("display","none");
+			} else {
+				ce_custom_actions.parent().css("display","block");
+				for (var stanza in data.conf) {
+					if (data.conf.hasOwnProperty(stanza)) {
+						if (stanza.substr(0,7) === "action:") {
+							var act = $.extend({}, actionDefaults, data.conf[stanza]);
+							if (! isTrueValue(data.conf[stanza].disabled)) {
+								actions.push(act);
+							}
+						}
+					}
+				}
+				actions.sort(function(a, b) {
+					if (a.order < b.order)
+						return -1;
+					if (a.order > b.order)
+						return 1;
+					return 0;
+				});
+				if (actions.length === 0) {
+					ce_custom_actions.html("No custom actions defined");
+				} else {
+					ce_custom_actions.empty();
+					for (var i = 0; i < actions.length; i++) {
+						// add to the home screen
+						(function(a, i, l){
+							var button = $("<span class='ce_custom_action btn'></span>").text(a.label).on("click", function(){
+								runAction(a.action);
+							});
+							var elem = $("<div class='" + ((i+1 < l) ? "ce_marginbottom" : "") + "'></div>").text(a.description).prepend(button);
+							elem.appendTo(ce_custom_actions);
+						})(actions[i], i, actions.length);
+					}
+				}
+			}
+
 			confFiles = {};
 			confFilesSorted = [];
 			while((res = rex.exec(data.files)) !== null) {
@@ -2457,9 +2503,9 @@ require([
 			draggable: ".ce_tab",
 			animation: 150,
 			onEnd: function () {
-				// figure out how things moved and reorder list					
+				// figure out how things moved and reorder list
 				openTabsListChanged();
-				doPipeTabSeperators();		
+				doPipeTabSeperators();
 			}
 		});	
 

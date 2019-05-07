@@ -62,7 +62,7 @@ git_autocommit_work_tree = <string>
 
 
 [hook]
-* "[hook:<unique_name>]""
+* "[hook:<unique_name>]"
 * The [hooks:...] stanza allows creation of custom right-click actions that can be quickly run from both 
   the editor and the file tree context menus.
 
@@ -73,7 +73,6 @@ match = <regular expression>
 matchtype = <string>
 * The type of of tree element to match. Can be either "file", "folder", "conf" (the conf files screen).
 * Default is "file"
-	
 
 action = <string>
 * The action name to run, full colon, then the argument (if required). Example: "run:ls -l ${FILENAME}"
@@ -101,6 +100,30 @@ showWithSave = <bool>
 * Show the action a second time in the editor context menu, prefixed with "Save and ...". Use this
   when creation a hook that is often used after saving the file.
 * Default true
+
+disabled = <bool>
+* Enable or disable the hook.
+* Defaults to false
+
+order = <non-negative integer>
+* Sort order. Lower numbers are sorted and displayed first.
+* Defaults to 10
+
+
+[action]
+* "[action:<unique_name>]"
+* The [action:...] stanza allows creation of actions that can be run from the home tab 
+
+action = <string>
+* The action name to run, full colon, then the argument (if required). Example: "run:ls -l". 
+* See hooks section above for complete list of options (except without variable substitutions).
+* Commands always run from $SPLUNK_HOME
+
+label = <string>
+* Display label for the button.
+
+description = <string>
+* Text to show next to the button
 
 disabled = <bool>
 * Enable or disable the hook.

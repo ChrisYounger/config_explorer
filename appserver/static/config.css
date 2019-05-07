@@ -284,10 +284,24 @@ input[type=text].ce_treesearch_input::placeholder {
 .ce_theme_vs .ce_app_title {
 	color: black;
 }
+.ce_actions_wrapper {
+    display: flex;
+}
 .ce_app_devlinks {
     font-size: 16px;
     margin-top: 50px;
 	font-weight: bold;
+    margin-bottom: 10px;
+}
+.ce_actions_area{
+    background-color: #252525;
+    padding:10px;
+    margin-bottom: 40px;
+    margin-right: 60px;
+    min-width: 350px;
+}
+.ce_theme_vs .ce_actions_area {
+    background-color: #eaeaea;
 }
 .ce_tagline {
     font-size: 10px;
@@ -295,10 +309,10 @@ input[type=text].ce_treesearch_input::placeholder {
     margin-bottom: 40px;
     opacity: 0.3;
 }
-.ce_home_section{
+.ce_marginbottom {
     margin-bottom:20px;
 }
-.ce_home_section .btn {
+.ce_contents_home .btn {
     margin-right: 8px;
 }
 .ce_home_buttonset {
