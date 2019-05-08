@@ -75,3 +75,27 @@ hide_settings = false
 #disabled = false
 #showWithSave = true 
 #order = 10
+
+############################################################################
+#  Custom home-tab actions                                                 #
+############################################################################
+
+# Actions are buttons on the home tab that can be used to run common actions.
+# the run_commands option must be enabled. Read the spec file for hooks which 
+# uses the same command options.
+ 
+# Example 1
+#[action:ftw]
+#label = Splunk FTW
+#action = run:echo running bin/splunk ftw ; bin/splunk ftw
+#description = ORLY?
+#disabled = false
+#order = 10
+
+# Example 2
+#[action:reload_deploy_server]
+#label = Reload deploy-server
+#action = run:./bin/splunk reload deploy-server
+#description = 
+#disabled = false
+#order = 10
