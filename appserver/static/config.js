@@ -2463,7 +2463,7 @@ require([
 					if (data.conf.hasOwnProperty(stanza)) {
 						if (stanza.substr(0,7) === "action:") {
 							var act = $.extend({}, actionDefaults, data.conf[stanza]);
-							if (! isTrueValue(data.conf[stanza].disabled)) {
+							if (! isTrueValue(act.disabled)) {
 								actions.push(act);
 							}
 						}

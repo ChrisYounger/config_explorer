@@ -84,18 +84,32 @@ hide_settings = false
 # the run_commands option must be enabled. Read the spec file for hooks which 
 # uses the same command options.
  
-# Example 1
-#[action:ftw]
-#label = Splunk FTW
-#action = run:echo running bin/splunk ftw ; bin/splunk ftw
-#description = ORLY?
-#disabled = false
-#order = 10
+# Examples below:
 
-# Example 2
-#[action:reload_deploy_server]
-#label = Reload deploy-server
-#action = run:./bin/splunk reload deploy-server
-#description = 
-#disabled = false
-#order = 10
+# [action:ftw]
+# label = Splunk FTW
+# action = run:echo running bin/splunk ftw ; bin/splunk ftw
+# description = ORLY?
+# disabled = false
+# order = 10
+
+# [action:reload_deploy_server]
+# label = Reload deploy-server
+# action = run:./bin/splunk reload deploy-server
+# order = 20
+
+# [action:kill_persistant_threads]
+# label = Kill persistant threads
+# action = run:echo triggered task to kill threads; nohup sh -c "sleep 2; ps aux | grep \"persistconn\/appserver\" | grep -v \"grep\" | awk '{print \$2}' | xargs kill" >/dev/null 2>&1 &
+# order = 20
+
+# [action:restart_splunk_web]
+# label = restart splunk-web
+# action = run:echo restart splunkweb triggered; nohup sh -c "sleep 2; ./bin/splunk restart splunkweb" >/dev/null 2>&1 &
+# order = 80
+
+# [action:restart_splunk]
+# label = restart splunk
+# action = run-safe:echo restart splunk triggered; nohup sh -c "sleep 2; ./bin/splunk restart" >/dev/null 2>&1 &
+# order = 90
+
