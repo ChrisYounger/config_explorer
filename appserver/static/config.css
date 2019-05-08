@@ -897,3 +897,7 @@ input.ce_run_cwd_radio[type=radio] {
 	transform: translateY(-2px);
 
 }
+.ce_pref_advanced {
+    width: 100%;
+    height: 174px;
+}

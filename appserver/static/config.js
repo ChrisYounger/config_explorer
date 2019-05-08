@@ -128,7 +128,7 @@ require([
 	var folderContents;
 	var run_history = (JSON.parse(localStorage.getItem('ce_run_history')) || []);
 	var closed_tabs = (JSON.parse(localStorage.getItem('ce_closed_tabs')) || []);
-	var preferences = (JSON.parse(localStorage.getItem('ce_preferences')) || []);
+	var preferences = getPreferences();
 	var activeTab = -1;
 	var filecache = {};
 	var conf = {};
@@ -574,6 +574,23 @@ require([
 		}
 	}
 
+	function getPreferences() {
+		var preferences;
+		try {
+			preferences = JSON.parse(localStorage.getItem('ce_preferences'));
+		} catch(e) {}
+		if (! preferences || $.isEmptyObject(preferences)) {
+			preferences = {
+				"cursorBlinking": "blink",
+				"cursorSmoothCaretAnimation": false,
+				"minimap": {
+					"renderCharacters": true,
+					"showSlider": "mouseover"
+				}
+			};
+		}
+		return preferences;
+	}
 	// This is an action that will occur after saving the file
 	function openPreferences() {
 		var ecfg = editors[activeTab];
@@ -581,36 +598,46 @@ require([
 			title: "Preferences",
 			size: 500,
 			body: "<div>Preferences will only affect sessions from this browser."+
-					"<br><br><span class='ce_pref_item'>Enable word-wrap <label class='ce_pref_label'><input type='checkbox' class='ce_word_wrap'></label></span>"+
-					"<br><br><span class='ce_pref_item'>Enable visible whitespace <label class='ce_pref_label'><input type='checkbox' class='ce_whitespace'></label></span>"+
-					"<br><br><span class='ce_pref_item'>Reuse tabs for post-commit actions <label class='ce_pref_label'><input type='checkbox' class='ce_reuse'></label></span>"+
+					"<br><br><span class='ce_pref_item'>Enable word-wrap <label class='ce_pref_label'><input type='checkbox' class='ce_wordWrap'></label></span>"+
+					"<br><span class='ce_pref_item'>Enable visible whitespace <label class='ce_pref_label'><input type='checkbox' class='ce_renderWhitespace'></label></span>"+
+					"<br><span class='ce_pref_item'>Reuse tabs for post-save actions <label class='ce_pref_label'><input type='checkbox' class='ce_reuseWindow'></label></span>"+
+					"<br><br><span class='ce_pref_item'>Advanced editor options (See <a href='https://microsoft.github.io/monaco-editor/api/interfaces/monaco.editor.ieditoroptions.html' target='_blank'>here</a>)<br>"+
+					"<textarea class='ce_pref_advanced'></textarea></span>"+
 				  "</div>",
 			onShow: function(){
 				// On load set the fields to the current values 
-				var preferences = (JSON.parse(localStorage.getItem('ce_preferences')) || {});
-				for (var item in preferences) {
-					if (preferences.hasOwnProperty(item) && preferences[item]){
-						$(".ce_pref_label ." + item).prop('checked', true);
-					}
+				var preferences = getPreferences();
+				if (preferences.hasOwnProperty("wordWrap") && preferences.wordWrap === "on") {
+					$(".ce_pref_item .ce_wordWrap").prop('checked', true);
 				}
+				if (preferences.hasOwnProperty("renderWhitespace") && preferences.renderWhitespace === "all") {
+					$(".ce_pref_item .ce_renderWhitespace").prop('checked', true);
+				}
+				if (preferences.hasOwnProperty("ce_reuseWindow") && preferences.ce_reuseWindow) {
+					$(".ce_pref_item .ce_reuseWindow").prop('checked', true);
+				}
+				delete preferences.wordWrap;
+				delete preferences.renderWhitespace;
+				delete preferences.ce_reuseWindow;
+				$(".ce_pref_item .ce_pref_advanced").val(JSON.stringify(preferences,null,3));
 			}, 
 			actions: [{
 				onClick: function(){
-					preferences = {};
-					$(".ce_pref_label input:checked").each(function(){
-						var t = $(this);
-						preferences[ t.attr("class") ] = true;
-					});
+					try {
+						preferences = JSON.parse($(".ce_pref_item .ce_pref_advanced").val());
+					} catch (e) {
+						preferences = {};
+					}
+					preferences.wordWrap = ($(".ce_pref_item input.ce_wordWrap:checked").length > 0) ? "on" : "off";
+					preferences.renderWhitespace = ($(".ce_pref_item input.ce_renderWhitespace:checked").length > 0) ? "all" : "none";
+					preferences.ce_reuseWindow = ($(".ce_pref_item input.ce_reuseWindow:checked").length > 0);
 					localStorage.setItem('ce_preferences', JSON.stringify(preferences));
 					// Update all currently open windows
 					for (var i = 0; i < editors.length; i++) {
 						if (editors[i].hasOwnProperty("editor")) {
-							editors[i].editor.updateOptions({
-								wordWrap: (preferences.hasOwnProperty("ce_word_wrap") && preferences.ce_word_wrap) ? "on" : "off",
-								renderWhitespace: (preferences.hasOwnProperty("ce_whitespace") && preferences.ce_whitespace) ? "all" : "none",
-							});
+							editors[i].editor.updateOptions(preferences);
 						}
-					}						
+					}
 					$(".modal").modal('hide');
 				},
 				cssClass: 'btn-primary',
@@ -1480,12 +1507,14 @@ require([
 	}
 
 	function closeTabByHookDetails(arg0, arg1) {
-		if (arg0 === "bump") {
-			closeTabByName("refresh", "bump")
-		} else if (arg0 === "run-safe") {
-			closeTabByName("run", arg1)
-		} else {
-			closeTabByName(arg0, arg1);
+		if (preferences.ce_reuseWindow) {
+			if (arg0 === "bump") {
+				closeTabByName("refresh", "bump")
+			} else if (arg0 === "run-safe") {
+				closeTabByName("run", arg1)
+			} else {
+				closeTabByName(arg0, arg1);
+			}
 		}
 	}
 	
@@ -1648,16 +1677,16 @@ require([
 		if (ecfg.model.getModeId() === "plaintext" && ! language) {
 			monaco.editor.setModelLanguage(ecfg.model, "ini");
 		}
-		ecfg.editor = monaco.editor.create(ecfg.container[0], {
+		
+		var options = $.extend({}, preferences, {
 			automaticLayout: true,
 			model: ecfg.model,
 			lineNumbersMinChars: 3,
 			ariaLabel: ecfg.file,
 			//readOnly: ! ecfg.canBeSaved,
-			wordWrap: (preferences.hasOwnProperty("ce_word_wrap") && preferences.ce_word_wrap) ? "on" : "off",
-			renderWhitespace: (preferences.hasOwnProperty("ce_whitespace") && preferences.ce_whitespace) ? "all" : "none",
 			glyphMargin: true
 		});
+		ecfg.editor = monaco.editor.create(ecfg.container[0], options);
 		ecfg.server_content = ecfg.editor.getValue();
 		if (ecfg.canBeSaved) {
 			ecfg.editor.onDidChangeModelContent(function() {
