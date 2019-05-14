@@ -660,7 +660,7 @@ require([
 		}
 		showModal({
 			title: "Set post-save action",
-			size: 600,
+			size: 800,
 			body: "<div>Enter a command to automatically run after successful save of this file only. This action will be saved in your browser local storage "+
 						"(it will not affect other users or other browsers you use, but it will be remembered after browser refresh). "+
 						"Run commands will be executed from the SPLUNK_HOME directory.<br><br>"+
@@ -682,8 +682,12 @@ require([
 							"<option value='live'>Show running config</option>"+
 							"<option value='live-diff'>Show running config as diff</option>"+
 						"</select>"+
-						"<input type='text' value='' class='ce_postsave_arg1 ce_prompt_input input input-text' style='margin-left:6px;width:270px;'/></div>"+
+						"<input type='text' value='' class='ce_postsave_arg1 ce_prompt_input input input-text'/></div>"+
 					"</div>"+
+					"<div>Run in background tab: <select class='ce_postsave_background'><option value='yes' selected='selected'>Yes</option><option value='no'>No</option></select></div>"+
+					"<div>The following options will check the returned content from a post-save action for a specific string and will show a success or failure icon on the tab. Only one value is required for the icon to be displayed.</div>"+
+					"<div>Content match for success: <input type='text' value='' class='ce_postsave_strmatch_good ce_prompt_input input input-text'/></div>"+
+					"<div>Content match for failure: <input type='text' value='' class='ce_postsave_strmatch_bad ce_prompt_input input input-text'/></div>"+
 				  "</div>",
 			onShow: function(){
 				// On load set the fields to the current values
@@ -691,6 +695,9 @@ require([
 				if (p !== null) {
 					$(".ce_postsave_arg0").val(p[0]);
 					$(".ce_postsave_arg1").val(p[1]);
+					$(".ce_postsave_background").val(p[2]);
+					$(".ce_postsave_strmatch_good").val(p[3]);
+					$(".ce_postsave_strmatch_bad").val(p[4]);
 				}
 			}, 
 			actions: [{
@@ -698,10 +705,13 @@ require([
 					var postsave = (JSON.parse(localStorage.getItem('ce_postsave')) || {});
 					var arg0 = $(".ce_postsave_arg0").val();
 					var arg1 = $(".ce_postsave_arg1").val();
+					var background = $(".ce_postsave_background").val();
+					var strmatch_good = $(".ce_postsave_strmatch_good").val();
+					var strmatch_bad = $(".ce_postsave_strmatch_bad").val();
 					if (arg0 === "nothing") {
 						delete postsave[ecfg.file];
 					} else {
-						postsave[ecfg.file] = arg0 + ":" + arg1;
+						postsave[ecfg.file] = [arg0, arg1, background, strmatch_good, strmatch_bad];
 					}
 					localStorage.setItem('ce_postsave', JSON.stringify(postsave));
 					$(".modal").modal('hide');
@@ -719,10 +729,17 @@ require([
 	function getPostSave(file) {
 		var postsave = (JSON.parse(localStorage.getItem('ce_postsave')) || {});
 		if (postsave.hasOwnProperty(file)){
-			var parts = postsave[file].split(":");
-			var action = parts.shift();
-			var args = replaceTokens(parts.join(":"), file);
-			return [action,args];
+			// Handle legacy format
+			if (typeof postsave[file] === "string") {
+				var parts = postsave[file].split(":");
+				var action = parts.shift();
+				var args = replaceTokens(parts.join(":"), file);
+				return [action,args];
+			} else {
+				var parts = postsave[file];
+				parts[1] = replaceTokens(parts[1], file);
+				return parts;
+			}
 		}
 		return null;
 	}
@@ -1613,7 +1630,7 @@ require([
 			label: type + ": " + file,
 			id: tabid++
 		};
-		editors.push(ecfg);	
+		editors.push(ecfg);
 		ecfg.container = $("<div></div>").appendTo($container);
 		ecfg.container.append($spinner.clone());
 		// Remove the "restore session" link
@@ -1640,7 +1657,7 @@ require([
 							runAction(hook.action, ecfg.file);
 						});
 					}
-				});						
+				});
 			}
 			ecfg.editor.addAction({
 				id: lab,
@@ -1650,10 +1667,10 @@ require([
 				run: function() {
 					runAction(hook.action, ecfg.file);
 				}
-			});					
+			});
 		}
 	}
-			
+
 	function updateTabAsEditor(ecfg, contents, language) {
 		// uses the built-in language detection where possible
 		if (! language) {
@@ -1700,7 +1717,7 @@ require([
 					if (ecfg.hasChanges) {
 						ecfg.tab.find('.icon-alert-circle').remove();
 						ecfg.hasChanges = false;
-					}							
+					}
 				}
 				// Turn off the glyphs until next save
 				ecfg.decorations = ecfg.editor.deltaDecorations(ecfg.decorations, []);
@@ -1763,8 +1780,10 @@ require([
 					hooksCfg[ecfg.type](ecfg.file, ecfg.fromFolder);
 				}
 			});
-		}		 		
+		}
 		openTabsListChanged();
+
+		ecfg.tab.trigger("ce_loaded");
 	}
 	
 	function saveActiveTab(cb){
@@ -1802,9 +1821,8 @@ require([
 								actions: [{
 									onClick: function(){
 										$(".modal").modal('hide');
-										closeTabByHookDetails(p[0], p[1]);
-										hooksCfg[p[0]](p[1]);
 										approvedPostSaveHooks[p[0] + "|" + p[1]] = true;
+										runPostSaveAction(p);
 									},
 									cssClass: 'btn-primary',
 									label: "Approve"
@@ -1814,8 +1832,7 @@ require([
 								}]
 							});
 						} else {
-							closeTabByHookDetails(p[0], p[1]);
-							hooksCfg[p[0]](p[1]);
+							runPostSaveAction(p);
 						}
 					}
 				}, function(){
@@ -1832,9 +1849,42 @@ require([
 			});	
 		}
 	}
+
+	function runPostSaveAction(parts) {
+		var ptab = activeTab;
+		closeTabByHookDetails(parts[0], parts[1]);
+		hooksCfg[parts[0]](parts[1]);
+		var ntab = activeTab;
+		// todo quickly swap back to prev tab
+		if (parts[2] === "yes") {
+			activateTab(ptab);
+		}
+		if (parts[3] || parts[4]) {
+			// Check the contents of the tab
+			editors[ntab].tab.on("ce_loaded", function(){
+				// TODO Get the contents, update the tab
+				var contents = editors[ntab].editor.getValue();
+				var status = "";
+				// Good match
+				if (parts[3] && contents.indexOf(parts[3]) > -1) {
+					status = "good";
+				}
+				// Bad match
+				if (parts[4] && contents.indexOf(parts[4]) > -1) {
+					status = "bad";
+				}
+				if (status === "good"){
+					editors[ntab].tab.append("<i class='ce_right_icon ce_clickable_icon icon-check' style='color:green'></i>");
+				} else if (status === "bad") {
+					editors[ntab].tab.append("<i class='ce_right_icon ce_clickable_icon icon-x-circle' style='color:red'></i>");
+				}
+			});
+		}
+	}
 	
 	function updateTabHTML(ecfg, contents) {
 		ecfg.container.html(contents).css("overflow", "auto");
+		ecfg.tab.trigger("ce_loaded");
 	}
 	
 	function updateTabAsDiffer(ecfg, left, right) {
@@ -1847,8 +1897,9 @@ require([
 		ecfg.editor.setModel({
 			original: originalModel,
 			modified: modifiedModel
-		});	
-	}	
+		});
+		ecfg.tab.trigger("ce_loaded");
+	}
 	
 	// Make sure the server action that results in a tab open, takes a minimum amount of time so as not to flicker and look dumb
 	function serverActionWithoutFlicker(postData) {
@@ -1859,7 +1910,7 @@ require([
 		var promiseCombined = Promise.all([promise, promiseTimeout]);
 		return promiseCombined.then(function(values) {
 			return values[0];
-		});			
+		});
 	}
 	
 	// Make a rest call to our backend python script

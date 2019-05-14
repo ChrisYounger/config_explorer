@@ -901,3 +901,15 @@ input.ce_run_cwd_radio[type=radio] {
     width: 100%;
     height: 174px;
 }
+.ce_postsave_arg1 {
+    margin-left:6px;
+    width:470px;
+}
+.ce_postsave_strmatch_bad,
+.ce_postsave_strmatch_good {
+    margin-left:6px;
+    width:150px;
+}
+.ce_postsave_background {
+    width: 60px;
+}
