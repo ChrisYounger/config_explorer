@@ -98,17 +98,30 @@ hide_settings = false
 # action = run:./bin/splunk reload deploy-server
 # order = 20
 
+# [action:shc_apply_bundle]
+# label = Send bundle to search heads
+# action = run:./bin/splunk apply shcluster-bundle -target https://FQDN_OF_ONE_SEARCH_HEAD:8089 --answer-yes
+# order = 20
+
+# [action:idx_apply_bundle]
+# label = Send bundle to indexers
+# action = run:./bin/splunk apply cluster-bundle --answer-yes
+# order = 20
+
 # [action:kill_persistant_threads]
+# # Linux only
 # label = Kill persistant threads
 # action = run:echo triggered task to kill threads; nohup sh -c "sleep 2; ps aux | grep \"persistconn\/appserver\" | grep -v \"grep\" | awk '{print \$2}' | xargs kill" >/dev/null 2>&1 &
 # order = 20
 
 # [action:restart_splunk_web]
+# # Linux only
 # label = restart splunk-web
 # action = run:echo restart splunkweb triggered; nohup sh -c "sleep 2; ./bin/splunk restart splunkweb" >/dev/null 2>&1 &
 # order = 80
 
 # [action:restart_splunk]
+# # Linux only
 # label = restart splunk
 # action = run-safe:echo restart splunk triggered; nohup sh -c "sleep 2; ./bin/splunk restart" >/dev/null 2>&1 &
 # order = 90
