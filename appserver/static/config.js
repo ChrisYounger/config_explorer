@@ -292,7 +292,7 @@ require([
 			}));
 		}
 	}
-	
+
 	// add folder hooks to the path display
 	$filePath.on("contextmenu", function (e) {
 		var actions = [];
@@ -380,6 +380,43 @@ require([
 					getFileHistory(thisFile, inFolder);
 				}));
 			}
+			// download file
+			actions.push($("<div>Download</div>").on("click", function(){
+				serverAction({action: 'filedownload', path: inFolder, param1: thisFile}).then(function(b64data){
+					var byteCharacters = atob(b64data);
+					var byteArrays = [];
+					for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+						var slice = byteCharacters.slice(offset, offset + 512);
+						var byteNumbers = new Array(slice.length);
+						for (let i = 0; i < slice.length; i++) {
+							byteNumbers[i] = slice.charCodeAt(i);
+						}
+						var byteArray = new Uint8Array(byteNumbers);
+						byteArrays.push(byteArray);
+					}
+					var blob = new Blob(byteArrays, {type: "application/octet-stream"});
+					var filename = dodgyBasename(thisFile);
+					if (typeof window.navigator.msSaveBlob !== 'undefined') {
+						// IE workaround for "HTML7007: One or more blob URLs were revoked by closing the blob for which they were created. These URLs will no longer resolve as the data backing the URL has been freed."
+						window.navigator.msSaveBlob(blob, filename);
+					} else {
+						var URL = window.URL || window.webkitURL;
+						var downloadUrl = URL.createObjectURL(blob);
+						// use HTML5 a[download] attribute to specify filename
+						var a = document.createElement("a");
+						// safari doesn't support this yet
+						if (typeof a.download === 'undefined') {
+							window.location = downloadUrl;
+						} else {
+							a.href = downloadUrl;
+							a.download = filename;
+							document.body.appendChild(a);
+							a.click();
+						}
+						setTimeout(function () { URL.revokeObjectURL(downloadUrl); }, 100); // cleanup
+					}
+				});
+			}));
 			// can compare
 			actions.push($("<div>Mark for comparison</div>").on("click", function(){ 
 				comparisonLeftFile = thisFile; 
@@ -1866,12 +1903,20 @@ require([
 				var contents = editors[ntab].editor.getValue();
 				var status = "";
 				// Good match
-				if (parts[3] && contents.indexOf(parts[3]) > -1) {
-					status = "good";
+				if (parts[3]){
+					if (contents.indexOf(parts[3]) > -1) {
+						status = "good";
+					} else {
+						status = "bad";
+					}
 				}
 				// Bad match
-				if (parts[4] && contents.indexOf(parts[4]) > -1) {
-					status = "bad";
+				if (parts[4]){
+					if (contents.indexOf(parts[4]) > -1) {
+						status = "bad";
+					} else if (status !== "bad") {
+						status = "good";
+					}
 				}
 				if (status === "good"){
 					editors[ntab].tab.append("<i class='ce_right_icon ce_clickable_icon icon-check' style='color:green'></i>");

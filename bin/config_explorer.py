@@ -258,7 +258,7 @@ class req(PersistentServerConnectionApplication):
 										with open(file_path, 'r') as fh:
 											result = fh.read()
 									if is_binary_string(result):
-										reason = "unable to open binary file"
+										reason = "unable to open binary file (right-click and 'download' instead)"
 
 							elif form['action'] == 'delete':
 								os.chdir(os.path.dirname(file_path))
@@ -271,6 +271,14 @@ class req(PersistentServerConnectionApplication):
 									os.remove(file_path)
 								git_output.append({"type": "desc", "content": "Deleting file"})
 								git(user + " deleted ", git_status_codes, git_output, file_path)
+
+							elif form['action'] == 'filedownload':
+								if not os.path.exists(form['param1']):
+									reason = "File not found"
+								else:
+									with open(form['param1'], "rb") as fh:
+										bin_data = fh.read()
+										result = (base64.b64encode(bin_data)).decode('ascii')
 
 							elif form['action'] == 'fileupload':
 								os.chdir(file_path)
