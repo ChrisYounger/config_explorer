@@ -1340,19 +1340,29 @@ require([
 			title: "File upload ",
 			size: 300,
 			body: "<div>Select file:<br><br>"+
-					// There is no option to auto extract the files becuase this would be a git headache
-					"<input type='file' style='width: 100%;' class='ce_file_upload_input'/><br><br>"+
+					"<input type='file' style='width: 100%;' class='ce_file_upload_input'/><br><br><br>"+
+					"<label><input type='checkbox' class='ce_file_upload_extract' />Extract file after upload</label><br><br>"+
 					"</div>",
 			actions: [{
 				onClick: function(){
 					$('.modal').one('hidden.bs.modal', function() {
 						var file = $('.ce_file_upload_input')[0].files[0];
 						var reader = new FileReader();
+						var extract = "";
+						var ecfg;
+						if ($('.ce_file_upload_extract:checked').length) {
+							extract = "e";
+							ecfg = createTab('run', "", '<span class="ce-dim">Extracted files:</span> ' + htmlEncode(file.name));
+						}
 						reader.onloadend = function() {
 							var upFileB64 = reader.result;
 							showTreePaneSpinner();
-							serverAction({action: 'fileupload', path: parentPath, param1: file.name, file: upFileB64}).then(function(){
-								showToast('Success');
+							serverAction({action: 'fileupload' + extract, path: parentPath, param1: file.name, file: upFileB64}).then(function(contents){
+								if (ecfg) {
+									updateTabAsEditor(ecfg, contents, "plaintext");
+								} else {
+									showToast('Success');
+								}
 								refreshFolder();
 							}).catch(function(contents){
 								refreshFolder();

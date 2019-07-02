@@ -878,6 +878,10 @@ html .ce_spinner {
     transform: scale(1.0);
   }
 }
+input.ce_file_upload_extract[type=checkbox] {
+    transform: translateY(-3px);
+    margin-right: 8px;
+}
 input.ce_run_cwd_radio[type=radio] {
 	margin: 0 10px;
 }

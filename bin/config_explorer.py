@@ -280,7 +280,7 @@ class req(PersistentServerConnectionApplication):
 										bin_data = fh.read()
 										result = (base64.b64encode(bin_data)).decode('ascii')
 
-							elif form['action'] == 'fileupload':
+							elif form['action'][:10] == 'fileupload':
 								os.chdir(file_path)
 								if os.path.exists(form['param1']):
 									reason = "File already exists"
@@ -292,6 +292,20 @@ class req(PersistentServerConnectionApplication):
 										fh.write(base64.b64decode(form['file'][idx:]))
 									git_output.append({"type": "desc", "content": "Adding uploaded file"})
 									git(user + " uploaded ", git_status_codes, git_output, form['param1'])
+									if form['action'] == 'fileuploade':
+										status_codes = []
+										#if file is tar or spl
+										if re.search(r'\.(?:tgz|tar|spl)(?:$|\.)', form['param1']):
+											result = runCommand(["tar","-xvf",form['param1']], env_copy, status_codes)
+										elif re.search(r'\.zip$', form['param1']):
+											result = runCommand(["unzip", form['param1']], env_copy, status_codes)
+										else:
+											result = "File uploaded but unable to extract due to unknown file extension"
+										result += "status code=" + str(max(status_codes))
+										if max(status_codes) == 0:
+											os.remove(form['param1'])
+											git_output.append({"type": "desc", "content": "Deleting file"})
+											git(user + " deleted ", git_status_codes, git_output, file_path)
 
 							else:
 								if re.search(r'[^A-Za-z0-9_\- \.\(\)]', form['param1']):
