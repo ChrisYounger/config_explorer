@@ -116,7 +116,7 @@ class req(PersistentServerConnectionApplication):
 				env_copy = os.environ.copy()
 				env_git = env_copy.copy()
 				# inject the auth token so any shell'ed CLI commands will inherit permissions correctly
-				env_copy["SPLUNK_TOK"] = in_payload['session']['authtoken']
+				env_copy["SPLUNK_TOK"] = in_payload['session']['authtoken'].encode('ascii','ignore')
 				if confIsTrue("git_autocommit", False):
 					git_output.append({"type": "out", "content": "cwd = " + os.getcwd() + "\n"})
 					try:
