@@ -362,6 +362,18 @@ require([
 			actions.push($("<div>Show btool (hide 'default' settings)</div>").on("click", function(){ 
 				runBToolList(thisFile, 'btool-hidedefaults');
 			}));
+			
+			for (var k = 0; k < conf.btool_dirs.length; k++) {
+				(function(dir){
+					actions.push($("<div>[" + htmlEncode(dodgyBasename(dir)) +"] Show btool</div>").on("click", function(){ 
+						runBToolList(thisFile + ":" + dir, 'btool');
+					}));
+					actions.push($("<div>[" + htmlEncode(dodgyBasename(dir)) +"] Show btool (hide 'default' settings)</div>").on("click", function(){ 
+						runBToolList(thisFile + ":" + dir, 'btool-hidedefaults');
+					}));
+				})(conf.btool_dirs[k]);
+			}
+
 			actions.push($("<div>Show .spec file</div>").on("click", function(){
 				displaySpecFile(thisFile);
 			}));
@@ -980,8 +992,10 @@ require([
 		}	
 	}
 	
-	function runBToolList(path, type){
-		path = path.replace(/\.conf$/i,"");
+	function runBToolList(inPath, type){
+		var parts = inPath.split(":")
+		var conf_file = parts.shift().replace(/\.conf$/i, "");
+		var path = parts.join(":");
 		var ce_btool_default_values = true;
 		var ce_btool_path = true;
 		if (type === 'btool-hidepaths') {
@@ -991,36 +1005,37 @@ require([
 			ce_btool_default_values = false;
 			ce_btool_path = true;
 		}
-		var tab_path_fmt = '<span class="ce-dim">btool:</span> ' + path;
+		var tab_path_fmt = '<span class="ce-dim">btool:</span> ' + conf_file;
 		if (! ce_btool_default_values) { 
 			tab_path_fmt += " <span class='ce-dim'>(no defaults)</span>"; 
 		} else if (ce_btool_path) { 
 			tab_path_fmt += " <span class='ce-dim'>--debug</span>"; 
 		}
-		if (! tabAlreadyOpen(type, path)) {
-			var ecfg = createTab(type, path, tab_path_fmt);
-			serverActionWithoutFlicker({action: 'btool-list', path: path}).then(function(contents){
-				var c = formatBtoolList(contents, ce_btool_default_values, ce_btool_path);
-				if ($.trim(c)) {
-					updateTabAsEditor(ecfg, c, 'ini');
-					ecfg.btoollist = contents;
-					serverAction({action: 'spec-hinting', path: path}).then(function(h){
-						ecfg.hinting = buildHintingLookup(path, h);
-					});
-				} else {
-					closeTabByCfg(ecfg);
-					showModal({
-						title: "Warning",
-						body: "<div class='alert alert-warning'><i class='icon-alert'></i>No contents for \"<strong>" + tab_path_fmt + "</strong>\"</div>",
-						size: 300
-					});
-				}
-			}).catch(function(){ 
-				console.error(arguments);
+		if (tabAlreadyOpen(type, conf_file + ":" + path)) {
+			closeTabByName(type, conf_file + ":" + path);
+		}
+		var ecfg = createTab(type, conf_file + ":" + path, tab_path_fmt);
+		serverActionWithoutFlicker({action: 'btool-list', path: conf_file, param1: path}).then(function(contents){
+			var c = formatBtoolList(contents, ce_btool_default_values, ce_btool_path);
+			if ($.trim(c)) {
+				updateTabAsEditor(ecfg, c, 'ini');
+				ecfg.btoollist = contents;
+				serverAction({action: 'spec-hinting', path: conf_file}).then(function(h){
+					ecfg.hinting = buildHintingLookup(conf_file, h);
+				});
+			} else {
 				closeTabByCfg(ecfg);
-			});
-		}	
-	}	
+				showModal({
+					title: "Warning",
+					body: "<div class='alert alert-warning'><i class='icon-alert'></i>No contents for \"<strong>" + tab_path_fmt + "</strong>\"</div>",
+					size: 300
+				});
+			}
+		}).catch(function(){ 
+			console.error(arguments);
+			closeTabByCfg(ecfg);
+		});
+	}
 	
 	function displaySpecFile(path) {
 		path = path.replace(/\.conf$/i,"");
@@ -2502,7 +2517,7 @@ require([
 				conf.git_autocommit_work_tree = "";
 			} else {
 				conf.git_autocommit_work_tree = $.trim(conf.git_autocommit_work_tree);
-			}			
+			}
 			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ');
 			if (confIsTrue('write_access', false)) {
 				$dashboardBody.removeClass('ce_no_write_access');
@@ -2515,6 +2530,13 @@ require([
 			}
 			if (confIsTrue('git_autocommit', false) && conf.git_autocommit_work_tree !== "") {
 				$dashboardBody.removeClass('ce_no_git_access');
+			}
+			if (! conf.hasOwnProperty('btool_dirs')) {
+				conf.btool_dirs = [];
+			} else {
+				conf.btool_dirs = conf.btool_dirs.split(",").map(function(item) {
+					return item.trim().replace(/\/$/, "");
+				}).filter(function (el) { return el });
 			}
 
 			// Build the quick access hooksActive object

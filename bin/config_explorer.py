@@ -166,7 +166,10 @@ class req(PersistentServerConnectionApplication):
 							result = result + runCommand([cmd, 'btool', 'validate-regex'], env_copy)
 
 						elif form['action'] == 'btool-list':
-							result = runCommand([cmd, 'btool', form['path'], 'list', '--debug'], env_copy)	
+							if form['param1'] == "":
+								result = runCommand([cmd, 'btool', form['path'], 'list', '--debug'], env_copy)	
+							else:
+								result = runCommand([cmd, 'btool', form['path'], 'list', '--debug', '--dir=' + form['param1']], env_copy)	
 
 						elif form['action'] == 'git-log':
 							os.chdir(form['path'])

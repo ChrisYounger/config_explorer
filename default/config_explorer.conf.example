@@ -36,6 +36,18 @@ hide_settings = false
 # doesn't work properly, so run btool yourself to confirm.
 # Defaults to true
 
+#btool_dirs = 
+# A comma-seperated list of absolute paths to add as "--dirs=" that btool can check
+# If this is a search head cluster deployer, "add /opt/splunk/etc/shcluster/apps" (sans-quotes)
+# If this is a deployment server, you will need to do a few extra steps to make this work:
+# 1. mkdir /opt/splunk/etc/deployment-apps-for-btool/
+# 2. cd /opt/splunk/etc/deployment-apps-for-btool/
+# 3. ln -s /opt/splunk/etc/deployment-apps app
+# 4. Set the above parameter to: btools_dirs = /opt/splunk/etc/deployment-apps
+# For more info see: https://answers.splunk.com/answers/731787
+# There are additional hooks and actions below that you will probably want to uncomment if this
+# is a search head deployer or deployment server.
+
 #git_autocommit = false
 # Track all file saves by automatically committing them to git with a generic message. 
 # Note you must first configure the git repo using "git init". Please see the documentation.
@@ -58,6 +70,7 @@ hide_settings = false
 # Set to "etc/" to track all changes beneath etc folder.
 # Defaults to empty, meaning the normal git behavior will apply.
 
+
 ############################################################################
 #  Custom action hooks                                                     #
 ############################################################################
@@ -76,6 +89,22 @@ hide_settings = false
 #showWithSave = true 
 #order = 10
 
+# An example hook showing how to run "git status" on a folder
+# [hook:git_status]
+# match = .*
+# matchtype = folder
+# label = Git status
+# action = run:cd ${FILE} && git status
+# showWithSave = false
+
+# when editing .conf files in "deployment-apps", have an option to run btool
+# this is also useful on search head deployers. See "btool_dirs" above for extra notes.
+# [hook:btool-deployment-apps-for-btool]
+# match = /deployment-apps.*(?:local|default)/[^\/]*\.conf$
+# label = [deployment-apps-for-btool] Run btool on ${BASEFILE}
+# action = btool:${BASEFILE}:/opt/splunk/etc/deployment-apps-for-btool
+# showWithSave = false
+
 ############################################################################
 #  Custom home-tab actions                                                 #
 ############################################################################
@@ -88,24 +117,44 @@ hide_settings = false
 
 # [action:ftw]
 # label = Splunk FTW
+# # Linux
 # action = run:echo running bin/splunk ftw ; bin/splunk ftw
+# # Windows
+# action = run:echo running bin\\splunk ftw ; bin\\splunk ftw
 # description = ORLY?
 # disabled = false
 # order = 10
 
 # [action:reload_deploy_server]
 # label = Reload deploy-server
+# # Linux
 # action = run:./bin/splunk reload deploy-server
+# # Windows
+# action = run:bin\\splunk reload deploy-server
 # order = 20
+
+# Add a home screen button for checking deployment-apps for config errors
+# see "btool_dirs" above for extra notes.
+# [action:btool-deployment-apps-for-btool-check]
+# label = Btool check deployment-apps
+# action = run:./bin/splunk btool check --dir=/opt/splunk/etc/deployment-apps-for-btool
+# description = Check for config errors in deployment-apps folder
+# order = 30
 
 # [action:shc_apply_bundle]
 # label = Send bundle to search heads
-# action = run:./bin/splunk apply shcluster-bundle -target https://FQDN_OF_ONE_SEARCH_HEAD:8089 --answer-yes
+# # Linux
+# action = run:./bin/splunk apply shcluster-bundle -target https://FQDN_OF_A_SEARCH_HEAD:8089 --answer-yes
+# # Windows
+# action = run:bin\\splunk apply shcluster-bundle -target https://FQDN_OF_A_SEARCH_HEAD:8089 --answer-yes
 # order = 20
 
 # [action:idx_apply_bundle]
 # label = Send bundle to indexers
+# Linux
 # action = run:./bin/splunk apply cluster-bundle --answer-yes
+# Windows
+# action = run:bin\\splunk apply cluster-bundle --answer-yes
 # order = 20
 
 # [action:kill_persistant_threads]

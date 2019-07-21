@@ -22,10 +22,6 @@ hide_settings = <bool>
 max_file_size = <non-negative integer>
 * The maximum file size in megabytes that can be opened. 
 
-############################################################################
-#  Experimental features                                                   #
-############################################################################
-
 cache_file_depth = <integer>
 * Cache the list of files and folders for the left pane to this many levels deep. 
   This makes navigation much faster (especially on windows) but uses more memory, 
@@ -43,6 +39,16 @@ git_autocommit = <bool>
 * Track all file saves by automatically committing them to git with a generic message.   
   Note you must first configure the git repo using "git init". Please see the documentation.
 * Defaults to false 
+
+btool_dirs = <string>
+* A comma-seperated list of paths (relative to $SPLUNK_HOME) to add as btool options
+* If this is a deployment server, add "etc/deployment-apps"
+* If this is a search head cluster deployer, "add etc/shcluster/apps"
+
+
+############################################################################
+#  Experimental features                                                   #
+############################################################################
 
 git_autocommit_show_output = <string>
 * When autocommit is enabled, when should we show the commit log
