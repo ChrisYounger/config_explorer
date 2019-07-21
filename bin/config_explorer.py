@@ -276,6 +276,7 @@ class req(PersistentServerConnectionApplication):
 								git(user + " deleted ", git_status_codes, git_output, file_path)
 
 							elif form['action'] == 'filedownload':
+								os.chdir(SPLUNK_HOME)
 								if not os.path.exists(form['param1']):
 									reason = "File not found"
 								else:
