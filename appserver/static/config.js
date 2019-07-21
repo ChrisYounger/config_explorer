@@ -63,6 +63,7 @@ require([
 		'btool': 				{ can_rerun: true,  can_reopen: true,  },
 		'btool-hidepaths': 		{ can_rerun: true,  can_reopen: true,  },
 		'btool-hidedefaults': 	{ can_rerun: true,  can_reopen: true,  },
+		'btool-hidesystemdefaults': { can_rerun: true,  can_reopen: true,  },
 		'btool-check': 			{ can_rerun: true,  can_reopen: false, },
 		'spec': 				{ can_rerun: false, can_reopen: true,  },
 		'run': 					{ can_rerun: true,  can_reopen: false, },
@@ -92,6 +93,9 @@ require([
 		'btool-hidedefaults':function(arg1){
 			runBToolList(arg1, 'btool-hidedefaults');
 		},
+		'btool-hidesystemdefaults':function(arg1){
+			runBToolList(arg1, 'btool-hidesystemdefaults');
+		},		
 		'btool-check': function(arg1){
 			runBToolCheck();
 		},
@@ -359,8 +363,11 @@ require([
 			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ 
 				runBToolList(thisFile, 'btool-hidepaths');
 			}));
-			actions.push($("<div>Show btool (hide 'default' settings)</div>").on("click", function(){ 
+			actions.push($("<div>Show btool (hide all defaults)</div>").on("click", function(){ 
 				runBToolList(thisFile, 'btool-hidedefaults');
+			}));
+			actions.push($("<div>Show btool (hide system defaults)</div>").on("click", function(){ 
+				runBToolList(thisFile, 'btool-hidesystemdefaults');
 			}));
 			
 			for (var k = 0; k < conf.btool_dirs.length; k++) {
@@ -368,7 +375,7 @@ require([
 					actions.push($("<div>[" + htmlEncode(dodgyBasename(dir)) +"] Show btool</div>").on("click", function(){ 
 						runBToolList(thisFile + ":" + dir, 'btool');
 					}));
-					actions.push($("<div>[" + htmlEncode(dodgyBasename(dir)) +"] Show btool (hide 'default' settings)</div>").on("click", function(){ 
+					actions.push($("<div>[" + htmlEncode(dodgyBasename(dir)) +"] Show btool (hide all defaults)</div>").on("click", function(){ 
 						runBToolList(thisFile + ":" + dir, 'btool-hidedefaults');
 					}));
 				})(conf.btool_dirs[k]);
@@ -725,7 +732,8 @@ require([
 							"<option value='refresh'>Debug/Refresh endpoint/s</option>"+
 							"<option value='btool'>Btool list</option>"+
 							"<option value='btool-hidepaths'>Btool list (no paths)</option>"+
-							"<option value='btool-hidedefaults'>Btool list (no defaults)</option>"+
+							"<option value='btool-hidedefaults'>Btool list (hide all defaults)</option>"+
+							"<option value='btool-hidesystemdefaults'>Btool list (hide system defaults)</option>"+
 							"<option value='spec'>Open Spec file</option>"+
 							"<option value='read'>Open file</option>"+
 							"<option value='live'>Show running config</option>"+
@@ -958,7 +966,7 @@ require([
 		if (! tabAlreadyOpen(type, path)) {
 			var ecfg = createTab(type, path, tab_path_fmt);
 			serverActionWithoutFlicker({action: 'btool-list', path: path}).then(function(contents){
-				var c = formatBtoolList(contents, true, false);
+				var c = formatBtoolList(contents, "btool-hidepaths");
 				if ($.trim(c)) {
 					getRunningConfig(path).then(function(contents_running){
 						if (compare) {
@@ -996,27 +1004,13 @@ require([
 		var parts = inPath.split(":")
 		var conf_file = parts.shift().replace(/\.conf$/i, "");
 		var path = parts.join(":");
-		var ce_btool_default_values = true;
-		var ce_btool_path = true;
-		if (type === 'btool-hidepaths') {
-			ce_btool_default_values = true;
-			ce_btool_path = false;
-		} else if (type === 'btool-hidedefaults') {
-			ce_btool_default_values = false;
-			ce_btool_path = true;
-		}
-		var tab_path_fmt = '<span class="ce-dim">btool:</span> ' + conf_file;
-		if (! ce_btool_default_values) { 
-			tab_path_fmt += " <span class='ce-dim'>(no defaults)</span>"; 
-		} else if (ce_btool_path) { 
-			tab_path_fmt += " <span class='ce-dim'>--debug</span>"; 
-		}
+		var tab_path_fmt = '<span class="ce-dim">btool:</span> ' + conf_file + (type === "btool" ? "" : " <span class='ce-dim'>(" + type.substr(6) + ")</span>");
 		if (tabAlreadyOpen(type, conf_file + ":" + path)) {
 			closeTabByName(type, conf_file + ":" + path);
 		}
 		var ecfg = createTab(type, conf_file + ":" + path, tab_path_fmt);
 		serverActionWithoutFlicker({action: 'btool-list', path: conf_file, param1: path}).then(function(contents){
-			var c = formatBtoolList(contents, ce_btool_default_values, ce_btool_path);
+			var c = formatBtoolList(contents, type);
 			if ($.trim(c)) {
 				updateTabAsEditor(ecfg, c, 'ini');
 				ecfg.btoollist = contents;
@@ -1644,7 +1638,7 @@ require([
 		if (splicy > -1){
 			closed_tabs.splice(splicy, 1);
 		}
-		if (tabCfg[ecfg.type].can_reopen) {
+		if (tabCfg.hasOwnProperty(ecfg.type) && tabCfg[ecfg.type].can_reopen) {
 			closed_tabs.push({label: ecfg.label, type: ecfg.type, file: ecfg.file});
 		}
 		// trim length
@@ -2069,15 +2063,18 @@ require([
 	}
 	
 	// Formats the output of "btool list" depending on what checkboxes are selected in the left pane
-	function formatBtoolList(contents, ce_btool_default_values, ce_btool_path) {
+	function formatBtoolList(contents, type) {
 		var indent = 80;
 		return contents.replace(/\\/g,'/').replace(/^.+?splunk[\/]etc[\/](.*?\.conf)\s+(.+)(\r?\n)/img,function(all, g1, g2, g3){
 			var path = '';
 			// I am pretty sure that stanzas cant be set to default when containing a child that isnt
-			if (! ce_btool_default_values && /[\/\\]default[\/\\]/.test(g1)) {
+			if (type === "btool-hidesystemdefaults" && /system[\/\\]default[\/\\]/.test(g1)) {
 				return '';
 			}
-			if (ce_btool_path) {
+			if (type === "btool-hidedefaults" && /[\/\\]default[\/\\]/.test(g1)) {
+				return '';
+			}
+			if (type !== "btool-hidepaths") {
 				path = (" ".repeat(Math.max(1, (indent - g2.length)))) + "  " + g1;
 			}
 			return g2 + path + g3;

@@ -41,9 +41,16 @@ git_autocommit = <bool>
 * Defaults to false 
 
 btool_dirs = <string>
-* A comma-seperated list of paths (relative to $SPLUNK_HOME) to add as btool options
-* If this is a deployment server, add "etc/deployment-apps"
-* If this is a search head cluster deployer, "add etc/shcluster/apps"
+* A comma-seperated list of absolute paths to add as "--dirs=" that btool can check
+* If this is a search head cluster deployer, "add /opt/splunk/etc/shcluster/apps" (sans-quotes)
+* If this is a deployment server, you will need to do a few extra steps to make this work:
+  1. mkdir /opt/splunk/etc/deployment-apps-for-btool/
+  2. cd /opt/splunk/etc/deployment-apps-for-btool/
+  3. ln -s /opt/splunk/etc/deployment-apps app
+  4. Set the above parameter to: btools_dirs = /opt/splunk/etc/deployment-apps
+* For more info see: https://answers.splunk.com/answers/731787
+* There are additional hooks and actions in the example config that you will probably want to uncomment 
+  for search head deployers or deployment servers.
 
 
 ############################################################################
@@ -90,6 +97,7 @@ action = <string>
     btool:(1) - Run btool on the specified conf file (--debug mode).
     btool-hidepaths:(1) - Run btool on the specified conf file and do not show paths (not --debug mode).
     btool-hidedefaults:(1) - Run btool on the specified conf file and hide any default setting.
+    btool-hidesystemdefaults:(1) - Run btool on the specified conf file and hide system default settings.
     spec:(1) - Show the .spec file for the specified conf file.
     read:(1) - Open the specified file.
     live:(1) - Show the current running config for the specified conf file. Uses the "/services/configs/conf-*" endpoint.
