@@ -1,4 +1,4 @@
-# Copyright (C) 2018 Chris Younger
+# Copyright (C) 2020 Chris Younger
 
 import splunk, base64, sys, os, time, json, re, shutil, subprocess, platform, logging, logging.handlers
 
@@ -21,7 +21,7 @@ def setup_logging():
 	formatter = logging.Formatter("%(created)f %(levelname)s pid=%(process)d %(message)s")
 	file_handler.setFormatter(formatter)
 	logger.addHandler(file_handler)
-	logger.setLevel("INFO");
+	logger.setLevel("INFO")
 	return logger
 logger = setup_logging()
 
@@ -48,7 +48,10 @@ class req(PersistentServerConnectionApplication):
 				p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=False, env=this_env)
 				o = p.communicate()
 				status_codes.append(p.returncode)
-				return str(o[0]) + "\n"
+				if sys.version_info < (3, 0):
+					return str(o[0]) + "\n"
+				else:
+					return o[0].decode('utf-8') + "\n"
 
 			def runCommandGit(git_output, git_status_codes, env_git, cmds):
 				git_output.append({"type": "cmd", "content": '$ ' + " ".join(cmds)}) 
@@ -59,7 +62,10 @@ class req(PersistentServerConnectionApplication):
 				# TODO timeout after: int(conf["global"]["run_timeout"])
 				p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, env=env_copy)
 				o = p.communicate()
-				return str(o[0]) + "\n"
+				if sys.version_info < (3, 0):
+					return str(o[0]) + "\n"
+				else:
+					return o[0].decode('utf-8') + "\n"
 
 			def git(message, git_status_codes, git_output, file1, file2=None):
 				if confIsTrue("git_autocommit", False):
@@ -161,7 +167,6 @@ class req(PersistentServerConnectionApplication):
 
 						elif form['action'] == 'btool-check':
 							result = runCommand([cmd, 'btool', 'check', '--debug'], env_copy)
-							result = result + runCommand([cmd, 'btool', 'find-dangling'], env_copy)
 							result = result + runCommand([cmd, 'btool', 'validate-strptime'], env_copy)
 							result = result + runCommand([cmd, 'btool', 'validate-regex'], env_copy)
 
@@ -219,7 +224,7 @@ class req(PersistentServerConnectionApplication):
 									os.chdir(os.path.dirname(file_path))
 									git_output.append({"type": "desc", "content": "Committing file before saving changes"})
 									git("unknown", git_status_codes, git_output, file_path)
-									with open(file_path, "wb") as fh:
+									with open(file_path, "w") as fh:
 										fh.write(form['file'])
 									git_output.append({"type": "desc", "content": "Committing file after saving changes"})
 									git(user + " save ", git_status_codes, git_output, file_path)
@@ -258,9 +263,12 @@ class req(PersistentServerConnectionApplication):
 									if fsize > int(conf["global"]["max_file_size"]):
 										reason = "File too large to open. File size is " + str(fsize) + " MB and the configured limit is " + conf["global"]["max_file_size"] + " MB"
 									else:
-										with open(file_path, 'r') as fh:
-											result = fh.read()
-									if is_binary_string(result):
+										try:
+											with open(file_path, 'r') as fh:
+												result = fh.read()
+										except UnicodeDecodeError:
+											reason = "unable to open binary file (right-click and 'download' instead)"
+									if sys.version_info < (3, 0) and is_binary_string(result):
 										reason = "unable to open binary file (right-click and 'download' instead)"
 
 							elif form['action'] == 'delete':
@@ -322,7 +330,7 @@ class req(PersistentServerConnectionApplication):
 
 									else:
 										os.chdir(os.path.dirname(file_path))
-										git_output.append({"type": "desc", "content": "Committing file before renaming"})	
+										git_output.append({"type": "desc", "content": "Committing file before renaming"})
 										git("unknown", git_status_codes, git_output, file_path)
 										os.rename(file_path, new_path)
 										git_output.append({"type": "desc", "content": "Committing renamed file"})
@@ -355,3 +363,4 @@ class req(PersistentServerConnectionApplication):
 			logger.info('user={} action={} item="{}" param1="{}"'.format(user, form['action'], form['path'], form['param1']))
 			logger.warn('caught error {} debug={}'.format(message, debug))
 			return {'payload': {'reason': message, 'debug': debug}, 'status': 200}
+
