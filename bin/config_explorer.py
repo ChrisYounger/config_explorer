@@ -59,7 +59,6 @@ class req(PersistentServerConnectionApplication):
                 git_output.append({"type": "cmd", "content": 'Ended with code: ' + str(git_status_codes[-1])})
 
             def runCommandCustom(cmds, env_copy):
-                # TODO timeout after: int(conf["global"]["run_timeout"])
                 p = subprocess.Popen(cmds, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True, env=env_copy)
                 o = p.communicate()
                 if sys.version_info < (3, 0):
@@ -318,10 +317,10 @@ class req(PersistentServerConnectionApplication):
                                             git(user + " deleted ", git_status_codes, git_output, file_path)
 
                             else:
-                                if re.search(r'[^A-Za-z0-9_\- \.\(\)]', form['param1']):
-                                    reason = "New name contains invalid characters"
+                                #if re.search(r'[^A-Za-z0-9_\- \.\(\)]', form['param1']):
+                                #    reason = "New name contains invalid characters"
 
-                                elif form['action'] == 'rename':
+                                if form['action'] == 'rename':
                                     new_path = os.path.join(os.path.dirname(file_path), form['param1'])
                                     if os.path.exists(new_path):
                                         reason = "That already exists"
