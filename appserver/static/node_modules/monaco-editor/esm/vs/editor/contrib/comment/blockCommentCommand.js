@@ -89,8 +89,9 @@ var BlockCommentCommand = /** @class */ (function () {
             ops = BlockCommentCommand._createAddBlockCommentOperations(selection, startToken, endToken);
             this._usedEndToken = ops.length === 1 ? endToken : null;
         }
-        for (var i = 0; i < ops.length; i++) {
-            builder.addTrackedEditOperation(ops[i].range, ops[i].text);
+        for (var _i = 0, ops_1 = ops; _i < ops_1.length; _i++) {
+            var op = ops_1[_i];
+            builder.addTrackedEditOperation(op.range, op.text);
         }
     };
     BlockCommentCommand._createRemoveBlockCommentOperations = function (r, startToken, endToken) {

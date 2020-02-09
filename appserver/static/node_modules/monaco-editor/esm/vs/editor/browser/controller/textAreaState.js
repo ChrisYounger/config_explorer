@@ -174,20 +174,20 @@ export { TextAreaState };
 var PagedScreenReaderStrategy = /** @class */ (function () {
     function PagedScreenReaderStrategy() {
     }
-    PagedScreenReaderStrategy._getPageOfLine = function (lineNumber) {
-        return Math.floor((lineNumber - 1) / PagedScreenReaderStrategy._LINES_PER_PAGE);
+    PagedScreenReaderStrategy._getPageOfLine = function (lineNumber, linesPerPage) {
+        return Math.floor((lineNumber - 1) / linesPerPage);
     };
-    PagedScreenReaderStrategy._getRangeForPage = function (page) {
-        var offset = page * PagedScreenReaderStrategy._LINES_PER_PAGE;
+    PagedScreenReaderStrategy._getRangeForPage = function (page, linesPerPage) {
+        var offset = page * linesPerPage;
         var startLineNumber = offset + 1;
-        var endLineNumber = offset + PagedScreenReaderStrategy._LINES_PER_PAGE;
+        var endLineNumber = offset + linesPerPage;
         return new Range(startLineNumber, 1, endLineNumber + 1, 1);
     };
-    PagedScreenReaderStrategy.fromEditorSelection = function (previousState, model, selection, trimLongText) {
-        var selectionStartPage = PagedScreenReaderStrategy._getPageOfLine(selection.startLineNumber);
-        var selectionStartPageRange = PagedScreenReaderStrategy._getRangeForPage(selectionStartPage);
-        var selectionEndPage = PagedScreenReaderStrategy._getPageOfLine(selection.endLineNumber);
-        var selectionEndPageRange = PagedScreenReaderStrategy._getRangeForPage(selectionEndPage);
+    PagedScreenReaderStrategy.fromEditorSelection = function (previousState, model, selection, linesPerPage, trimLongText) {
+        var selectionStartPage = PagedScreenReaderStrategy._getPageOfLine(selection.startLineNumber, linesPerPage);
+        var selectionStartPageRange = PagedScreenReaderStrategy._getRangeForPage(selectionStartPage, linesPerPage);
+        var selectionEndPage = PagedScreenReaderStrategy._getPageOfLine(selection.endLineNumber, linesPerPage);
+        var selectionEndPageRange = PagedScreenReaderStrategy._getRangeForPage(selectionEndPage, linesPerPage);
         var pretextRange = selectionStartPageRange.intersectRanges(new Range(1, 1, selection.startLineNumber, selection.startColumn));
         var pretext = model.getValueInRange(pretextRange, 1 /* LF */);
         var lastLine = model.getLineCount();
@@ -222,7 +222,6 @@ var PagedScreenReaderStrategy = /** @class */ (function () {
         }
         return new TextAreaState(pretext + text + posttext, pretext.length, pretext.length + text.length, new Position(selection.startLineNumber, selection.startColumn), new Position(selection.endLineNumber, selection.endColumn));
     };
-    PagedScreenReaderStrategy._LINES_PER_PAGE = 10;
     return PagedScreenReaderStrategy;
 }());
 export { PagedScreenReaderStrategy };

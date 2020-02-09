@@ -16,6 +16,7 @@ var FastDomNode = /** @class */ (function () {
         this._fontFamily = '';
         this._fontWeight = '';
         this._fontSize = -1;
+        this._fontFeatureSettings = '';
         this._lineHeight = -1;
         this._letterSpacing = -100;
         this._className = '';
@@ -23,6 +24,7 @@ var FastDomNode = /** @class */ (function () {
         this._position = '';
         this._visibility = '';
         this._layerHint = false;
+        this._contain = 'none';
     }
     FastDomNode.prototype.setMaxWidth = function (maxWidth) {
         if (this._maxWidth === maxWidth) {
@@ -101,6 +103,13 @@ var FastDomNode = /** @class */ (function () {
         this._fontSize = fontSize;
         this.domNode.style.fontSize = this._fontSize + 'px';
     };
+    FastDomNode.prototype.setFontFeatureSettings = function (fontFeatureSettings) {
+        if (this._fontFeatureSettings === fontFeatureSettings) {
+            return;
+        }
+        this._fontFeatureSettings = fontFeatureSettings;
+        this.domNode.style.fontFeatureSettings = this._fontFeatureSettings;
+    };
     FastDomNode.prototype.setLineHeight = function (lineHeight) {
         if (this._lineHeight === lineHeight) {
             return;
@@ -152,7 +161,14 @@ var FastDomNode = /** @class */ (function () {
             return;
         }
         this._layerHint = layerHint;
-        this.domNode.style.willChange = this._layerHint ? 'transform' : 'auto';
+        this.domNode.style.transform = this._layerHint ? 'translate3d(0px, 0px, 0px)' : '';
+    };
+    FastDomNode.prototype.setContain = function (contain) {
+        if (this._contain === contain) {
+            return;
+        }
+        this._contain = contain;
+        this.domNode.style.contain = this._contain;
     };
     FastDomNode.prototype.setAttribute = function (name, value) {
         this.domNode.setAttribute(name, value);

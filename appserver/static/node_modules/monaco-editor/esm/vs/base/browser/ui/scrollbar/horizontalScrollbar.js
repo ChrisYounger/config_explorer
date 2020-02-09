@@ -8,14 +8,14 @@ var __extends = (this && this.__extends) || (function () {
             ({ __proto__: [] } instanceof Array && function (d, b) { d.__proto__ = b; }) ||
             function (d, b) { for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p]; };
         return extendStatics(d, b);
-    }
+    };
     return function (d, b) {
         extendStatics(d, b);
         function __() { this.constructor = d; }
         d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
     };
 })();
-import { StandardMouseWheelEvent } from '../../mouseEvent.js';
+import { StandardWheelEvent } from '../../mouseEvent.js';
 import { AbstractScrollbar } from './abstractScrollbar.js';
 import { ARROW_IMG_SIZE } from './scrollbarArrow.js';
 import { ScrollbarState } from './scrollbarState.js';
@@ -37,21 +37,21 @@ var HorizontalScrollbar = /** @class */ (function (_super) {
                 className: 'left-arrow',
                 top: scrollbarDelta,
                 left: arrowDelta,
-                bottom: void 0,
-                right: void 0,
+                bottom: undefined,
+                right: undefined,
                 bgWidth: options.arrowSize,
                 bgHeight: options.horizontalScrollbarSize,
-                onActivate: function () { return _this._host.onMouseWheel(new StandardMouseWheelEvent(null, 1, 0)); },
+                onActivate: function () { return _this._host.onMouseWheel(new StandardWheelEvent(null, 1, 0)); },
             });
             _this._createArrow({
                 className: 'right-arrow',
                 top: scrollbarDelta,
-                left: void 0,
-                bottom: void 0,
+                left: undefined,
+                bottom: undefined,
                 right: arrowDelta,
                 bgWidth: options.arrowSize,
                 bgHeight: options.horizontalScrollbarSize,
-                onActivate: function () { return _this._host.onMouseWheel(new StandardMouseWheelEvent(null, -1, 0)); },
+                onActivate: function () { return _this._host.onMouseWheel(new StandardWheelEvent(null, -1, 0)); },
             });
         }
         _this._createSlider(Math.floor((options.horizontalScrollbarSize - options.horizontalSliderSize) / 2), 0, undefined, options.horizontalSliderSize);

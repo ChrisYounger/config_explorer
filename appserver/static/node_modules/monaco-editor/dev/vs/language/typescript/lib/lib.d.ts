@@ -1,0 +1,17 @@
+export declare const lib_es2015_symbol_dts: string;
+export declare const lib_es2015_symbol_wellknown_dts: string;
+export declare const lib_es2015_reflect_dts: string;
+export declare const lib_es2015_proxy_dts: string;
+export declare const lib_es2015_iterable_dts: string;
+export declare const lib_es2015_promise_dts: string;
+export declare const lib_es2015_generator_dts: string;
+export declare const lib_es2015_collection_dts: string;
+export declare const lib_es2015_core_dts: string;
+export declare const lib_dom_iterable_dts: string;
+export declare const lib_scripthost_dts: string;
+export declare const lib_webworker_importscripts_dts: string;
+export declare const lib_dom_dts: string;
+export declare const lib_es5_dts: string;
+export declare const lib_es2015_dts: string;
+export declare const lib_es6_dts: string;
+export declare const lib_dts: string;

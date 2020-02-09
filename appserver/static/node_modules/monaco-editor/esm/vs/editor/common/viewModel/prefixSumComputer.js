@@ -2,7 +2,7 @@
  *  Copyright (c) Microsoft Corporation. All rights reserved.
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
-import { toUint32 } from '../core/uint.js';
+import { toUint32 } from '../../../base/common/uint.js';
 var PrefixSumIndexOfResult = /** @class */ (function () {
     function PrefixSumIndexOfResult(index, remainder) {
         this.index = index;
