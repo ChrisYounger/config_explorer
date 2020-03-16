@@ -38,7 +38,6 @@ window.MonacoEnvironment = {
 require([
 	"splunkjs/mvc",
 	"jquery",
-	"moment",
 	"splunkjs/mvc/simplexml",
 	"splunkjs/mvc/layoutview",
 	"splunkjs/mvc/simplexml/dashboardview",
@@ -48,7 +47,6 @@ require([
 ], function(
 	mvc,
 	$,
-	moment,
 	DashboardController,
 	LayoutView,
 	Dashboard,
@@ -1989,7 +1987,7 @@ require([
 					$('.ce_saving_icon').addClass('ce_hidden');
 				}
 				var errText = '';
-				//console.log(type, err, r);
+				//console.log(err, r);
 				if (err) {
 					if (err.data.hasOwnProperty('messages')) {
 						errText = "<pre>" + htmlEncode(err.data.messages["0"].text) + "</pre>";
@@ -2014,7 +2012,10 @@ require([
 						
 					} else if (r.data.reason === "config_locked") {
 						errText = "<p>Unable to write to the settings file becuase it is locked and must be edited externally: <code>etc/apps/config_explorer/local/config_explorer.conf</code></p>";
-						
+
+					} else if (r.data.reason === "binary_file") {
+						errText = "<p>Unable to open binary file (right-click and 'download' file instead)</p>";
+
 					} else if (r.data.reason !== "") {
 						errText = "<pre>" + htmlEncode(r.data.reason) + "</pre>";
 					}
@@ -2022,7 +2023,7 @@ require([
 				if (errText) {
 					showModal({
 						title: "Error",
-						body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + errText + "</pre></div>",
+						body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + postData.action + ": " + (postData.hasOwnProperty("path") ? postData.path : "") + "<br><br><br>" + errText + "</pre></div>",
 					});
 					reject(Error("error"));
 				} else {

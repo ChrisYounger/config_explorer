@@ -1,7 +1,7 @@
 # Copyright (C) 2020 Chris Younger
 
 import splunk, base64, sys, os, time, json, re, shutil, subprocess, platform, logging, logging.handlers
-
+# range does not need to be imported from six. it is not used when running in python3 mode.
 if sys.platform == "win32":
     import msvcrt
     # Binary mode is required for persistent mode on Windows.
@@ -265,9 +265,9 @@ class req(PersistentServerConnectionApplication):
                                             with open(file_path, 'r') as fh:
                                                 result = fh.read()
                                         except UnicodeDecodeError:
-                                            reason = "unable to open binary file (right-click and 'download' instead)"
+                                            reason = "binary_file"
                                     if sys.version_info < (3, 0) and is_binary_string(result):
-                                        reason = "unable to open binary file (right-click and 'download' instead)"
+                                        reason = "binary_file"
 
                             elif form['action'] == 'delete':
                                 os.chdir(os.path.dirname(file_path))
@@ -343,6 +343,8 @@ class req(PersistentServerConnectionApplication):
 
                                     elif form['action'] == 'newfile':
                                         open(new_path, 'w').close()
+                                        #with open(new_path, "w") as fh:
+                                        #    fh.write("")
                                         os.chdir(os.path.dirname(new_path))
                                         git(user + " new", git_status_codes, git_output, new_path)
 
