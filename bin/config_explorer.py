@@ -163,6 +163,7 @@ class req(PersistentServerConnectionApplication):
                             result = {}
                             result['files'] = runCommand([cmd, 'btool', 'check', '--debug'], env_copy)
                             result['conf'] = conf
+                            result['system'] = system
 
                         elif form['action'] == 'btool-check':
                             result = runCommand([cmd, 'btool', 'check', '--debug'], env_copy)
