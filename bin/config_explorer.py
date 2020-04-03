@@ -315,17 +315,21 @@ class req(PersistentServerConnectionApplication):
                                     if form['action'] == 'fileuploade':
                                         status_codes = []
                                         #if file is tar or spl
-                                        if re.search(r'\.(?:tgz|tar|spl)(?:$|\.)', form['param1']):
-                                            result = runCommand(["tar","-xvf",form['param1']], env_copy, status_codes)
-                                        elif re.search(r'\.zip$', form['param1']):
-                                            result = runCommand(["unzip", form['param1']], env_copy, status_codes)
-                                        else:
-                                            result = "File uploaded but unable to extract due to unknown file extension"
-                                        result += "status code=" + str(max(status_codes))
-                                        if max(status_codes) == 0:
-                                            os.remove(form['param1'])
-                                            git_output.append({"type": "desc", "content": "Deleting file"})
-                                            git(user + " deleted ", git_status_codes, git_output, file_path)
+                                        try:
+                                            if re.search(r'\.(?:tgz|tar|spl)(?:$|\.)', form['param1']):
+                                                result = runCommand(["tar","-xvf",form['param1']], env_copy, status_codes)
+                                            elif re.search(r'\.zip$', form['param1']):
+                                                result = runCommand(["unzip", form['param1']], env_copy, status_codes)
+                                            else:
+                                                result = "File uploaded but unable to extract due to unknown file extension"
+                                            result += "status code=" + str(max(status_codes))
+                                            if max(status_codes) == 0:
+                                                os.remove(form['param1'])
+                                                git_output.append({"type": "desc", "content": "Deleting file"})
+                                                git(user + " deleted ", git_status_codes, git_output, file_path)
+                                        except OSError:
+                                            result += "File was uploaded but could not be extracted because the required application (tar/unzip) not found."
+
 
                             else:
                                 #if re.search(r'[^A-Za-z0-9_\- \.\(\)]', form['param1']):

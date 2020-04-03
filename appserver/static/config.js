@@ -1374,7 +1374,10 @@ require([
 									showToast('Success');
 								}
 								refreshFolder();
-							}).catch(function(contents){
+							}).catch(function(){
+								if (ecfg) {
+									closeTabByCfg(ecfg);
+								}
 								refreshFolder();
 							});
 						}
