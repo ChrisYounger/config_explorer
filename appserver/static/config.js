@@ -10,7 +10,7 @@ window.MonacoEnvironment = {
 			importScripts('https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.15.0/min/vs/base/worker/workerMain.js');`
 		)}`; 
 	}
-}*/ 
+}*/
 
 // The splunk webserver prepends all scripts with a call to i18n_register() for internationalisation. This fails for web-workers becuase they dont know about this function yet.
 // The options are patch the function on-the-fly like so, or to edit the file on the filesystem (which makes upgrading monaco harder)
@@ -157,6 +157,7 @@ require([
 	var approvedPostSaveHooks = {};
 	var fileModsCheckTimer;
 	var fileModsCheckTimerPeriod = 10000;
+	var lineEndings = 1;
 
 	// Set the "save" hotkey at a global level instead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
@@ -1753,6 +1754,7 @@ require([
 		// The monaco URL must be unique or it will silently close. We use the same file when running different versions of btool and in other circumstances so need to prefix with a unique id.
 		var url = "T" + (tabCreationCount++) + "/" + ecfg.file;
 		ecfg.model = monaco.editor.createModel(contents, language, monaco.Uri.file(url));
+		ecfg.model.setEOL(lineEndings);
 		// Default things to be ini syntax highlighting rather than none
 		if (ecfg.model.getModeId() === "plaintext" && ! language) {
 			monaco.editor.setModelLanguage(ecfg.model, "ini");
@@ -1786,6 +1788,26 @@ require([
 				ecfg.decorations = ecfg.editor.deltaDecorations(ecfg.decorations, []);
 			});
 		}
+		
+		ecfg.editor.addAction({
+			id: 'line-endings-linux',
+			//contextMenuOrder: 0.1,
+			//contextMenuGroupId: 'navigation',
+			label: 'Force Windows line endings for this file (\\r\\n)',
+			run: function() {
+				ecfg.model.setEOL(0);
+			}
+		});		
+		ecfg.editor.addAction({
+			id: 'line-endings-win',
+			//contextMenuOrder: 0.1,
+			//contextMenuGroupId: 'navigation',
+			label: 'Force Linux line endings for this file (\\n)',
+			run: function() {
+				ecfg.model.setEOL(1);
+			}
+		});
+		
 		if (ecfg.canBeSaved) {
 			ecfg.editor.addAction({
 				id: 'save-file',
@@ -1968,6 +1990,8 @@ require([
 	function updateTabAsDiffer(ecfg, left, right) {
 		var originalModel = monaco.editor.createModel(left);
 		var modifiedModel = monaco.editor.createModel(right);
+		originalModel.setEOL(lineEndings);
+		modifiedModel.setEOL(lineEndings);
 		ecfg.container.empty();
 		ecfg.editor = monaco.editor.createDiffEditor(ecfg.container[0],{
 			automaticLayout: true,
@@ -2692,6 +2716,10 @@ require([
 						})(actions[i], i, actions.length);
 					}
 				}
+			}
+
+			if (data.hasOwnProperty("system") && (data.system.toLowerCase() === "linux" || data.system.toLowerCase() === "darwin")) {
+				lineEndings = 0;
 			}
 
 			confFiles = {};
