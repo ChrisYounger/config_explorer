@@ -52,6 +52,9 @@ btool_dirs = <string>
 * There are additional hooks and actions in the example config that you will probably want to uncomment 
   for search head deployers or deployment servers.
 
+detect_changed_files = <bool>
+* Check if files that are open have changed on the filesystem and warn if so. 
+* Defaults to true
 
 ############################################################################
 #  Experimental features                                                   #

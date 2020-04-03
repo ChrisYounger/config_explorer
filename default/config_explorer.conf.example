@@ -70,6 +70,9 @@ hide_settings = false
 # Set to "etc/" to track all changes beneath etc folder.
 # Defaults to empty, meaning the normal git behavior will apply.
 
+#detect_changed_files = true
+#* Check if files that are open have changed on the filesystem and warn if so. 
+#* Defaults to true
 
 ############################################################################
 #  Custom action hooks                                                     #

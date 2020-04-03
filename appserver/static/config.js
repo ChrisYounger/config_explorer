@@ -155,6 +155,8 @@ require([
 	var $ce_home_tab = $(".ce_home_tab");
 	var tabCreationCount = 0;
 	var approvedPostSaveHooks = {};
+	var fileModsCheckTimer;
+	var fileModsCheckTimerPeriod = 10000;
 
 	// Set the "save" hotkey at a global level instead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
@@ -1738,6 +1740,13 @@ require([
 		if (found && ecfg.canBeSaved && found[1] !== 'app') {
 			ecfg.matchedConf = found[1];
 		}
+		if (ecfg.canBeSaved) {
+			// Start the process of checking filemodtimes
+			// A filemodcheck might be about to occur, but delay it another 100ms in case its the first load a bunch of tabs are opening at once.
+			clearTimeout(fileModsCheckTimer);
+			fileModsCheckTimer = setTimeout(function(){ checkFileMods(); }, 100);
+		}
+
 		ecfg.saving = false;
 		ecfg.decorations = [];
 		ecfg.container.empty();
@@ -1851,6 +1860,13 @@ require([
 				ecfg.saving = true;
 				ecfg.tab.append("<i class='ce_right_icon ce_right_two ce_tab_saving_icon icon-two-arrows-cycle' title='Saving...'></i>");
 				serverAction({action: 'save', path: ecfg.file, file: saved_value}).then(function(){
+					// After file has been saved, delete its filemod time and get a new filemod time
+					delete ecfg.filemod;
+					// remove unsaved changes icon from tab
+					ecfg.tab.find('.ce_modified_on_disk').remove();
+					clearTimeout(fileModsCheckTimer);
+					fileModsCheckTimer = setTimeout(function(){ checkFileMods(); }, 100);
+					
 					ecfg.saving = false;
 					ecfg.tab.find('.ce_tab_saving_icon').remove();
 					showToast('Saved');
@@ -1909,14 +1925,14 @@ require([
 		closeTabByHookDetails(parts[0], parts[1]);
 		hooksCfg[parts[0]](parts[1]);
 		var ntab = activeTab;
-		// todo quickly swap back to prev tab
+		// quickly swap back to prev tab
 		if (parts[2] === "yes") {
 			activateTab(ptab);
 		}
 		if (parts[3] || parts[4]) {
 			// Check the contents of the tab
 			editors[ntab].tab.on("ce_loaded", function(){
-				// TODO Get the contents, update the tab
+				// Get the contents, update the tab
 				var contents = editors[ntab].editor.getValue();
 				var status = "";
 				// Good match
@@ -2021,14 +2037,16 @@ require([
 					}
 				}
 				if (errText) {
-					showModal({
-						title: "Error",
-						body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + postData.action + ": " + (postData.hasOwnProperty("path") ? postData.path : "") + "<br><br><br>" + errText + "</pre></div>",
-					});
+					// dont show the error for background requests such as filemods
+					if (postData.action !== "filemods") {
+						showModal({
+							title: "Error",
+							body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + postData.action + ": " + (postData.hasOwnProperty("path") ? postData.path : "") + "<br><br><br>" + errText + "</pre></div>",
+						});
+					}
 					reject(Error("error"));
 				} else {
 					// if there was some unexpected git output, then open a window to display it
-					
 					if (r.data.git && r.data.git_status !== -1) {
 						var git_autocommit_show_output = "auto";
 						if (conf.hasOwnProperty("git_autocommit_show_output")) {
@@ -2411,7 +2429,7 @@ require([
 				[/(?:(\-+)\s*$|\(\-\))/, "metatag"], // minus (?:(\-+)\s*$|(?<=\()\-(?=\)))
 			]
 		}
-	});		
+	});
     // dubious
 	function dodgyBasename(f) {
 		return f.replace(/.*[\/\\]/,'');
@@ -2502,7 +2520,64 @@ require([
 		monaco.editor.setTheme(mode);
 		// save to local storage
 		localStorage.setItem('ce_theme', mode);
-	}
+	};
+
+	function checkFileMods() {
+		var files = {};
+		var problems = [];
+		var hasFiles = false;
+		// check if change detection is disabled
+		if (!confIsTrue('detect_changed_files', true)) {
+			return;
+		}
+		clearTimeout(fileModsCheckTimer);
+		fileModsCheckTimer = setTimeout(checkFileMods, fileModsCheckTimerPeriod);
+		for (var j = 0; j < editors.length; j++){
+			if (editors[j].type === "read") {
+				files[editors[j].file] = 0;
+				hasFiles = true;
+			} 
+		}
+		if (hasFiles) {
+			serverAction({action: 'filemods', paths: JSON.stringify(files)}).then(function(filemods) {
+				var editorMap = {};
+				for (var i = 0; i < editors.length; i++) {
+					if (editors[i].type === "read") {
+						editorMap[editors[i].file] = editors[i];
+					}
+				}
+				for (var file in files) {
+					if (files.hasOwnProperty(file)) {
+						if (filemods.hasOwnProperty(file)) {
+							if (filemods[file] === "") {
+								// file was deleted
+								if (editorMap[file].tab.find(".ce_modified_on_disk").length === 0) {
+									problems.push("Deleted: <code>" + htmlEncode(file) + "</code>");
+									editorMap[file].tab.append("<i class='ce_modified_on_disk ce_right_icon ce_right_two ce_clickable_icon icon-alert' style='color:orange' title='File might have been deleted or moved since it was opened. Either save or attempt to reload from disk.'></i>");
+								}
+							} else if (! editorMap[file].hasOwnProperty("filemod")) {
+								// first time we have checked filemod on this file. so store the response
+								editorMap[file].filemod = filemods[file];
+							} else if (filemods[file] > editorMap[file].filemod) {
+								// file has updated behind the scenes
+								if (editorMap[file].tab.find(".ce_modified_on_disk").length === 0) {
+									problems.push("Changed: <code>" + htmlEncode(file) + "</code>");
+									editorMap[file].tab.append("<i class='ce_modified_on_disk ce_right_icon ce_right_two ce_clickable_icon icon-alert' style='color:orange' title='File might have changed on disk since it was opened. Either save or reload from disk.'></i>");
+								}
+							}
+						}
+					}
+				}
+				if (problems.length) {
+					showModal({
+						title: "Warning",
+						body: "<div class='alert alert-warning'><i class='icon-alert'></i>Warning: An open file has unexpectedly changed on disk. Either save or reload from disk.<br><br>" + problems.join("<br>") + "</div>",
+						size: 600
+					});
+				}
+			});
+		}
+	};
 	
 	// Build the list of config files, 
 	// This function is also called after settings are changed.
@@ -2742,5 +2817,17 @@ require([
 			}
 			readFolder(inFolder);
 		}
+		// Keep track if the page is visible or not. This will affect how often we check for changes to open files
+		$(document).on('visibilitychange', function(){
+			if (document.hidden) {
+				fileModsCheckTimerPeriod = 60000;
+				clearTimeout(fileModsCheckTimer);
+				setTimeout(function(){ checkFileMods(); }, fileModsCheckTimerPeriod);
+			} else {
+				fileModsCheckTimerPeriod = 10000;
+				// When the tab gains focus, immidiatly check for udpated files
+				checkFileMods();
+			}
+		});
 	});
 });

@@ -55,6 +55,7 @@
 .ce_tab_saving_icon {
 	color: #00A4FD;
 	animation: pulsate 1s infinite linear;
+    z-index: 9;
 }
 @keyframes pulsate{
 	0% {

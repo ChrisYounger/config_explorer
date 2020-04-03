@@ -203,6 +203,16 @@ class req(PersistentServerConnectionApplication):
                                 with open(spec_path, 'r') as fh:
                                     result = result + fh.read()
 
+                    elif form['action'] == 'filemods':
+                        result = {}
+                        pathsJson = json.loads(form['paths'])
+                        for path in pathsJson:
+                            path_full = os.path.join(SPLUNK_HOME, path)
+                            if os.path.exists(path_full):
+                                result[path] = os.path.getmtime(path_full)
+                            else:
+                                result[path] = ""
+
                     else:
                         base_path_abs = str(os.path.abspath(os.path.join(SPLUNK_HOME)))
                         file_path = os.path.join(SPLUNK_HOME, form['path'])
