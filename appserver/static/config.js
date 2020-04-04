@@ -127,6 +127,7 @@ require([
 	var service = mvc.createService({owner: "nobody"});
 	var editors = [];  
 	var inFolder = (localStorage.getItem('ce_current_path') || './etc/apps');
+	var openingFolder;
 	var folderContents;
 	var run_history = (JSON.parse(localStorage.getItem('ce_run_history')) || []);
 	var closed_tabs = (JSON.parse(localStorage.getItem('ce_closed_tabs')) || []);
@@ -141,23 +142,29 @@ require([
 	var tabid = 0;
 	var leftpane_ignore = false;
 	var max_recent_files_show = 30;
-	var hooksActive = [];	
-	var $dashboardBody = $('.dashboard-body');
-	var $ce_tree_pane = $(".ce_tree_pane");
-    var $dirlist = $(".ce_file_list");
-	var $filelist = $(".ce_file_wrap");
-	var $filePath = $(".ce_file_path");
-	var $ce_tree_icons = $(".ce_tree_icons");
-    var $container = $(".ce_contents");
-	var $spinner = $(".ce_spinner");
-    var $tabs = $(".ce_tabs");
-	var $ce_contents_home = $(".ce_contents_home");
-	var $ce_home_tab = $(".ce_home_tab");
+	var hooksActive = [];
 	var tabCreationCount = 0;
 	var approvedPostSaveHooks = {};
 	var fileModsCheckTimer;
 	var fileModsCheckTimerPeriod = 10000;
 	var lineEndings = 1;
+	var sortMode = "name";
+	var sortAsc = true;
+	var $dashboard_body = $('.dashboard-body');
+	var $ce_tree_pane = $(".ce_tree_pane");
+	var $ce_container = $('.ce_container');
+	var $ce_resize_column = $('.ce_resize_column');
+	var $ce_file_list = $(".ce_file_list");
+	var $ce_file_wrap = $(".ce_file_wrap");
+	var $ce_file_path = $(".ce_file_path");
+	var $ce_tree_icons = $(".ce_tree_icons");
+	var $ce_contents = $(".ce_contents");
+	var $ce_contents_home = $(".ce_contents_home");
+	var $ce_spinner = $(".ce_spinner");
+	var $ce_tabs = $(".ce_tabs");
+	var $ce_home_tab = $(".ce_home_tab");
+	var $ce_context_menu_overlay = $(".ce_context_menu_overlay");
+
 
 	// Set the "save" hotkey at a global level instead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
@@ -178,18 +185,21 @@ require([
 			}
 		}
     });
+
+	function setLeftPathWidth(size) {
+		size = Math.min(Math.max(size, 0), $(window).width() * 0.8);
+		$ce_tree_pane.css("width", size + "px");
+		$ce_resize_column.css("left", size + "px");
+		$ce_container.css("left", (size + 3) + "px");
+		filePathRTLCheck();
+	}
 	
 	// Handler for resizing the tree pane/editor divider
-	$('.ce_resize_column').on("mousedown", function(e) {
+	$ce_resize_column.on("mousedown", function(e) {
 		e.preventDefault();
-		var ce_container = $('.ce_container');
-		var ce_resize_column = $('.ce_resize_column');
 		$(document).on("mousemove.colresize", function(e) {
-			var size = Math.max(e.pageX, 0);
-			$ce_tree_pane.css("width", size + "px");
-			ce_resize_column.css("left", size + "px");
-			ce_container.css("left", (size + 3) + "px");
-			filePathRTLCheck();
+			setLeftPathWidth(e.pageX);
+			localStorage.setItem('ce_lwidth', e.pageX);
 		});
 	});
 
@@ -236,18 +246,18 @@ require([
 		} else if (elem.hasClass("ce_filter")) {
 			if (elem.hasClass("ce_selected")) {
 				leftPaneFileList();
-				filterModeOff();				
+				filterModeOff();
 			} else {
 				var $in = $('<input class="ce_treesearch_input" autocorrect="off" autocapitalize="off" spellcheck="false" type="text" wrap="off" aria-label="Filter text" placeholder="Filter text" title="Filter text">');
-				$filePath.css("margin-top", "30px");
-				$dirlist.css("top", "100px");
+				$ce_file_path.css("margin-top", "30px");
+				$ce_file_list.css("top", "100px");
 				elem.addClass("ce_selected");
 				$in.appendTo($ce_tree_pane).focus().on("input ",function(){
 					leftPaneFileList($(this).val().toLowerCase());
 				}).on("keydown", function(e){
 					// select the top item
 					if (e.which === 13) {
-						$filelist.find(".ce_leftnav").eq(0).click();
+						$ce_file_wrap.find(".ce_leftnav").eq(0).click();
 					// If user hits backspace with nothing in box then navigate back
 					} else if (e.which === 8 && $in.val() === "") {
 						// navigate back
@@ -264,7 +274,7 @@ require([
 				filterModeOff();
 				elem.addClass("ce_selected");
 				leftPaneConfList();
-			}			
+			}
 		} else if (elem.hasClass("ce_recent_files")) {
 			if (elem.hasClass("ce_selected")) {
 				leftPaneFileList();
@@ -276,14 +286,33 @@ require([
 			}
 		} else if (elem.hasClass('ce_app_run')) {
 			runShellCommand();
+		} else if (elem.hasClass('ce_sort_files')) {
+			var $menu = $("<div class='ce_sort_menu_wrap'>Sort by:"+
+				"<div><i class='icon-chevron-down ce_clickable_icon ce_sortby_name'></i><i class='icon-chevron-up ce_clickable_icon ce_sortby_name'></i>Name</div>"+
+				"<div><i class='icon-chevron-down ce_clickable_icon ce_sortby_size'></i><i class='icon-chevron-up ce_clickable_icon ce_sortby_size'></i>Size</div>"+
+				"<div><i class='icon-chevron-down ce_clickable_icon ce_sortby_time'></i><i class='icon-chevron-up ce_clickable_icon ce_sortby_time'></i>Modified date</div></div>").appendTo($dashboard_body);
+			$menu.find(".ce_sortby_" + sortMode + "." + (sortAsc ? 'icon-chevron-down' : 'icon-chevron-up')).addClass("ce_sortby_selected");
+			$menu.css({right: $(window).width() - parseInt($ce_tree_pane.css("width")) + 2, top: 41});
+			$menu.on("click", ".ce_clickable_icon", function(){
+				var $t = $(this);
+				sortMode = $t.hasClass("ce_sortby_name") ? "name" : $t.hasClass("ce_sortby_size") ? "size" : "time";
+				sortAsc = !!($t.hasClass("icon-chevron-down"));
+				readFolderLoad(inFolder);
+			});
+			$ce_context_menu_overlay.removeClass("ce_hidden");
+			$(document).one("click contextmenu", function(e2) {
+				$ce_context_menu_overlay.addClass("ce_hidden");
+				$menu.remove();
+				e2.preventDefault();
+			});
 		}
 	});
 	
 	function filterModeOff() {
 		$(".ce_filter").removeClass("ce_selected");
 		$(".ce_treesearch_input").remove();
-		$filePath.css("margin-top", "");
-		$dirlist.css("top", "");
+		$ce_file_path.css("margin-top", "");
+		$ce_file_list.css("top", "");
 	}
 
 	function filterModeReset(){
@@ -299,7 +328,7 @@ require([
 	}
 
 	// add folder hooks to the path display
-	$filePath.on("contextmenu", function (e) {
+	$ce_file_path.on("contextmenu", function (e) {
 		var actions = [];
 		for (var j = 0; j < hooksActive.length; j++) {
 			addHookAction(hooksActive[j], inFolder, actions, "folder");
@@ -307,13 +336,13 @@ require([
 		if (confIsTrue('git_autocommit', false) && conf.git_autocommit_work_tree === "") {
 			actions.push($("<div>Show change log</div>").on("click", function(){ 
 				showChangeLog();
-			}));			
+			}));
 		}
 		buildLeftContextMenu(actions, e);
 	});
 	
 	// Click handler for left pane items
-	$dirlist.on("click", ".ce_leftnav", function(){
+	$ce_file_list.on("click", ".ce_leftnav", function(){
 		var elem = $(this);
 		// click on a conf file
 		if (elem.hasClass("ce_conf")) {
@@ -360,7 +389,7 @@ require([
 		if ($leftnavElem.hasClass("ce_conf")) {
 			for (var j = 0; j < hooksActive.length; j++) {
 				addHookAction(hooksActive[j], thisFile, actions, "conf");
-			}				
+			}
 			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ 
 				runBToolList(thisFile, 'btool-hidepaths');
 			}));
@@ -453,7 +482,7 @@ require([
 	});
 
 	// Event handlers for the editor tabs
-	$tabs.on("click", ".ce_close_tab", function(e){
+	$ce_tabs.on("click", ".ce_close_tab", function(e){
 		e.stopPropagation();
 		closeTabWithConfirmation($(this).parent().index());
 	
@@ -462,7 +491,7 @@ require([
 		if (e.which !== 3) {
 			e.stopPropagation();
 			closeTabWithConfirmation($(this).index());	
-		}	
+		}
 	// Clicking tab
 	}).on("click", ".ce_tab", function(){
 		activateTab($(this).index());
@@ -493,16 +522,15 @@ require([
 		} else {
 			$menu.css({opacity:1, left:30 + e.clientX, bottom:"auto", right:"auto", top: e.clientY - 30});
 		}
-		$(".ce_context_menu_overlap").removeClass("ce_hidden");
-		$(document).on("click contextmenu", function(e2) {
+		$ce_context_menu_overlay.removeClass("ce_hidden");
+		$(document).one("click contextmenu", function(e2) {
 			$menu.removeAttr("style");
-			$(".ce_context_menu_overlap").addClass("ce_hidden");
+			$ce_context_menu_overlay.addClass("ce_hidden");
 			if ($t) {
 				$t.removeClass("ce_leftnav_highlighted");
 			}
-			$(document).off("click");
 			e2.preventDefault();
-		});	
+		});
 	}
 	
 	function compareFiles(rightFile, leftFile) {
@@ -515,7 +543,7 @@ require([
 			updateTabAsDiffer(ecfg, leftFile + "\n" + contents[0], rightFile + "\n" + contents[1]);
 		}).catch(function(){ 
 			closeTabByCfg(ecfg);
-		});						
+		});
 	}
 	
 	function debugRefreshBumpHook(endpoint){
@@ -547,14 +575,14 @@ require([
 			showModal({
 				title: "Error",
 				body: "<div class='alert alert-error'><i class='icon-alert'></i>" + label + " - Error occurred!<br><br>Status code: " + jqXHR.status + "<br><br><pre>" + htmlEncode(errorThrown) + "</pre></div>",
-			});			
+			});
 		});
 	}
 	
 	function replaceTokens(str, file){
 		var basefile = dodgyBasename(file);
 		var dirname = dodgyDirname(file);
-		return str.replace(/\$\{FILE\}/g, file).replace(/\$\{BASEFILE\}/g, basefile).replace(/\$\{DIRNAME\}/g, dirname);		
+		return str.replace(/\$\{FILE\}/g, file).replace(/\$\{BASEFILE\}/g, basefile).replace(/\$\{DIRNAME\}/g, dirname);
 	}
 	
 	function runAction(actionStr, file) {
@@ -582,7 +610,7 @@ require([
 				return 0;
 			}
 		}); 
-		activeTab = $tabs.children(".ce_active").index();
+		activeTab = $ce_tabs.children(".ce_active").index();
 		for (var i = 0; i < editors.length; i++){
 			if (tabCfg[editors[i].type].can_reopen) {
 				t.push({label: editors[i].label, type: editors[i].type, file: editors[i].file});
@@ -870,7 +898,7 @@ require([
 			}]
 		});
 	}
-	
+
 	function runShellCommandNow(command, fromFolder){
 		var ecfg = createTab('run', command, '<span class="ce-dim">$</span> ' + htmlEncode(command));
 		//var cancel = $("<div class='ce_cancel ce_internal_link'>Cancel</div>").appendTo(ecfg.container);
@@ -904,7 +932,7 @@ require([
 			closeTabByCfg(ecfg);
 		});
 	}
-	
+
 	// Check config
 	function runBToolCheck() {
 		var ecfg = createTab('btool-check', 'btool-check', 'btool check ');
@@ -918,13 +946,13 @@ require([
 					title: "Info",
 					body: "<div class='alert alert-info'><i class='icon-alert'></i>No configuration errors found</div>",
 					size: 300
-				});	
+				});
 			}
 		}).catch(function(){ 
 			closeTabByCfg(ecfg);
 		});
 	}
-	
+
 	function getRunningConfig(path) {
 		path = path.replace(/\.conf$/i,"");
 		return new Promise(function(resolve, reject){
@@ -955,7 +983,7 @@ require([
 			});
 		});
 	}
-	
+
 	function runningVsLayered(path, compare){
 		path = path.replace(/\.conf$/i,"");
 		var type = 'live';
@@ -995,7 +1023,7 @@ require([
 						size: 300
 					});
 				}
-			}).catch(function(){ 
+			}).catch(function(){
 				closeTabByCfg(ecfg);
 			});
 		}	
@@ -1058,16 +1086,16 @@ require([
 	function showTreePaneSpinner(direction) {
 		if (! leftpane_ignore) {
 			leftpane_ignore = direction || "none";
-			$filelist.addClass("ce_move_" + leftpane_ignore);
-			$spinner.clone().appendTo($ce_tree_pane);
-			$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_recent_files, .ce_show_confs, .ce_app_run").addClass("ce_disabled");
+			$ce_file_wrap.addClass("ce_move_" + leftpane_ignore);
+			$ce_spinner.clone().appendTo($ce_tree_pane);
+			$ce_tree_icons.find('i').addClass("ce_disabled");
 		}
 	}
 
 	function refreshFolder(){
 		readFolderFromServer(inFolder);
 	}
-	
+
 	function getTreeCache(path) {
 		var patharray = path.split("/");
 		var base = filecache;
@@ -1084,8 +1112,8 @@ require([
 		}
 		return base;
 	}
-	
-	// Run server action to load a folder
+
+	// Read the folder from the cache
 	function readFolder(path, direction) {
 		filterModeReset();
 		var base = getTreeCache(path);
@@ -1095,37 +1123,59 @@ require([
 			folderContents = [];
 			for (var key in base) {
 				if (base.hasOwnProperty(key) && key !== ".") {
-					folderContents.push("D" + key);
+					folderContents.push({
+						sortkey: key.toLocaleLowerCase(),
+						dir: true,
+						name: key
+					});
 				}
 			}
 			if (base.hasOwnProperty(".")) {
 				for (var j = 0; j < base["."].length; j++) {
-					folderContents.push("F" + base["."][j]);
+					folderContents.push({
+						sortkey: base["."][j].toLocaleLowerCase(),
+						dir: false,
+						name: base["."][j]
+					});
 				}
 			}
 			readFolderLoad(path);
+			// Even though we just loaded the folder contents from cache, we still request data from the server which will be updated once it is ready.
+			// this keeps the UI fast and makes sure that stuff hasnt changed after the cache was generated. It also allows for sorting by size/timestamp
+			readFolderFromServerWithoutSpinner(path, direction);
 		}
 	}
-	
+
 	function readFolderFromServer(path, direction) {
 		showTreePaneSpinner(direction);
+		openingFolder = path;
+		return readFolderFromServerActual(path, direction);
+	}
+
+	function readFolderFromServerWithoutSpinner(path, direction) {
+		openingFolder = path;
+		return readFolderFromServerActual(path, direction);
+	}
+
+	function readFolderFromServerActual(path, direction) {
 		return serverAction({action: 'read', path: path}).then(function(contents){
+			// Make sure the user didnt navigate to another folder while waiting for the server query
+			if (openingFolder !== path) { return; }
+			var i;
 			// if filecache is null it means user turned it off by setting conf to -1
 			if (filecache !== null) {
 				var base = getTreeCache(path);
 				// base can be null if the screen was opened when we were already deep in the uncached zone
 				if (base !== null) {
 					var folders = ["."];
-					var fn;
 					base["."] = [];
-					for (var i = 0; i < contents.length; i++) {
-						fn = contents[i].substr(1);
-						if (contents[i].substr(0,1) == "F") {
-							base["."].push(fn);
+					for (i = 0; i < contents.length; i++) {
+						if (!contents[i][0]) {
+							base["."].push(contents[i][1]);
 						} else {
-							folders.push(fn);
-							if (! base.hasOwnProperty(fn)) {
-								base[fn] = {};
+							folders.push(contents[i][1]);
+							if (! base.hasOwnProperty(contents[i][1])) {
+								base[contents[i][1]] = {};
 							}
 						}
 					}
@@ -1137,39 +1187,61 @@ require([
 					}
 				}
 			}
-			folderContents = contents;
+			folderContents = [];
+			for (i = 0; i < contents.length; i++) {
+				folderContents.push({
+					sortkey: contents[i][1].toLocaleLowerCase(),
+					dir: !!(contents[i][0]),
+					name: contents[i][1],
+					time: contents[i][2],
+					size: contents[i][3],
+				});
+			}
 			readFolderLoad(path);
 		}).catch(function(msg){
 			leftPaneRemoveSpinner();
-			$filelist.empty();
-			$filePath.empty();
-			$("<div class='ce_treenothing'><i class='icon-warning'></i>Error occured. <span class='ce_link ce_tree_retry'>Retry</span> / <span class='ce_link ce_tree_reset'>Home</span></div>").appendTo($filelist);
-			$filelist.find(".ce_tree_retry").on("click", function(){
+			$ce_file_wrap.empty();
+			$ce_file_path.empty();
+			$("<div class='ce_treenothing'><i class='icon-warning'></i>Error occured. <span class='ce_link ce_tree_retry'>Retry</span> / <span class='ce_link ce_tree_reset'>Home</span></div>").appendTo($ce_file_wrap);
+			$ce_file_wrap.find(".ce_tree_retry").on("click", function(){
 				return readFolderFromServer(path, direction);
 			});
-			$filelist.find(".ce_tree_reset").on("click", function(){
+			$ce_file_wrap.find(".ce_tree_reset").on("click", function(){
 				return readFolderFromServer(".");
 			});
 		});
 	}
-	
+
 	function readFolderLoad(path){
 		inFolder = path;
 		updateUrlHash();
 		localStorage.setItem('ce_current_path', inFolder);
 		folderContents.sort(function(a, b) {
-			return a.toLowerCase().localeCompare(b.toLowerCase());
-		});	
+			if (a.dir === b.dir) {
+				if (sortMode === "size" || sortMode === "time") {
+					if (sortAsc) {
+						return a[sortMode] > b[sortMode] ? -1 : a[sortMode] < b[sortMode] ? 1 : a.sortkey > b.sortkey ? 1 : a.sortkey < b.sortkey ? -1 : 0;
+					}
+					return a[sortMode] > b[sortMode] ? 1 : a[sortMode] < b[sortMode] ? -1 : a.sortkey > b.sortkey ? 1 : a.sortkey < b.sortkey ? -1 : 0;
+				}
+				// sort by name
+				if (sortAsc) {
+					return a.sortkey > b.sortkey ? 1 : a.sortkey < b.sortkey ? -1 : 0;
+				}
+				return a.sortkey > b.sortkey ? -1 : a.sortkey < b.sortkey ? 1 : 0;
+			}
+			return b.dir ? 1 : -1;
+		});
 		leftPaneFileList();
 	}
 
 	function filePathRTLCheck() {
-		var span = $filePath.find("span");
+		var span = $ce_file_path.find("span");
 		if (span.attr("title")) {
-			if (span.width() > $filePath.width()) {
-				$filePath.addClass('ce_rtl');
+			if (span.width() > $ce_file_path.width()) {
+				$ce_file_path.addClass('ce_rtl');
 			} else {
-				$filePath.removeClass('ce_rtl');
+				$ce_file_path.removeClass('ce_rtl');
 			}
 		}
 	}
@@ -1177,35 +1249,47 @@ require([
 	function leftPaneRemoveSpinner(){
 		if (leftpane_ignore) {
 			if (leftpane_ignore === 'fwd') {
-				$filelist.css({transition: "all 0ms", transform: "translate(200px, 0px)", opacity: 0});
+				$ce_file_wrap.css({transition: "all 0ms", transform: "translate(200px, 0px)", opacity: 0});
 			} else if (leftpane_ignore === 'back') {
-				$filelist.css({transition: "all 0ms", transform: "translate(-200px, 0px)", opacity: 0});
+				$ce_file_wrap.css({transition: "all 0ms", transform: "translate(-200px, 0px)", opacity: 0});
 			} else {
-				$filelist.css({transition: "all 0ms", transform: "", opacity: 0});
+				$ce_file_wrap.css({transition: "all 0ms", transform: "", opacity: 0});
 			}
-			$filelist.removeClass("ce_move_none ce_move_fwd ce_move_back");
+			$ce_file_wrap.removeClass("ce_move_none ce_move_fwd ce_move_back");
 			$ce_tree_pane.find(".ce_spinner, .ce_fs_slow_message").remove();
 			setTimeout(function(){
-				$filelist.css({transition: "", transform: "", opacity: ""});				
+				$ce_file_wrap.css({transition: "", transform: "", opacity: ""});
 			},0);
-
 			leftpane_ignore = false;	
-		}	
+		}
+	}
+
+	function formatSize(bytes) {
+		if (bytes === 0) return '0 <span class="ce_leftnav_size_unit">B</span>';
+		const k = 1024;
+		const dm = 2;
+		const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+		const i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' <span class="ce_leftnav_size_unit">' + sizes[i] + '</span>';
+	}
+
+	function formatDate(val) {
+		var d = new Date(val*1000);
+		return d.toLocaleString();
 	}
 
 	function leftPaneFileList(filter){
 		leftPaneRemoveSpinner();
-		$filelist.empty();
-		$filePath.empty();
-		$(".ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_recent_files, .ce_show_confs, .ce_app_run").removeClass("ce_disabled");
+		$ce_file_wrap.empty();
+		$ce_file_path.empty();
+		$ce_tree_icons.find('i').removeClass("ce_disabled");
 		if (inFolder === ".") {
 			$(".ce_folder_up").addClass("ce_disabled");
 		} else {
 			$(".ce_folder_up").removeClass("ce_disabled");
 		}
-		
-		$("<span></span><bdi></bdi>").appendTo($filePath);
-		$filePath.find("span, bdi").attr("title", inFolder).text(inFolder + '/');
+		$("<span></span><bdi></bdi>").appendTo($ce_file_path);
+		$ce_file_path.find("span, bdi").attr("title", inFolder).text(inFolder + '/');
 		filePathRTLCheck();
 		var files = false;
 		var filter_re;
@@ -1213,46 +1297,48 @@ require([
 			filter_re = new RegExp(escapeRegExp(filter), 'gi'); 
 		}
 		for (var i = 0; i < folderContents.length; i++) {
-			var item = folderContents[i].substr(1);
+			var item = folderContents[i].name;
 			if (! filter || item.toLowerCase().indexOf(filter) > -1) {
-				var icon = "folder";
-				if (folderContents[i].substr(0,1) === "F") {
-					icon = "report";
-				}
-				files = true;
+				var icon = (folderContents[i].dir) ? "folder" : "report";
 				var text = htmlEncode(item);
+				files = true;
 				if (filter) {
 					text = text.replace(filter_re, "<span class='ce_treehighlight'>$&</span>");
 				}
-				$("<div class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'>" + text + "</div>").attr("file", inFolder + "/" + item).prepend("<i class='icon-" + icon + "'></i> ").appendTo($filelist);
+				$("<div class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'>"+
+					"<i class='icon-" + icon + "'></i> " +
+					"<div class='ce_leftnav_name'>" + text + "</div>"+
+					"<div class='ce_leftnav_size'>" + (!folderContents[i].dir && folderContents[i].hasOwnProperty("size") ? formatSize(folderContents[i].size) : "") + "</div>"+
+					"<div class='ce_leftnav_time'>" + (folderContents[i].time > 0 && folderContents[i].hasOwnProperty("time") ? formatDate(folderContents[i].time) : "") + "</div>"+
+				"</div>").attr("file", inFolder + "/" + item).appendTo($ce_file_wrap);
 			}
 		}
 		if (!files) {
 			if (filter) {
-				$("<div class='ce_treenothing'><i class='icon-warning'></i>Not found: <span class='ce_treenothing_text'>" + htmlEncode(filter) + "<span></div>").appendTo($filelist);
+				$("<div class='ce_treenothing'><i class='icon-warning'></i>Not found: <span class='ce_treenothing_text'>" + htmlEncode(filter) + "<span></div>").appendTo($ce_file_wrap);
 			} else {
-				$("<div class='ce_treeempty'><i class='icon-warning'></i>Folder empty</div>").appendTo($filelist);
+				$("<div class='ce_treeempty'><i class='icon-warning'></i>Folder empty</div>").appendTo($ce_file_wrap);
 			}
 		}
 	}
 
 	// The conf file list
 	function leftPaneConfList() {
-		$filelist.empty();
-		$filePath.removeClass('ce_rtl').empty();
+		$ce_file_wrap.empty();
+		$ce_file_path.removeClass('ce_rtl').empty();
 		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_recent_files, .ce_app_run").addClass("ce_disabled");
-		$("<span>Splunk conf files</span>").appendTo($filePath);
+		$("<span>Splunk conf files</span>").appendTo($ce_file_path);
 		for (var i = 0; i < confFilesSorted.length; i++) {
-			$("<div class='ce_leftnav ce_conf'></div>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-bulb'></i> ").appendTo($filelist);
+			$("<div class='ce_leftnav ce_conf'></div>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-bulb'></i> ").appendTo($ce_file_wrap);
 		}
 	}
 
 	// Click handler for Recent Files button in top right
 	function leftPaneRecentList() {
-		$filelist.empty();
-		$filePath.removeClass('ce_rtl').empty();
+		$ce_file_wrap.empty();
+		$ce_file_path.removeClass('ce_rtl').empty();
 		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_show_confs, .ce_app_run").addClass("ce_disabled");
-		$("<span>Recent files</span>").appendTo($filePath);
+		$("<span>Recent files</span>").appendTo($ce_file_path);
 		var counter = 0;
 		var openlabels = [];
 		for (var j = 0; j < editors.length; j++) {
@@ -1269,14 +1355,14 @@ require([
 				if (closed_tabs[i].type !== "read") {
 					icon = "bulb";
 				}
-				$("<div class='ce_leftnav ce_leftnav_reopen'><i class='icon-" + icon + "'></i> " + htmlEncode(closed_tabs[i].label).replace(/^read:\s/,"") + "</div>").attr("file", closed_tabs[i].file).attr("title", closed_tabs[i].file).attr("type", closed_tabs[i].type).appendTo($filelist);
+				$("<div class='ce_leftnav ce_leftnav_reopen'><i class='icon-" + icon + "'></i> " + htmlEncode(closed_tabs[i].label).replace(/^read:\s/,"") + "</div>").attr("file", closed_tabs[i].file).attr("title", closed_tabs[i].file).attr("type", closed_tabs[i].type).appendTo($ce_file_wrap);
 			}
 		}
 		if (counter === 0) {
-			$("<div class='ce_treeempty'><i class='icon-warning'></i>Nothing here</div>").appendTo($filelist);
+			$("<div class='ce_treeempty'><i class='icon-warning'></i>Nothing here</div>").appendTo($ce_file_wrap);
 		}
 	}
-	
+
 	// Handle clicking an file or folder in the left pane
 	function readFile(path){
 		var label = dodgyBasename(path);
@@ -1434,7 +1520,7 @@ require([
 			}]
 		});
 	}
-	
+
 	// Delete a file or folder with a popup windows
 	function filesystemDelete(file) {
 		if (fileIsOpenAndHasChanges(file)) { return; }
@@ -1514,18 +1600,18 @@ require([
 		if (idx < -1 || idx > (editors.length - 1)) {
 			return;
 		}
-		$container.children().addClass("ce_hidden");
+		$ce_contents.children().addClass("ce_hidden");
 		$ce_contents_home.addClass("ce_hidden");
-		$tabs.children().removeClass("ce_active");
+		$ce_tabs.children().removeClass("ce_active");
 		$ce_home_tab.removeClass("ce_active");
 		activeTab = idx;
 		if (idx !== -1) {
 			editors[idx].tab.addClass('ce_active');
 			editors[idx].container.removeClass('ce_hidden');
-			editors[idx].last_opened = Date.now();  
+			editors[idx].last_opened = Date.now();
 		} else {
 			$ce_home_tab.addClass('ce_active');
-			$ce_contents_home.removeClass('ce_hidden');			
+			$ce_contents_home.removeClass('ce_hidden');
 		}
 		doPipeTabSeperators();
 		updateUrlHash();
@@ -1533,7 +1619,7 @@ require([
 			editors[idx].editor.focus();
 		}
 	}
-	
+
 	// The pipe seperators are between active tabs but not on the currently active tab or the one to its left.
 	function doPipeTabSeperators(){
 		$(".ce_pipe, .ce_pipe_left").remove();
@@ -1566,7 +1652,7 @@ require([
 		}
 		return false;
 	}
-	
+
 	// A tab was opened but there was nothing to put in it, so it is closed.
 	function closeTabByCfg(ecfg) {
 		for (var i = 0; i < editors.length; i++) {
@@ -1574,9 +1660,9 @@ require([
 				closeTabNow(i);
 				return;
 			}
-		}		
+		}
 	}
-	
+
 	function closeTabByName(type, file) {
 		for (var i = 0; i < editors.length; i++) {
 			if (editors[i].file === file && editors[i].type === type) {
@@ -1597,7 +1683,7 @@ require([
 			}
 		}
 	}
-	
+
 	// Check if tab is already open, and if so, active it instead.
 	function tabAlreadyOpen(type, file) {
 		// check if file is already open
@@ -1608,8 +1694,8 @@ require([
 			}
 		} 
 		return false;
-	}	
-	
+	}
+
 	function closeTabWithConfirmation(idx){
 		if (editors[idx].hasChanges) {
 			showModal({
@@ -1627,7 +1713,7 @@ require([
 					onClick: function(){ $(".modal").modal('hide'); },
 					label: "Cancel"
 				}]
-			});			
+			});
 		} else {
 			closeTabNow(idx);
 		}
@@ -1656,7 +1742,7 @@ require([
 		//persist to localstorage
 		localStorage.setItem('ce_closed_tabs', JSON.stringify(closed_tabs));		
 	}
-	
+
 	function closeTabNow(idx) {
 		logClosedTab(editors[idx]);
 		if (editors[idx].hasOwnProperty("editor")) {
@@ -1670,10 +1756,10 @@ require([
 		editors.splice(idx, 1);
 		openTabsListChanged();
 		// if there are still tabs open, find the most recently used tab and activate that one
-		if ($tabs.children().length === 0) {
+		if ($ce_tabs.children().length === 0) {
 			activateTab(-1);
 		// if there is already a tab selected
-		} else if ($tabs.children(".ce_active").length === 0) {
+		} else if ($ce_tabs.children(".ce_active").length === 0) {
 			var last_used_idx, 
 				newest;
 			for (var i = 0; i < editors.length; i++) {
@@ -1683,7 +1769,7 @@ require([
 				}
 			}
 			activateTab(last_used_idx);
-		}		
+		}
 	}
 
 	function createTab(type, file, label){
@@ -1694,18 +1780,18 @@ require([
 			id: tabid++
 		};
 		editors.push(ecfg);
-		ecfg.container = $("<div></div>").appendTo($container);
-		ecfg.container.append($spinner.clone());
+		ecfg.container = $("<div></div>").appendTo($ce_contents);
+		ecfg.container.append($ce_spinner.clone());
 		// Remove the "restore session" link
 		$(".ce_restore_session").remove();
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + label + "</div>").attr("title", ecfg.label).data({"tab": ecfg}).appendTo($tabs);
+		ecfg.tab = $("<div class='ce_tab ce_active'>" + label + "</div>").attr("title", ecfg.label).data({"tab": ecfg}).appendTo($ce_tabs);
 		ecfg.hasChanges = false;
 		ecfg.server_content = '';
 		activateTab(editors.length-1);
 		openTabsListChanged();
 		return ecfg;
 	}
-	
+
 	function addHookActionToEditor(hook, ecfg) {
 		if (hook._match.test(ecfg.file) && hook.matchtype == "file") {
 			var lab = replaceTokens(hook.label, ecfg.file);
@@ -1753,7 +1839,6 @@ require([
 			clearTimeout(fileModsCheckTimer);
 			fileModsCheckTimer = setTimeout(function(){ checkFileMods(); }, 100);
 		}
-
 		ecfg.saving = false;
 		ecfg.decorations = [];
 		ecfg.container.empty();
@@ -1765,7 +1850,6 @@ require([
 		if (ecfg.model.getModeId() === "plaintext" && ! language) {
 			monaco.editor.setModelLanguage(ecfg.model, "ini");
 		}
-		
 		var options = $.extend({}, preferences, {
 			automaticLayout: true,
 			model: ecfg.model,
@@ -1845,7 +1929,7 @@ require([
 			run: function() {
 				ecfg.model.setEOL(0);
 			}
-		});		
+		});
 		ecfg.editor.addAction({
 			id: 'line-endings-win',
 			//contextMenuOrder: 0.1,
@@ -1915,7 +1999,6 @@ require([
 			});
 		}
 		openTabsListChanged();
-
 		ecfg.tab.trigger("ce_loaded");
 	}
 	
@@ -2029,12 +2112,12 @@ require([
 			});
 		}
 	}
-	
+
 	function updateTabHTML(ecfg, contents) {
 		ecfg.container.html(contents).css("overflow", "auto");
 		ecfg.tab.trigger("ce_loaded");
 	}
-	
+
 	function updateTabAsDiffer(ecfg, left, right) {
 		var originalModel = monaco.editor.createModel(left);
 		var modifiedModel = monaco.editor.createModel(right);
@@ -2062,7 +2145,7 @@ require([
 			return values[0];
 		});
 	}
-	
+
 	// Make a rest call to our backend python script
 	function serverAction(postData) {
 		return new Promise(function(resolve, reject) {
@@ -2085,19 +2168,19 @@ require([
 				} else {
 					if (! r.data) {
 						errText = "<pre>Error communicating with Splunk</pre>";
-						
+
 					} else if (! (r.data.hasOwnProperty('result') || r.data.hasOwnProperty('reason'))) {
 						errText = "<pre>" + htmlEncode(r.data) + "</pre>";
-						
+
 					} else if (r.data.reason === "missing_perm_read") {
 						errText = "<p>To use this application you must be have the capability \"<strong>admin_all_objects</strong>\" via a <a href='/manager/config_explorer/authorization/roles'>role</a>.</p>";
 
 					} else if (r.data.reason === "missing_perm_run") {
 						errText = "<p>You must enable the <code>run_commands</code> setting</p>";
-						
+
 					} else if (r.data.reason === "missing_perm_write") {
 						errText = "<p>You must enable the <code>write_access</code> setting</p>";
-						
+
 					} else if (r.data.reason === "config_locked") {
 						errText = "<p>Unable to write to the settings file becuase it is locked and must be edited externally: <code>etc/apps/config_explorer/local/config_explorer.conf</code></p>";
 
@@ -2139,11 +2222,11 @@ require([
 					}
 					resolve(r.data.result);	
 				}
-			});	
-		});			
+			});
+		});
 	}
 
-	// Try to build a conf file from calling the rest services. turns out this is pretty unreliable. 
+	// Try to build a conf file from calling the rest services. turns out this is pretty unreliable.
 	function formatLikeRunningConfig(contents) {
 		return contents.replace(/^.+?splunk[\/\\]etc[\/\\].*?\.conf\s+(?:(.+) = (.*)|(\[.+))\r?\n/img,function(all, g1, g2, g3){
 			if (g3 !== undefined) { return g3 + "\n"; }
@@ -2152,7 +2235,7 @@ require([
 			return g1 + " = " + g2 + "\n";
 		});
 	}
-	
+
 	// Formats the output of "btool list" depending on what checkboxes are selected in the left pane
 	function formatBtoolList(contents, type) {
 		var indent = 80;
@@ -2171,10 +2254,10 @@ require([
 			return g2 + path + g3;
 		});
 	}
-	
+
 	function addGutter(newdecorations, i, className, message) {
 		newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: className, glyphMarginHoverMessage: [{value: message }]  }});
-	}										
+	}
 
 	// After loading a .conf file or after saving and before any changes are made, red or green colour will
 	// be shown in the gutter about if the current line can be found in the output of btool list.
@@ -2274,11 +2357,11 @@ require([
 											// Look in the unstanzaed part of the spec
 											if (ecfg.hinting[""].hasOwnProperty(found[2])) {
 												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"\" Property=\"" + found[2] + "\")");
-												
+	
 											// Look in the stanzaed part of the spec
 											} else if (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2])) {
 												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanza + "\" Property=\"" + found[2] + "\")");
-											
+
 											// Look for a trimmed version of the stanza in the spec. e.g. [endpoint:blah_rest] might be in the spec as [endpoint]
 											} else if (ecfg.hinting.hasOwnProperty(currentStanzaTrimmed) && ecfg.hinting[currentStanzaTrimmed].hasOwnProperty(found[2])) {
 												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanzaTrimmed + "\" Property=\"" + found[2] + "\")");
@@ -2286,15 +2369,15 @@ require([
 											// Now go through those same three checks, but look for the whole thing. For Example in web.conf found[2] is "tools" where as found[1] is "tools.sessions.timeout"
 											} else if (ecfg.hinting[""].hasOwnProperty(found[1])) {
 												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"\" Property=\"" + found[1] + "\")");
-												
+
 											// Look in the stanzaed part of the spec
 											} else if (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[1])) {
 												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanza + "\" Property=\"" + found[1] + "\")");
-											
+
 											// Look for a trimmed version of the stanza in the spec. e.g. [endpoint:blah_rest] might be in the spec as [endpoint]
 											} else if (ecfg.hinting.hasOwnProperty(currentStanzaTrimmed) && ecfg.hinting[currentStanzaTrimmed].hasOwnProperty(found[1])) {
 												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanzaTrimmed + "\" Property=\"" + found[1] + "\")");
-												
+
 											} else {
 												if (found[2] === found[1]) {
 													extraProp = "Looked for property \"" + found[2] + "\" ";
@@ -2305,14 +2388,13 @@ require([
 													extraStanz = "in stanza \"\", \"" + currentStanza + "\"";
 												} else {
 													extraStanz = "in stanzas \"\", \"" + currentStanza + "\" and \"" + currentStanzaTrimmed + "\"";
-												}												
+												}
 												addGutter(newdecorations, i, 'ceDimGreeenLine', "Found in \"btool\" output, but not found in spec file. "+ extraProp + extraStanz);
-
 											}
 										} else {
 											// No spec file exists 
 											addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output");
-										}										
+										}
 									}
 								}
 							}
@@ -2351,7 +2433,7 @@ require([
 		}
 		return ret;
 	}
-	
+
 	// parse the spec file and build a lookup to use for code completion
 	function buildHintingLookup(conf, contents){
 		// left side is for properties, right size for stanzas
@@ -2387,7 +2469,7 @@ require([
 		}	
 		return confFiles[conf];
 	}
-	
+
 	// When hovering lines in a .conf file, Monaco will lookup the current property in the README/*.conf.spec files. 
 	// Becuase the README/*.conf.spec files are not perfect, neither is this documentation!
 	monaco.languages.registerHoverProvider('ini', {
@@ -2414,16 +2496,16 @@ require([
 								currentStanza = "";
 							} else {
 								currentStanza = res[2];
-							}							
+							}
 							currentField = "";
 						}
 					}
 					if (editors[activeTab].hinting.hasOwnProperty(currentStanza) && editors[activeTab].hinting[currentStanza].hasOwnProperty(currentField)) {
 						hintdata = editors[activeTab].hinting[currentStanza][currentField];
-						
+
 					} else if (editors[activeTab].hinting[""].hasOwnProperty(currentField)) {
 						hintdata = editors[activeTab].hinting[""][currentField];
-					
+
 					} else {
 						resolve();
 						return;
@@ -2442,7 +2524,7 @@ require([
 			});
 		}
 	});
-	
+
 	// When hitting CTRL-SPACE in .conf files, monaco will suggest all valid keys - with doco!
 	// Becuase the README/*.conf.spec files are not perfect, neither is this hinting!
 	monaco.languages.registerCompletionItemProvider('ini', {
@@ -2475,8 +2557,8 @@ require([
 			}
 			return { suggestions: [] };
 		}
-	});	
-	
+	});
+
 	// Register a new simple language for prettying up git diffs
 	monaco.languages.register({ id: 'git-diff' });
 	monaco.languages.setMonarchTokensProvider('git-diff', {
@@ -2490,7 +2572,7 @@ require([
 			]
 		}
 	});
-	
+
 	// Register a new simple language for prettying up git log
 	monaco.languages.register({ id: 'git-log' });
 	monaco.languages.setMonarchTokensProvider('git-log', {
@@ -2506,16 +2588,17 @@ require([
 	function dodgyBasename(f) {
 		return f.replace(/.*[\/\\]/,'');
 	}
+
 	function dodgyDirname(f) {
 		return f.replace(/[^\/\\]*$/,'');
 	}
-	
+
 	//create a in-memory div, set it's inner text(which jQuery automatically encodes)
 	//then grab the encoded contents back out.  The div never exists on the page.
 	function htmlEncode(value){
 		return $('<div/>').text(value).html();
 	}
-	
+
 	function escapeRegExp(str) {
 		return str.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); // $& means the whole matched string
 	}
@@ -2526,11 +2609,11 @@ require([
 		}
 		return isTrueValue(conf[param]);
 	}
-	
+
 	function isTrueValue(param) {
 		return (["1", "true", "yes", "t", "y"].indexOf($.trim(param.toLowerCase())) > -1);
 	}
-	
+
 	function showToast(message) {
 		var t = $('.ce_toaster');
 		t.find('span').text(message);
@@ -2539,7 +2622,7 @@ require([
 			t.removeClass('ce_show');
 		},3000);
 	}
-		
+
 	var showModal = function self(o) {
 		var options = $.extend({
 				title : '',
@@ -2551,7 +2634,6 @@ require([
 				onHide : false,
 				actions : false
 			}, o);
-
 		self.onShow = typeof options.onShow == 'function' ? options.onShow : function () {};
 		self.onHide = typeof options.onHide == 'function' ? options.onHide : function () {};
 		if (self.$modal === undefined) {
@@ -2579,15 +2661,14 @@ require([
 		}
 		self.$modal.modal(options);
 	};
-		
 
 	// "vs" | "vs-dark" (default) | "hc-black"
 	function setThemeMode(mode){
 		// Remove existing theme class from parent
-		$dashboardBody.removeClass(function (index, className) {
+		$dashboard_body.removeClass(function (index, className) {
 			return (className.match (/(^|\s)ce_theme_\S+/g) || []).join(' ');
 		});
-		$dashboardBody.addClass("ce_theme_" + mode);
+		$dashboard_body.addClass("ce_theme_" + mode);
 		// Set theme for editors
 		monaco.editor.setTheme(mode);
 		// save to local storage
@@ -2608,7 +2689,7 @@ require([
 			if (editors[j].type === "read") {
 				files[editors[j].file] = 0;
 				hasFiles = true;
-			} 
+			}
 		}
 		if (hasFiles) {
 			serverAction({action: 'filemods', paths: JSON.stringify(files)}).then(function(filemods) {
@@ -2650,7 +2731,7 @@ require([
 			});
 		}
 	};
-	
+
 	// Build the list of config files, 
 	// This function is also called after settings are changed.
 	function loadPermissionsAndConfList(){
@@ -2663,18 +2744,18 @@ require([
 			} else {
 				conf.git_autocommit_work_tree = $.trim(conf.git_autocommit_work_tree);
 			}
-			$dashboardBody.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ');
+			$dashboard_body.addClass('ce_no_write_access ce_no_run_access ce_no_settings_access ce_no_git_access ');
 			if (confIsTrue('write_access', false)) {
-				$dashboardBody.removeClass('ce_no_write_access');
+				$dashboard_body.removeClass('ce_no_write_access');
 			}
 			if (confIsTrue('run_commands', false)) {
-				$dashboardBody.removeClass('ce_no_run_access');
+				$dashboard_body.removeClass('ce_no_run_access');
 			}
 			if (! confIsTrue('hide_settings', false)) {
-				$dashboardBody.removeClass('ce_no_settings_access');
+				$dashboard_body.removeClass('ce_no_settings_access');
 			}
 			if (confIsTrue('git_autocommit', false) && conf.git_autocommit_work_tree !== "") {
-				$dashboardBody.removeClass('ce_no_git_access');
+				$dashboard_body.removeClass('ce_no_git_access');
 			}
 			if (! conf.hasOwnProperty('btool_dirs')) {
 				conf.btool_dirs = [];
@@ -2705,7 +2786,7 @@ require([
 								if (action === "run") {
 									data.conf[stanza].label = "$" + data.conf[stanza].label;
 								}
-							}				
+							}
 							try {
 								data.conf[stanza]._match = new RegExp(data.conf[stanza].match, 'i');
 								hooksActive.push(data.conf[stanza]);
@@ -2723,7 +2804,6 @@ require([
 					return 1;
 				return 0;
 			});
-
 			var actions = [];
 			var actionDefaults = data.conf.action || {};
 			var ce_custom_actions = $(".ce_custom_actions");
@@ -2784,10 +2864,11 @@ require([
 
 	// First load after init has occcured, setup the page
 	loadPermissionsAndConfList().then(function(){
-		$spinner.detach();
-		$dashboardBody.removeClass("ce_loading");
+		$ce_spinner.detach();
+		$dashboard_body.removeClass("ce_loading");
 		
 		setThemeMode(localStorage.getItem('ce_theme') || "vs-dark");
+		setLeftPathWidth(localStorage.getItem('ce_lwidth') || 280);
 
 		// on page load, log that tabs that were open previously
 		var ce_open_tabs = (JSON.parse(localStorage.getItem('ce_open_tabs')) || []);
@@ -2796,16 +2877,16 @@ require([
 			for (var i = 0; i < ce_open_tabs.length; i++){
 				logClosedTab(ce_open_tabs[i]);
 			}
-			var $restore = $("<span class='ce_restore_session'><i class='icon-rotate'></i> <span>Restore " + (ce_open_tabs.length === 1 ? "1 tab" : ce_open_tabs.length + " tabs") + "</span></span>").appendTo($tabs);
+			var $restore = $("<span class='ce_restore_session'><i class='icon-rotate'></i> <span>Restore " + (ce_open_tabs.length === 1 ? "1 tab" : ce_open_tabs.length + " tabs") + "</span></span>").appendTo($ce_tabs);
 			$restore.on("click", function(){
 				for (var j = 0; j < ce_open_tabs.length; j++) {
 					hooksCfg[ce_open_tabs[j].type](ce_open_tabs[j].file);
 				}
 			});
 		}
-		
+
 		// Allow tabs to be rearranged
-		Sortable.create($tabs[0], {
+		Sortable.create($ce_tabs[0], {
 			draggable: ".ce_tab",
 			animation: 150,
 			onEnd: function () {
@@ -2816,18 +2897,18 @@ require([
 		});	
 
 		// Add tooltips
-		$('.ce_tree_icons i').tooltip({delay: 100, placement: 'bottom'});
+		$ce_tree_icons.find('i').tooltip({delay: 100, placement: 'bottom'});
 
 		// Setup the splunk components properly
 		$('header').remove();
 		new LayoutView({ "hideAppBar": true, "hideChrome": false, "hideFooter": false, "hideSplunkBar": false, layout: "fixed" })
 			.render()
 			.getContainerElement()
-			.appendChild($dashboardBody[0]);
+			.appendChild($dashboard_body[0]);
 
 		new Dashboard({
 			id: 'dashboard',
-			el: $dashboardBody,
+			el: $dashboard_body,
 			showTitle: true,
 			editable: true
 		}, { tokens: false }).render();
@@ -2839,8 +2920,8 @@ require([
 		readUrlHash();
 		
 		// Left pane styled scrollbar
-		OverlayScrollbars($dirlist[0],{ className : "os-theme-light", overflowBehavior : { x: "hidden"} });
-		
+		OverlayScrollbars($ce_file_list[0],{ className : "os-theme-light", overflowBehavior : { x: "hidden"} });
+
 		// Show a warning the first time someone opens the app
 		if (! localStorage.getItem('ce_seen_warning')) {
 			localStorage.setItem('ce_seen_warning', "1");

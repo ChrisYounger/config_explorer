@@ -258,14 +258,18 @@ class req(PersistentServerConnectionApplication):
 
                             elif form['action'] == 'read':
                                 if os.path.isdir(file_path):
-
                                     result = []
                                     for f in os.listdir(file_path):
-                                        if os.path.isdir(os.path.join(file_path, f)):
-                                            # for sorting
-                                            result.append("D" + f)
-                                        else:
-                                            result.append("F" + f)
+                                        path_full = os.path.join(os.path.join(file_path, f))
+                                        mtime = 0;
+                                        size = 0;
+                                        ftype = 1;
+                                        mtime = round(os.path.getmtime(path_full))
+                                        if not os.path.isdir(path_full):
+                                            ftype = 0;
+                                            # get size and filemod time
+                                            size = os.path.getsize(path_full)
+                                        result.append([ftype,f,mtime,size])
 
                                 else:
                                     fsize = os.path.getsize(file_path) / 1000000
