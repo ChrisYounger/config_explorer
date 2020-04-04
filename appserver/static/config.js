@@ -601,7 +601,7 @@ require([
 				if (! newest || newest < editors[i].last_opened) {
 					newest = editors[i].last_opened;
 					last_used_idx = (hashparts.length - 1) / 2;
-				}			
+				}
 				hashparts.push(editors[i].type);
 				hashparts.push(editors[i].file);
 			}
@@ -611,7 +611,7 @@ require([
 			history.replaceState(null, null, '#' + hashparts.join("|"));
 		} else {
 			location.hash = '#' + encodeURIComponent(hashparts.join("|"));
-		}		
+		}
 	}
 	
 	function readUrlHash(){
@@ -1529,6 +1529,9 @@ require([
 		}
 		doPipeTabSeperators();
 		updateUrlHash();
+		if (editors[idx].hasOwnProperty("editor")) {
+			editors[idx].editor.focus();
+		}
 	}
 	
 	// The pipe seperators are between active tabs but not on the currently active tab or the one to its left.
@@ -1791,7 +1794,49 @@ require([
 				ecfg.decorations = ecfg.editor.deltaDecorations(ecfg.decorations, []);
 			});
 		}
-		
+		ecfg.editor.addAction({
+			id: 'prev-tab',
+			label: 'Switch tab to left of current',
+			keybindings: [monaco.KeyMod.Alt | monaco.KeyMod.Shift | monaco.KeyCode.LeftArrow],
+			run: function() {
+				if (editors.length > 1) {
+					activateTab((activeTab === 0) ? editors.length - 1 : activeTab - 1);
+				}
+				return null;
+			}
+		});
+		ecfg.editor.addAction({
+			id: 'next-tab',
+			label: 'Switch tab to right of current',
+			keybindings: [monaco.KeyMod.Alt | monaco.KeyMod.Shift | monaco.KeyCode.RightArrow],
+			run: function() {
+				if (editors.length > 1) {
+					activateTab((activeTab === editors.length - 1) ? 0 : activeTab + 1);
+				}
+				return null;
+			}
+		});
+		ecfg.editor.addAction({
+			id: 'last-used-tab',
+			label: 'Switch tab to last active',
+			keybindings: [monaco.KeyMod.Alt | monaco.KeyMod.Shift | monaco.KeyCode.UpArrow],
+			run: function() {
+				var last_used_idx, 
+					newest;
+				if (editors.length > 1) {
+					for (var i = 0; i < editors.length; i++){
+						if (activeTab !== i) {
+							if (! newest || newest < editors[i].last_opened) {
+								newest = editors[i].last_opened;
+								last_used_idx = i;
+							}
+						}
+					}
+					activateTab(last_used_idx);
+				}
+				return null;
+			}
+		});
 		ecfg.editor.addAction({
 			id: 'line-endings-linux',
 			//contextMenuOrder: 0.1,
