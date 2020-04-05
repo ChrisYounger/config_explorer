@@ -147,7 +147,7 @@ require([
 	var approvedPostSaveHooks = {};
 	var fileModsCheckTimer;
 	var fileModsCheckTimerPeriod = 10000;
-	var lineEndings = 1;
+	var fileModsCheckTimerInProgress = false;
 	var sortMode = "name";
 	var sortAsc = true;
 	var $dashboard_body = $('.dashboard-body');
@@ -1845,7 +1845,6 @@ require([
 		// The monaco URL must be unique or it will silently close. We use the same file when running different versions of btool and in other circumstances so need to prefix with a unique id.
 		var url = "T" + (tabCreationCount++) + "/" + ecfg.file;
 		ecfg.model = monaco.editor.createModel(contents, language, monaco.Uri.file(url));
-		ecfg.model.setEOL(lineEndings);
 		// Default things to be ini syntax highlighting rather than none
 		if (ecfg.model.getModeId() === "plaintext" && ! language) {
 			monaco.editor.setModelLanguage(ecfg.model, "ini");
@@ -1921,25 +1920,6 @@ require([
 				return null;
 			}
 		});
-		ecfg.editor.addAction({
-			id: 'line-endings-linux',
-			//contextMenuOrder: 0.1,
-			//contextMenuGroupId: 'navigation',
-			label: 'Force Windows line endings for this file (\\r\\n)',
-			run: function() {
-				ecfg.model.setEOL(0);
-			}
-		});
-		ecfg.editor.addAction({
-			id: 'line-endings-win',
-			//contextMenuOrder: 0.1,
-			//contextMenuGroupId: 'navigation',
-			label: 'Force Linux line endings for this file (\\n)',
-			run: function() {
-				ecfg.model.setEOL(1);
-			}
-		});
-		
 		if (ecfg.canBeSaved) {
 			ecfg.editor.addAction({
 				id: 'save-file',
@@ -2121,8 +2101,6 @@ require([
 	function updateTabAsDiffer(ecfg, left, right) {
 		var originalModel = monaco.editor.createModel(left);
 		var modifiedModel = monaco.editor.createModel(right);
-		originalModel.setEOL(lineEndings);
-		modifiedModel.setEOL(lineEndings);
 		ecfg.container.empty();
 		ecfg.editor = monaco.editor.createDiffEditor(ecfg.container[0],{
 			automaticLayout: true,
@@ -2691,8 +2669,10 @@ require([
 				hasFiles = true;
 			}
 		}
-		if (hasFiles) {
+		if (hasFiles && ! fileModsCheckTimerInProgress) {
+			fileModsCheckTimerInProgress = true;
 			serverAction({action: 'filemods', paths: JSON.stringify(files)}).then(function(filemods) {
+				fileModsCheckTimerInProgress = false;
 				var editorMap = {};
 				for (var i = 0; i < editors.length; i++) {
 					if (editors[i].type === "read") {
@@ -2711,7 +2691,7 @@ require([
 							} else if (! editorMap[file].hasOwnProperty("filemod")) {
 								// first time we have checked filemod on this file. so store the response
 								editorMap[file].filemod = filemods[file];
-							} else if (filemods[file] > editorMap[file].filemod) {
+							} else if (filemods[file] > editorMap[file].filemod + 10) { // add a buffer of 10 seconds
 								// file has updated behind the scenes
 								if (editorMap[file].tab.find(".ce_modified_on_disk").length === 0) {
 									problems.push("Changed: <code>" + htmlEncode(file) + "</code>");
@@ -2728,6 +2708,8 @@ require([
 						size: 600
 					});
 				}
+			}).catch(function(){
+				fileModsCheckTimerInProgress = false;
 			});
 		}
 	};
@@ -2845,11 +2827,6 @@ require([
 					}
 				}
 			}
-
-			if (data.hasOwnProperty("system") && (data.system.toLowerCase() === "linux" || data.system.toLowerCase() === "darwin")) {
-				lineEndings = 0;
-			}
-
 			confFiles = {};
 			confFilesSorted = [];
 			while((res = rex.exec(data.files)) !== null) {

@@ -210,7 +210,7 @@ class req(PersistentServerConnectionApplication):
                         for path in pathsJson:
                             path_full = os.path.join(SPLUNK_HOME, path)
                             if os.path.exists(path_full):
-                                result[path] = os.path.getmtime(path_full)
+                                result[path] = round(os.path.getmtime(path_full))
                             else:
                                 result[path] = ""
 
@@ -234,7 +234,7 @@ class req(PersistentServerConnectionApplication):
                                     git_output.append({"type": "desc", "content": "Committing file before saving changes"})
                                     git("unknown", git_status_codes, git_output, file_path)
                                     with open(file_path, "w") as fh:
-                                        fh.write(form['file'])
+                                        fh.write(form['file'].replace(b'\r\n',b'\n'))
                                     git_output.append({"type": "desc", "content": "Committing file after saving changes"})
                                     git(user + " save ", git_status_codes, git_output, file_path)
 
