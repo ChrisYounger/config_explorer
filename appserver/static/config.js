@@ -1308,8 +1308,8 @@ require([
 				$("<div class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'>"+
 					"<i class='icon-" + icon + "'></i> " +
 					"<div class='ce_leftnav_name'>" + text + "</div>"+
-					"<div class='ce_leftnav_size'>" + (!folderContents[i].dir && folderContents[i].hasOwnProperty("size") ? formatSize(folderContents[i].size) : "") + "</div>"+
-					"<div class='ce_leftnav_time'>" + (folderContents[i].time > 0 && folderContents[i].hasOwnProperty("time") ? formatDate(folderContents[i].time) : "") + "</div>"+
+					"<div class='ce_leftnav_size'>" + (folderContents[i].size > -1 && folderContents[i].hasOwnProperty("size") ? formatSize(folderContents[i].size) : "") + "</div>"+
+					"<div class='ce_leftnav_time'>" + (folderContents[i].time > -1 && folderContents[i].hasOwnProperty("time") ? formatDate(folderContents[i].time) : "") + "</div>"+
 				"</div>").attr("file", inFolder + "/" + item).appendTo($ce_file_wrap);
 			}
 		}
@@ -1615,7 +1615,7 @@ require([
 		}
 		doPipeTabSeperators();
 		updateUrlHash();
-		if (editors[idx].hasOwnProperty("editor")) {
+		if (editors[idx] && editors[idx].hasOwnProperty("editor")) {
 			editors[idx].editor.focus();
 		}
 	}

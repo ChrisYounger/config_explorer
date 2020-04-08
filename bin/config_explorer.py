@@ -261,14 +261,19 @@ class req(PersistentServerConnectionApplication):
                                     result = []
                                     for f in os.listdir(file_path):
                                         path_full = os.path.join(os.path.join(file_path, f))
-                                        mtime = 0;
-                                        size = 0;
+                                        mtime = -1;
+                                        size = -1;
                                         ftype = 1;
-                                        mtime = round(os.path.getmtime(path_full))
+                                        try:
+                                            mtime = round(os.path.getmtime(path_full))
+                                        except OSError:
+                                            pass
                                         if not os.path.isdir(path_full):
                                             ftype = 0;
-                                            # get size and filemod time
-                                            size = os.path.getsize(path_full)
+                                            try:
+                                                size = os.path.getsize(path_full)
+                                            except OSError:
+                                                pass
                                         result.append([ftype,f,mtime,size])
 
                                 else:
