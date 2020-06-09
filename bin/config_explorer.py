@@ -235,7 +235,7 @@ class req(PersistentServerConnectionApplication):
                                     git_output.append({"type": "desc", "content": "Committing file before saving changes"})
                                     git("unknown", git_status_codes, git_output, file_path)
                                     with open(file_path, "w") as fh:
-                                        fh.write(form['file'].replace(b'\r\n',b'\n'))
+                                        fh.write(form['file'].replace(r'\r\n',r'\n'))
                                     git_output.append({"type": "desc", "content": "Committing file after saving changes"})
                                     git(user + " save ", git_status_codes, git_output, file_path)
 
