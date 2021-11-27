@@ -105,6 +105,7 @@ action = <string>
     read:(1) - Open the specified file.
     live:(1) - Show the current running config for the specified conf file. Uses the "/services/configs/conf-*" endpoint.
     live-diff:(1) - Show the current running config as a diff comparison of what is reported by btool.
+    cd:(1) - Change the current directory in config explorer to the path specified. Path should be relative to $SPLUNKHOME
 * The following variables can be used after the full colon:
     ${FILE} = Filename with path
     ${BASEFILE} = Filename without path

@@ -120,7 +120,10 @@ require([
 		},
 		'refresh': function(arg1){
 			debugRefreshBumpHook(arg1);
-		},		
+		},
+		'cd': function(arg1){
+			changeDirectory(arg1);
+		},
 	};
 	// globals
 	var debug_gutters = false;
@@ -242,7 +245,7 @@ require([
 		} else if (elem.hasClass("ce_refresh_tree")) {
 			refreshFolder();
 		} else if (elem.hasClass("ce_folder_up")) {
-			readFolder(inFolder.replace(/[\/\\][^\/\\]+$/,''), 'back');
+			readFolder(inFolder.replace(/[\/\\][^\/\\]*$/,''), 'back');
 		} else if (elem.hasClass("ce_filter")) {
 			if (elem.hasClass("ce_selected")) {
 				leftPaneFileList();
@@ -577,6 +580,12 @@ require([
 				body: "<div class='alert alert-error'><i class='icon-alert'></i>" + label + " - Error occurred!<br><br>Status code: " + jqXHR.status + "<br><br><pre>" + htmlEncode(errorThrown) + "</pre></div>",
 			});
 		});
+	}
+
+	function changeDirectory(dir){
+		if (dir) {
+			readFolder(dir.replace(/[\/\\]$/g, ""), 'fwd');
+		}
 	}
 	
 	function replaceTokens(str, file){
@@ -1920,6 +1929,15 @@ require([
 				return null;
 			}
 		});
+		ecfg.editor.addAction({
+			id: 'close-tab',
+			label: 'Close tab',
+			keybindings: [monaco.KeyMod.Alt | monaco.KeyMod.Shift | monaco.KeyCode.KEY_W],
+			run: function() {
+				closeTabByCfg(ecfg);
+				return null;
+			}
+		});		
 		if (ecfg.canBeSaved) {
 			ecfg.editor.addAction({
 				id: 'save-file',
