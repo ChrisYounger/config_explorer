@@ -32,15 +32,7 @@ you care about your Splunk instance, you should code review all apps before inst
 There is some basic audit logging here: `index=_internal source="*config_explorer.log"`
 
 
-Copyright (C) 2018 Chris Younger
-I am a Splunk Professional Services consultant working for [JDS Australia](https://www.jds.net.au), in Brisbane Australia. 
-
-
-[Source code](https://github.com/ChrisYounger/config_explorer)
-
-[Feature requests and bugs](https://github.com/ChrisYounger/config_explorer/issues)
-
-[Splunkbase](https://splunkbase.splunk.com/app/4353/)
+Copyright (C) 2020 Chris Younger | [Source code](https://github.com/ChrisYounger/config_explorer) | [Feature requests and bugs](https://github.com/ChrisYounger/config_explorer/issues) | [Splunkbase](https://splunkbase.splunk.com/app/4353/)
 
 
   

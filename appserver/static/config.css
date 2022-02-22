@@ -742,6 +742,9 @@ input[type=text].ce_treesearch_input::placeholder {
 .ceOrangeLine {
 	border-left: 8px solid orange;
 }
+.ceBlueLine {
+	border-left: 8px solid #676767;
+}
 .ce_diff_addition { background-color: rgba(0,255,0,.2); }
 .ce_diff_deletion { background-color: rgba(255,0,0,.2); }
 .green {color: #65a637}
@@ -940,4 +943,9 @@ input.ce_run_cwd_radio[type=radio] {
 }
 .ce_postsave_background {
     width: 60px;
+}
+code {
+    color: white;
+    background-color: black;
+    border: 0 none;
 }

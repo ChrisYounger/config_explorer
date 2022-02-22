@@ -144,7 +144,7 @@ require([
 	var comparisonLeftFile = null;
 	var tabid = 0;
 	var leftpane_ignore = false;
-	var max_recent_files_show = 30;
+	var max_recent_files_show = 50;
 	var hooksActive = [];
 	var tabCreationCount = 0;
 	var approvedPostSaveHooks = {};
@@ -153,6 +153,7 @@ require([
 	var fileModsCheckTimerInProgress = false;
 	var sortMode = "name";
 	var sortAsc = true;
+	var doLineHighlight = "";
 	var $dashboard_body = $('.dashboard-body');
 	var $ce_tree_pane = $(".ce_tree_pane");
 	var $ce_container = $('.ce_container');
@@ -403,15 +404,29 @@ require([
 				runBToolList(thisFile, 'btool-hidesystemdefaults');
 			}));
 			
-			for (var k = 0; k < conf.btool_dirs.length; k++) {
-				(function(dir){
-					actions.push($("<div>[" + htmlEncode(dodgyBasename(dir)) +"] Show btool</div>").on("click", function(){ 
-						runBToolList(thisFile + ":" + dir, 'btool');
-					}));
-					actions.push($("<div>[" + htmlEncode(dodgyBasename(dir)) +"] Show btool (hide all defaults)</div>").on("click", function(){ 
-						runBToolList(thisFile + ":" + dir, 'btool-hidedefaults');
-					}));
-				})(conf.btool_dirs[k]);
+			if (conf.btool_dir_for_master_apps) {
+				actions.push($("<div>[master-apps] Show btool</div>").on("click", function(){ 
+					runBToolList(thisFile + ":" + conf.btool_dir_for_master_apps, 'btool', conf.btool_dir_for_master_apps, "/splunk/etc/master-apps/");
+				}));
+				actions.push($("<div>[master-apps] Show btool (hide all defaults)</div>").on("click", function(){ 
+					runBToolList(thisFile + ":" + conf.btool_dir_for_master_apps, 'btool-hidedefaults', conf.btool_dir_for_master_apps, "/splunk/etc/master-apps/");
+				}));
+			}
+			if (conf.btool_dir_for_deployment_apps) {
+				actions.push($("<div>[deployment-apps] Show btool</div>").on("click", function(){ 
+					runBToolList(thisFile + ":" + conf.btool_dir_for_deployment_apps, 'btool', conf.btool_dir_for_deployment_apps, "/splunk/etc/deployment-apps/");
+				}));
+				actions.push($("<div>[deployment-apps] Show btool (hide all defaults)</div>").on("click", function(){ 
+					runBToolList(thisFile + ":" + conf.btool_dir_for_deployment_apps, 'btool-hidedefaults', conf.btool_dir_for_deployment_apps, "/splunk/etc/deployment-apps/");
+				}));
+			}
+			if (conf.btool_dir_for_shcluster_apps) {
+				actions.push($("<div>[shcluster-apps] Show btool</div>").on("click", function(){ 
+					runBToolList(thisFile + ":" + conf.btool_dir_for_shcluster_apps, 'btool');
+				}));
+				actions.push($("<div>[shcluster-apps] Show btool (hide all defaults)</div>").on("click", function(){ 
+					runBToolList(thisFile + ":" + conf.btool_dir_for_shcluster_apps, 'btool-hidedefaults');
+				}));
 			}
 
 			actions.push($("<div>Show .spec file</div>").on("click", function(){
@@ -658,7 +673,15 @@ require([
 			for (var i = 2; (i + 1) < parts.length; i+=2) {
 				// check to make sure its allowed first! This protects against someone crafting a bad url (e.g. a "run" command) and sending it to a victim
 				if (tabCfg[parts[i]].can_reopen) {
-					hooksCfg[parts[i]](parts[i+1]);
+					var file_parts = parts[i+1].split("@");
+					if (file_parts.length > 1) {
+						doLineHighlight = file_parts[1];
+						hooksCfg[parts[i]](file_parts[0]);
+						
+					} else {
+						hooksCfg[parts[i]](parts[i+1]);
+					}
+					
 				}
 			}
 			var tabIdx = parseInt(parts[0],10);
@@ -695,6 +718,7 @@ require([
 					"<br><br><span class='ce_pref_item'>Enable word-wrap <label class='ce_pref_label'><input type='checkbox' class='ce_wordWrap'></label></span>"+
 					"<br><span class='ce_pref_item'>Enable visible whitespace <label class='ce_pref_label'><input type='checkbox' class='ce_renderWhitespace'></label></span>"+
 					"<br><span class='ce_pref_item'>Reuse tabs for post-save actions <label class='ce_pref_label'><input type='checkbox' class='ce_reuseWindow'></label></span>"+
+					"<br><span class='ce_pref_item'>Hover tooltip <label class='ce_pref_label'><input type='checkbox' class='ce_hideSpecTooltip'></label></span>"+
 					"<br><br><span class='ce_pref_item'>Advanced editor options (See <a href='https://microsoft.github.io/monaco-editor/api/interfaces/monaco.editor.ieditoroptions.html' target='_blank'>here</a>)<br>"+
 					"<textarea class='ce_pref_advanced'></textarea></span>"+
 				  "</div>",
@@ -710,9 +734,18 @@ require([
 				if (preferences.hasOwnProperty("ce_reuseWindow") && preferences.ce_reuseWindow) {
 					$(".ce_pref_item .ce_reuseWindow").prop('checked', true);
 				}
+				if (!(preferences.hasOwnProperty("hover") && preferences.hover.hasOwnProperty("enabled") && ! preferences.hover.enabled)) {
+					$(".ce_pref_item .ce_hideSpecTooltip").prop('checked', true);
+				}
 				delete preferences.wordWrap;
 				delete preferences.renderWhitespace;
 				delete preferences.ce_reuseWindow;
+				if (preferences.hasOwnProperty("hover")) {
+					delete preferences.hover.enabled;
+					if ($.isEmptyObject(preferences.hover)) {
+						delete preferences.hover;
+					}
+				}
 				$(".ce_pref_item .ce_pref_advanced").val(JSON.stringify(preferences,null,3));
 			}, 
 			actions: [{
@@ -725,6 +758,14 @@ require([
 					preferences.wordWrap = ($(".ce_pref_item input.ce_wordWrap:checked").length > 0) ? "on" : "off";
 					preferences.renderWhitespace = ($(".ce_pref_item input.ce_renderWhitespace:checked").length > 0) ? "all" : "none";
 					preferences.ce_reuseWindow = ($(".ce_pref_item input.ce_reuseWindow:checked").length > 0);
+					if (! preferences.hasOwnProperty("hover")) {
+						preferences.hover = {};
+					}
+					if ($(".ce_pref_item input.ce_hideSpecTooltip:checked").length === 0) {
+						preferences.hover.enabled = false;
+					} else {
+						preferences.hover.enabled = true;
+					}
 					localStorage.setItem('ce_preferences', JSON.stringify(preferences));
 					// Update all currently open windows
 					for (var i = 0; i < editors.length; i++) {
@@ -1038,7 +1079,7 @@ require([
 		}	
 	}
 	
-	function runBToolList(inPath, type){
+	function runBToolList(inPath, type, origPath, replacementPath){
 		var parts = inPath.split(":")
 		var conf_file = parts.shift().replace(/\.conf$/i, "");
 		var path = parts.join(":");
@@ -1048,6 +1089,9 @@ require([
 		}
 		var ecfg = createTab(type, conf_file + ":" + path, tab_path_fmt);
 		serverActionWithoutFlicker({action: 'btool-list', path: conf_file, param1: path}).then(function(contents){
+			if (typeof origPath !== "undefined") {
+				contents = adjustBtoolPaths(contents, origPath, replacementPath);
+			}
 			var c = formatBtoolList(contents, type);
 			if ($.trim(c)) {
 				updateTabAsEditor(ecfg, c, 'ini');
@@ -1864,10 +1908,24 @@ require([
 			lineNumbersMinChars: 3,
 			ariaLabel: ecfg.file,
 			//readOnly: ! ecfg.canBeSaved,
-			glyphMargin: true
+			glyphMargin: true,
+			hover: { delay: 700 }
 		});
 		ecfg.editor = monaco.editor.create(ecfg.container[0], options);
 		ecfg.server_content = ecfg.editor.getValue();
+
+		// check if we need to scroll to a particular location and highlight a line
+		if (doLineHighlight !== "") {
+			var line_nums = doLineHighlight.split(",");
+			console.log(doLineHighlight, line_nums);
+			if (line_nums.length > 1) {
+				ecfg.editor.setSelection(new monaco.Selection(Number(line_nums[0]),1,(Number(line_nums[1]) + 1),1));
+				ecfg.editor.revealLineInCenter(Number(line_nums[0]), 0);
+				ecfg.editor.focus();
+			}
+			doLineHighlight = "";
+		}
+
 		if (ecfg.canBeSaved) {
 			ecfg.editor.onDidChangeModelContent(function() {
 				// check against saved copy
@@ -1937,7 +1995,7 @@ require([
 				closeTabByCfg(ecfg);
 				return null;
 			}
-		});		
+		});
 		if (ecfg.canBeSaved) {
 			ecfg.editor.addAction({
 				id: 'save-file',
@@ -1955,6 +2013,18 @@ require([
 				label: 'Set post-save action',
 				run: function() {
 					setPostSaveAction();
+				}
+			});
+			ecfg.editor.addAction({
+				id: 'link-to-highlight',
+				contextMenuOrder: 3,
+				contextMenuGroupId: '99_prefs',
+				label: 'Create link to line/selection',
+				run: function() {
+					var editor_selection = ecfg.editor.getSelection();
+					//console.log("editor_selection",editor_selection);
+					var hashparts = window.location.href.replace(/#.*/,"") + "#0|" + inFolder + "|" + ecfg.type + "|" + ecfg.file + "@" + editor_selection.startLineNumber + "," + editor_selection.endLineNumber;
+					copyTextToClipboard(hashparts);
 				}
 			});
 		}
@@ -2232,6 +2302,10 @@ require([
 		});
 	}
 
+	function adjustBtoolPaths(contents, inPath, outPath) {
+		return contents.replace(new RegExp(regexEscape(inPath) + "[\\/\\\\]apps[\\/\\\\]", 'g'), outPath);
+	}
+
 	// Formats the output of "btool list" depending on what checkboxes are selected in the left pane
 	function formatBtoolList(contents, type) {
 		var indent = 80;
@@ -2255,151 +2329,278 @@ require([
 		newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: className, glyphMarginHoverMessage: [{value: message }]  }});
 	}
 
+	function regexEscape(s) {
+		return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+	}
+
+
 	// After loading a .conf file or after saving and before any changes are made, red or green colour will
 	// be shown in the gutter about if the current line can be found in the output of btool list.
 	function highlightBadConfig(ecfg){
-		if (!confIsTrue('conf_validate_on_save', true)) {
+		if (! confIsTrue('conf_validate_on_save', true)) {
 			return;
 		}
-		if (ecfg.hasOwnProperty('matchedConf')) {
+		if (! ecfg.hasOwnProperty('matchedConf')) {
+			return;
+		}
+		var run_path = "";
+		var run_path_parts = ecfg.file.split(/[\/\\]/);
+		if (run_path_parts.length > 1) {
+			run_path = run_path_parts[1];
+		}
+		// console.log("runpath is ",run_path);
+		// possible locations you can run btool: etc/master-apps, etc/slave-apps, etc/apps, etc/system/local, etc/user, etc/shcluster/apps
+
+		// can also run btool on slave-apps, but who has config explorer installed on an indexer anyway?
+		if (run_path === "apps" || run_path === "system") {
 			serverAction({action: 'btool-list', path: ecfg.matchedConf}).then(function(btoolcontents){
-				if (! $.trim(btoolcontents)) {
-					delete ecfg.matchedConf;
-					return;
-				}
-				btoolcontents = btoolcontents.replace(/\\/g,'/');
-				// Build lookup of btool output
-				var lookup = buildBadCodeLookup(btoolcontents);
-				if (debug_gutters) {
-					console.log("Btool:", lookup);
-					if (ecfg.hasOwnProperty('hinting')) {
-						console.log("Spec:", ecfg.hinting);
+				highlightBadConfigContinue(ecfg, btoolcontents, run_path);
+			});
+
+		} else if (run_path === "deployment-apps" && conf.btool_dir_for_deployment_apps) {
+			serverAction({action: 'btool-list', path: ecfg.matchedConf, param1: conf.btool_dir_for_deployment_apps}).then(function(btoolcontents){
+				if (btoolcontents) {
+					// nix only paths. this feature wont work with win becuase you cant symlink
+					var btoolcontents2 = adjustBtoolPaths(btoolcontents, conf.btool_dir_for_deployment_apps, "/splunk/etc/deployment-apps/");
+					if (btoolcontents2 !== btoolcontents) {
+						highlightBadConfigContinue(ecfg, btoolcontents2, run_path);
+						return;
 					}
 				}
-				// try to figure out the SPLUNK_HOME value
-				// Its common that in inputs.conf, some stanzas are defined with $SPLUNK_HOME which btool always expands
-				var rexSplunkHome = /^(.+?)[\\\/]etc[\\\/]/;
-				var foundSplunkHome = btoolcontents.match(rexSplunkHome);
-				var splunk_home = "";
-				if (foundSplunkHome && foundSplunkHome.length == 2) {
-					splunk_home = foundSplunkHome[1];
+				highlightBadConfigContinue(ecfg, "", run_path);
+			});
+
+		} else if (run_path === "master-apps" && conf.btool_dir_for_master_apps) {
+			serverAction({action: 'btool-list', path: ecfg.matchedConf, param1: conf.btool_dir_for_master_apps}).then(function(btoolcontents){
+				if (btoolcontents) {
+					var btoolcontents2 = adjustBtoolPaths(btoolcontents, conf.btool_dir_for_master_apps, "/splunk/etc/master-apps/");
+					// if the replace did nothing, then the btool gutters are probably going to be all wrong anyway
+					if (btoolcontents2 !== btoolcontents) {
+						highlightBadConfigContinue(ecfg, btoolcontents2, run_path);
+						return;
+					}
 				}
-				var seenStanzas = {};
-				var seenProps =  {};
-				// Go through everyline of the editor
-				var contents = ecfg.editor.getValue(),
-					rows = contents.split(/\r?\n/),
-					currentStanza = "",
-					currentStanzaExpandedHome = "",
-					currentStanzaTrimmed = "",
-					// This regex is complex becuase sometimes properties have a unique string on the end of them 
-					// e.g "EVAL-src = whatever"
-					// found[1] will be "EVAL-src"
-					// found[2] will be "EVAL"
-					reProps = /^\s*((\w+)[^=\s]*)\s*=/,
-					newdecorations = [],
-					currentStanzaAsExpectedInBtool,
-					tempStanza,
-					foundSpec,
-					extraProp,
-					extraStanz;
-				for (var i = 0; i < rows.length; i++) {
-					if (rows[i].substr(0,1) === "[") {
-						if (rows[i].substr(0,9) === "[default]") {
-							currentStanza = "";
+				highlightBadConfigContinue(ecfg, "", run_path);
+			});
+
+		} else if (run_path === "shcluster" && conf.btool_dir_for_shcluster_apps) {
+			serverAction({action: 'btool-list', path: ecfg.matchedConf, param1: conf.btool_dir_for_shcluster_apps}).then(function(btoolcontents){
+				console.log("btoolcontents",btoolcontents);
+				highlightBadConfigContinue(ecfg, btoolcontents, run_path);
+			});
+
+		} else {
+			highlightBadConfigContinue(ecfg, "", run_path);
+		}
+	}
+
+	function highlightBadConfigContinue(ecfg, btoolcontents, run_path){
+		var rexSplunkHome = /^(.+?)[\\\/]etc[\\\/]/;
+		var foundSplunkHome;
+		var lookup = {};
+		var splunk_home = "";
+		var seenStanzas = {};
+		var seenProps =  {};
+		var normalBtoolChecks = true;
+		var masterappsPropsTransformsChecks = false;
+		var masterappsPropsSourcetypeChecks = false;
+		var allConfigsAreUnnecisary = false;
+
+		// There is some special logic if we are in the master-apps directory
+		if (run_path === "master-apps") {
+			if (conf.hasOwnProperty("_master_apps_gutter_useful_props_and_transforms") && (ecfg.matchedConf === "props" || ecfg.matchedConf === "transforms")) {
+				// will check for master_apps_gutter_useful_props_and_transforms
+				masterappsPropsTransformsChecks = true;
+			}
+			// split the master_apps_allowed_config  by commas, then split each by full colon. ecfg.matchedConf
+			if (conf.hasOwnProperty("_master_apps_gutter_used_sourcetypes") && ecfg.matchedConf === "props") {
+				// will check for master_apps_gutter_useful_props_and_transforms
+				masterappsPropsSourcetypeChecks = true;
+			}
+			if (conf.hasOwnProperty("_master_apps_gutter_unnecissary_config_files") && conf._master_apps_gutter_unnecissary_config_files.test(ecfg.matchedConf)) {
+				allConfigsAreUnnecisary = true;
+			}
+		}
+
+		if (! $.trim(btoolcontents)) {
+			console.log("no btool contents for ", ecfg.matchedConf);
+			normalBtoolChecks = false;
+		}
+
+		if (normalBtoolChecks) {
+			btoolcontents = btoolcontents.replace(/\\/g,'/');
+			// Build lookup of btool output
+			lookup = buildBadCodeLookup(btoolcontents);
+			if (debug_gutters) {
+				console.log("Btool:", lookup);
+				if (ecfg.hasOwnProperty('hinting')) {
+					console.log("Spec:", ecfg.hinting);
+				}
+			}
+			// try to figure out the SPLUNK_HOME value
+			// Its common that in inputs.conf, some stanzas are defined with $SPLUNK_HOME which btool always expands
+			foundSplunkHome = btoolcontents.match(rexSplunkHome);
+			splunk_home = "";
+			if (foundSplunkHome && foundSplunkHome.length == 2) {
+				splunk_home = foundSplunkHome[1];
+			}
+		}
+
+		// Go through everyline of the editor
+		var contents = ecfg.editor.getValue(),
+			rows = contents.split(/\r?\n/),
+			currentStanza = "",
+			currentStanzaTrimmed = "",
+			// This regex is complex becuase sometimes properties have a unique string on the end of them 
+			// e.g "EVAL-src = whatever"
+			// found[1] will be "EVAL-src"
+			// found[2] will be "EVAL"
+			reProps = /^\s*((\w+)[^=\s]*)\s*=/,
+			newdecorations = [],
+			currentStanzaAsExpectedInBtool,
+			extraProp,
+			extraStanz;
+		for (var i = 0; i < rows.length; i++) {
+			if (rows[i].substr(0,1) === "[") {
+				if (rows[i].substr(0,9) === "[default]") {
+					currentStanza = "";
+				} else {
+					currentStanza = $.trim(rows[i]);
+				}
+				currentStanzaTrimmed = currentStanza.replace(/^(\[\w+).*$/,"$1");
+				// Stanzas that have $SPLUNK_HOME in them will be expanded by btool (stanzas in inputs.conf often have $SPLUNK_HOME in them)
+				currentStanzaAsExpectedInBtool = currentStanza.replace(/\$SPLUNK_HOME/i, splunk_home);
+				// Stanzas with windows path seperators are converted to unix seperators by btool
+				currentStanzaAsExpectedInBtool = currentStanzaAsExpectedInBtool.replace(/\\/g, '/');
+				// Stanzas that use relative paths, will be expanded by btool. (e.g. inputs.conf [script://./bin/go.sh] from current script location)
+				currentStanzaAsExpectedInBtool = currentStanzaAsExpectedInBtool.replace(/\/\/\.\//, "//" + splunk_home + ecfg.file.substr(1).replace(/[^\/\\]*\/[^\/\\]*$/,''));
+				
+				if (seenStanzas.hasOwnProperty(currentStanza)) {
+					addGutter(newdecorations, i, 'ceOrangeLine', "Duplicate Stanza in this file");
+				} else if (masterappsPropsSourcetypeChecks) {
+					// This does does not work with source:: or host:: stanzas, or those that look like they might be a regular expression (not perfect)
+					if (! conf._master_apps_gutter_used_sourcetypes.test(currentStanza) && currentStanza.substr(0,9) !== "[source::" && currentStanza.substr(0,7) !== "[host::" && currentStanza.substr(0,2) !== "[(") {
+						addGutter(newdecorations, i, 'ceBlueLine', "This stanza \"" + currentStanza + "\" does not match a sourcetype in master_apps_gutter_used_sourcetypes (which is " + conf._master_apps_gutter_used_sourcetypes_date + " days old)");
+					}
+				} else if (allConfigsAreUnnecisary) {
+					addGutter(newdecorations, i, 'ceBlueLine', "In most environments, the properties in this file are not needed on indexers.");
+				}
+				seenStanzas[currentStanza] = 1;
+				seenProps = {};
+			} else {
+				var found = rows[i].match(reProps);
+				if (found) {
+					if (found[1].substr(0,1) !== "#") {
+						var g_sev = 2;
+						var g_messages = [];
+						var prop = found[1];
+						// Check for duplicated key in stanza
+						if (seenProps.hasOwnProperty(found[1])) {
+							//addGutter(newdecorations, i, 'ceOrangeLine', "Duplicate key in stanza");
+							g_sev = Math.max(g_sev, 5);
+							g_messages.push("Duplicate key in stanza");
 						} else {
-							currentStanza = $.trim(rows[i]);
-						}
-						currentStanzaTrimmed = currentStanza.replace(/^(\[\w+).*$/,"$1");
-						// Stanzas that have $SPLUNK_HOME in them will be expanded by btool (stanzas in inputs.conf often have $SPLUNK_HOME in them)
-						currentStanzaAsExpectedInBtool = currentStanza.replace(/\$SPLUNK_HOME/i, splunk_home);
-						// Stanzas with windows path seperators are converted to unix seperators by btool
-						currentStanzaAsExpectedInBtool = currentStanzaAsExpectedInBtool.replace(/\\/g, '/');
-						// Stanzas that use relative paths, will be expanded by btool. (e.g. inputs.conf [script://./bin/go.sh] from current script location)
-						currentStanzaAsExpectedInBtool = currentStanzaAsExpectedInBtool.replace(/\/\/\.\//, "//" + splunk_home + ecfg.file.substr(1).replace(/[^\/\\]*\/[^\/\\]*$/,''));
-						
-						if (seenStanzas.hasOwnProperty(currentStanza)) {
-							newdecorations.push({ range: new monaco.Range((1+i),1,(1+i),1), options: { isWholeLine: true, glyphMarginClassName: 'ceOrangeLine', glyphMarginHoverMessage: [{value:"Duplicate Stanza in this file"}]  }});
-						}
-						seenStanzas[currentStanza] = 1;
-						seenProps =  {};
-					} else {
-						var found = rows[i].match(reProps);
-						if (found) {
-							if (found[1].substr(0,1) !== "#") {
-								// Check for duplicated key in stanza
-								if (seenProps.hasOwnProperty(found[1])) {
-									addGutter(newdecorations, i, 'ceOrangeLine', "Duplicate key in stanza");
+							seenProps[found[1]] = 1;
 
-								} else {
-									seenProps[found[1]] = 1;
-									// Look if stanza/property exists in btool
-									if (! lookup.hasOwnProperty(currentStanzaAsExpectedInBtool)){
-										addGutter(newdecorations, i, 'ceRedLine', "Not found in \"btool\" output (btool does not list the stanza \"" + currentStanzaAsExpectedInBtool +"\")");
+							if (normalBtoolChecks) {
+								// Look if stanza/property exists in btool
+								if (! lookup.hasOwnProperty(currentStanzaAsExpectedInBtool)){
+									//addGutter(newdecorations, i, 'ceRedLine', "Not found in \"btool\" output (btool does not list the stanza \"" + currentStanzaAsExpectedInBtool +"\")");
+									g_sev = Math.max(g_sev, 6);
+									g_messages.push("Not found in \"btool\" output (btool does not list the stanza " + currentStanzaAsExpectedInBtool +")");
 
-									} else if (! lookup[currentStanzaAsExpectedInBtool].hasOwnProperty(found[1])){
-										// [default] is a special case and is reflected through all other stanzas in the file
-										if (currentStanzaAsExpectedInBtool !== "") {
-											addGutter(newdecorations, i, 'ceRedLine', "Not found in \"btool\" output (btool with stanza [" + currentStanzaAsExpectedInBtool +"] does not have property \"" + found[1] + "\")");
-										}
-										
-									} else if (lookup[currentStanzaAsExpectedInBtool][found[1]] !== ecfg.file) {
-										addGutter(newdecorations, i, 'ceRedLine', "Not found in \"btool\" output (set in :" + lookup[currentStanzaAsExpectedInBtool][found[1]] + ")");
-
-									} else {
-										// If a spec file exists
-										if (ecfg.hasOwnProperty('hinting') && found.length > 2) {
-											foundSpec = false;
-											// Look in the unstanzaed part of the spec
-											if (ecfg.hinting[""].hasOwnProperty(found[2])) {
-												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"\" Property=\"" + found[2] + "\")");
-	
-											// Look in the stanzaed part of the spec
-											} else if (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2])) {
-												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanza + "\" Property=\"" + found[2] + "\")");
-
-											// Look for a trimmed version of the stanza in the spec. e.g. [endpoint:blah_rest] might be in the spec as [endpoint]
-											} else if (ecfg.hinting.hasOwnProperty(currentStanzaTrimmed) && ecfg.hinting[currentStanzaTrimmed].hasOwnProperty(found[2])) {
-												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanzaTrimmed + "\" Property=\"" + found[2] + "\")");
-
-											// Now go through those same three checks, but look for the whole thing. For Example in web.conf found[2] is "tools" where as found[1] is "tools.sessions.timeout"
-											} else if (ecfg.hinting[""].hasOwnProperty(found[1])) {
-												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"\" Property=\"" + found[1] + "\")");
-
-											// Look in the stanzaed part of the spec
-											} else if (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[1])) {
-												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanza + "\" Property=\"" + found[1] + "\")");
-
-											// Look for a trimmed version of the stanza in the spec. e.g. [endpoint:blah_rest] might be in the spec as [endpoint]
-											} else if (ecfg.hinting.hasOwnProperty(currentStanzaTrimmed) && ecfg.hinting[currentStanzaTrimmed].hasOwnProperty(found[1])) {
-												addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanzaTrimmed + "\" Property=\"" + found[1] + "\")");
-
-											} else {
-												if (found[2] === found[1]) {
-													extraProp = "Looked for property \"" + found[2] + "\" ";
-												} else {
-													extraProp = "Looked for property \"" + found[2] + "\" and \"" + found[1] + "\" ";
-												}
-												if (currentStanza === currentStanzaTrimmed) {
-													extraStanz = "in stanza \"\", \"" + currentStanza + "\"";
-												} else {
-													extraStanz = "in stanzas \"\", \"" + currentStanza + "\" and \"" + currentStanzaTrimmed + "\"";
-												}
-												addGutter(newdecorations, i, 'ceDimGreeenLine', "Found in \"btool\" output, but not found in spec file. "+ extraProp + extraStanz);
-											}
-										} else {
-											// No spec file exists 
-											addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output");
-										}
+								} else if (! lookup[currentStanzaAsExpectedInBtool].hasOwnProperty(found[1])){
+									// [default] is a special case and is reflected through all other stanzas in the file
+									if (currentStanzaAsExpectedInBtool !== "") {
+										//addGutter(newdecorations, i, 'ceRedLine', "Not found in \"btool\" output (btool with stanza [" + currentStanzaAsExpectedInBtool +"] does not have property \"" + found[1] + "\")");
+										g_sev = Math.max(g_sev, 6);
+										g_messages.push("Not found in \"btool\" output (could not find property in stanza " + currentStanzaAsExpectedInBtool +"");
 									}
+									
+								} else if (lookup[currentStanzaAsExpectedInBtool][found[1]] !== ecfg.file && lookup[currentStanzaAsExpectedInBtool][found[1]].substr(2) !== ecfg.file) {
+									//addGutter(newdecorations, i, 'ceRedLine', "Not found in \"btool\" output (set in :" + lookup[currentStanzaAsExpectedInBtool][found[1]] + ")");
+									g_sev = Math.max(g_sev, 6);
+									g_messages.push("Not found in \"btool\" output (set in :" + lookup[currentStanzaAsExpectedInBtool][found[1]] + " and i am :" + ecfg.file + ")");
+
+								}  else {
+									// addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output");
+									g_messages.push("Found in \"btool\" output");
 								}
 							}
+					
+							// If a spec file exists
+							if (ecfg.hasOwnProperty('hinting') && found.length > 2) {
+								foundSpec = false;
+								// Look in the unstanzaed part of the spec
+								if (ecfg.hinting[""].hasOwnProperty(found[2])) {
+									//addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"\" Property=\"" + found[2] + "\")");
+									g_messages.push("Exists in spec file");
+									prop = found[2];
+
+								// Look in the stanzaed part of the spec
+								} else if (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[2])) {
+									//addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanza + "\" Property=\"" + found[2] + "\")");
+									g_messages.push("Exists in spec file (Stanza=" + currentStanza + ")");
+									prop = found[2];
+
+								// Look for a trimmed version of the stanza in the spec. e.g. [endpoint:blah_rest] might be in the spec as [endpoint]
+								} else if (ecfg.hinting.hasOwnProperty(currentStanzaTrimmed) && ecfg.hinting[currentStanzaTrimmed].hasOwnProperty(found[2])) {
+									//addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanzaTrimmed + "\" Property=\"" + found[2] + "\")");
+									g_messages.push("Exists in spec file (Stanza=" + currentStanzaTrimmed + ")");
+									prop = found[2];
+
+								// Now go through those same three checks, but look for the whole thing. For Example in web.conf found[2] is "tools" where as found[1] is "tools.sessions.timeout"
+								} else if (ecfg.hinting[""].hasOwnProperty(found[1])) {
+									//addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"\" Property=\"" + found[1] + "\")");
+									g_messages.push("Exists in spec file");
+
+								// Look in the stanzaed part of the spec
+								} else if (ecfg.hinting.hasOwnProperty(currentStanza) && ecfg.hinting[currentStanza].hasOwnProperty(found[1])) {
+									//addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanza + "\" Property=\"" + found[1] + "\")");
+									g_messages.push("Exists in spec file (Stanza=" + currentStanza + ")");
+
+								// Look for a trimmed version of the stanza in the spec. e.g. [endpoint:blah_rest] might be in the spec as [endpoint]
+								} else if (ecfg.hinting.hasOwnProperty(currentStanzaTrimmed) && ecfg.hinting[currentStanzaTrimmed].hasOwnProperty(found[1])) {
+									//addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"" + currentStanzaTrimmed + "\" Property=\"" + found[1] + "\")");
+									g_messages.push("Exists in spec file (Stanza=" + currentStanzaTrimmed + ")");
+
+								} else {
+									if (found[2] === found[1]) {
+										extraProp = "Looked for property ";
+									} else {
+										extraProp = "Looked for property (or \"" + found[2] + "\" ";
+									}
+									if (currentStanza === currentStanzaTrimmed) {
+										extraStanz = "in stanzas \"\" or " + currentStanza + "";
+									} else {
+										extraStanz = "in stanzas \"\", " + currentStanza + " and " + currentStanzaTrimmed + "";
+									}
+									//addGutter(newdecorations, i, 'ceDimGreeenLine', "Found in \"btool\" output, but not found in spec file. "+ extraProp + extraStanz);
+									g_sev = Math.max(g_sev, 3);
+									g_messages.push("Not found in spec file ("+ extraProp + extraStanz + ")");
+								}
+							}
+							if (masterappsPropsTransformsChecks) {
+								if (! conf._master_apps_gutter_useful_props_and_transforms.test(found[2])) {
+									g_sev = Math.max(g_sev, 4);
+									g_messages.push("In most environments, this property is not needed on indexers (there is no harm in having it there though).");
+								}
+							}
+							if (allConfigsAreUnnecisary) {
+								g_sev = Math.max(g_sev, 4);
+								g_messages.push("In most environments, the properties in this file are not needed on indexers.");
+							}
+						}
+						// add gutters now
+						if (g_messages.length) {
+							var g_color = g_sev == 6 ? "ceRedLine" : g_sev == 5 ? "ceOrangeLine" : g_sev == 4 ? "ceBlueLine" : g_sev == 3 ? "ceDimGreeenLine" : "ceGreeenLine";
+							addGutter(newdecorations, i, g_color, "`" + prop + "` " + g_messages.join(". "));
 						}
 					}
 				}
-				ecfg.decorations = ecfg.editor.deltaDecorations(ecfg.decorations, newdecorations);
-			});
-		}		
+			}
+		}
+		ecfg.decorations = ecfg.editor.deltaDecorations(ecfg.decorations, newdecorations);
 	}
 	
 	// The bad code lookup builds a structure of the btool list output so it can be quickly referenced to see what config
@@ -2610,6 +2811,38 @@ require([
 		return (["1", "true", "yes", "t", "y"].indexOf($.trim(param.toLowerCase())) > -1);
 	}
 
+	function copyTextToClipboard(text) {
+		if (!navigator.clipboard) {
+			fallbackCopyTextToClipboard(text);
+		} else {
+			navigator.clipboard.writeText(text).then(function() {
+				showToast('Copied to clipboard!');
+			}, function (err) {
+				console.log(text);
+				console.error('Async: Could not copy to clipboard.', err);
+			});
+		}
+	}
+
+	function fallbackCopyTextToClipboard(text) {
+		var textArea = document.createElement("textarea");
+		textArea.value = text;
+		document.body.appendChild(textArea);
+		textArea.focus();
+		textArea.select();
+		try {
+			var successful = document.execCommand('copy');
+			if (successful) {
+				showToast('Copied to clipboard!');
+			} else {
+				console.error('Fallback2: Could not copy to clipboard.', err);
+			}
+		} catch (err) {
+			console.error('Fallback: Could not copy to clipboard.', err);
+		}
+		document.body.removeChild(textArea);
+	}
+	
 	function showToast(message) {
 		var t = $('.ce_toaster');
 		t.find('span').text(message);
@@ -2757,12 +2990,59 @@ require([
 			if (confIsTrue('git_autocommit', false) && conf.git_autocommit_work_tree !== "") {
 				$dashboard_body.removeClass('ce_no_git_access');
 			}
-			if (! conf.hasOwnProperty('btool_dirs')) {
-				conf.btool_dirs = [];
-			} else {
-				conf.btool_dirs = conf.btool_dirs.split(",").map(function(item) {
-					return item.trim().replace(/\/$/, "");
-				}).filter(function (el) { return el });
+
+			if (conf.btool_dir_for_deployment_apps) {
+				conf.btool_dir_for_deployment_apps = $.trim(conf.btool_dir_for_deployment_apps).replace(/\/$/, "");
+			}
+			if (conf.btool_dir_for_master_apps) {
+				conf.btool_dir_for_master_apps = $.trim(conf.btool_dir_for_master_apps).replace(/\/$/, "");
+			}
+			if (conf.btool_dir_for_shcluster_apps) {
+				conf.btool_dir_for_shcluster_apps = $.trim(conf.btool_dir_for_shcluster_apps).replace(/\/$/, "");
+			}
+
+			if (conf.hasOwnProperty('master_apps_gutter_useful_props_and_transforms')) {
+				conf.master_apps_gutter_useful_props_and_transforms = $.trim(conf.master_apps_gutter_useful_props_and_transforms);
+				if (conf.master_apps_gutter_useful_props_and_transforms !== "") {
+					try {
+						conf._master_apps_gutter_useful_props_and_transforms = new RegExp(conf.master_apps_gutter_useful_props_and_transforms, '');
+					} catch (e) {
+						console.error("Config file property: \"master_apps_gutter_useful_props_and_transforms\" has bad regular expression and will be ignored.");
+					}
+				}
+			}
+
+			if (conf.hasOwnProperty('master_apps_gutter_used_sourcetypes')) {
+				conf.master_apps_gutter_used_sourcetypes = $.trim(conf.master_apps_gutter_used_sourcetypes);
+				if (conf.master_apps_gutter_used_sourcetypes !== "") {
+					try {
+						conf._master_apps_gutter_used_sourcetypes = new RegExp(conf.master_apps_gutter_used_sourcetypes, '');
+						// attempt to load the date
+						if (! conf.hasOwnProperty('master_apps_gutter_used_sourcetypes_date')) {
+							conf.master_apps_gutter_used_sourcetypes_date = "";
+						}
+						var date_set = new Date(conf.master_apps_gutter_used_sourcetypes_date).valueOf();
+						if (isNaN(date_set)) {
+							conf._master_apps_gutter_used_sourcetypes_date = "Unknown";
+						} else {
+							conf._master_apps_gutter_used_sourcetypes_date = Math.floor(((new Date().valueOf()) - date_set) / 86400000);
+						}
+
+					} catch (e) {
+						console.error("Config file property: \"master_apps_gutter_used_sourcetypes\" has bad regular expression and will be ignored.");
+					}
+				}
+			} 
+
+			if (conf.hasOwnProperty('master_apps_gutter_unnecissary_config_files')) {
+				conf.master_apps_gutter_unnecissary_config_files = $.trim(conf.master_apps_gutter_unnecissary_config_files);
+				if (conf.master_apps_gutter_unnecissary_config_files !== "") {
+					try {
+						conf._master_apps_gutter_unnecissary_config_files = new RegExp(conf.master_apps_gutter_unnecissary_config_files, '');
+					} catch (e) {
+						console.error("Config file property: \"master_apps_gutter_unnecissary_config_files\" has bad regular expression and will be ignored.");
+					}
+				}
 			}
 
 			// Build the quick access hooksActive object

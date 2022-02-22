@@ -41,16 +41,35 @@ git_autocommit = <bool>
 * Defaults to false 
 
 btool_dirs = <string>
-* A comma-seperated list of absolute paths to add as "--dirs=" that btool can check
-* If this is a search head cluster deployer, "add /opt/splunk/etc/shcluster/apps" (sans-quotes)
-* If this is a deployment server, you will need to do a few extra steps to make this work:
-  1. mkdir /opt/splunk/etc/deployment-apps-for-btool/
-  2. cd /opt/splunk/etc/deployment-apps-for-btool/
-  3. ln -s /opt/splunk/etc/deployment-apps app
-  4. Set the above parameter to: btools_dirs = /opt/splunk/etc/deployment-apps
-* For more info see: https://answers.splunk.com/answers/731787
-* There are additional hooks and actions in the example config that you will probably want to uncomment 
-  for search head deployers or deployment servers.
+* this is now deprecated. See 'btool_dir_for_deployment_apps', 'btool_dir_for_master_apps' and 'btool_dir_for_shcluster_apps' below
+* This has no effect
+
+btool_dir_for_deployment_apps = <string>
+* If this server is a deployment server, then set this property to a sym-linked copy of the deployment-apps folder.
+* this will enable the btool gutter-hinting in config files to work with config in the deployment-apps folder
+* perform these steps to create the sym-linked deployment-apps folder. Note this only works on *nix-based platforms
+* 1. mkdir /opt/splunk/etc/deployment-apps-for-btool/
+* 2. cd /opt/splunk/etc/deployment-apps-for-btool/
+* 3. ln -s /opt/splunk/etc/deployment-apps apps
+* 4. Set this parameter to: btool_dir_for_deployment_apps = /opt/splunk/etc/deployment-apps-for-btool
+* For more info on why the symlinking process is necissary, please see: https://answers.splunk.com/answers/731787
+
+btool_dir_for_master_apps = <string>
+* If this server is a cluster master server, then set this property to a sym-linked copy of the master-apps folder.
+* this will enable the btool gutter-hinting in config files to work with config in the master-apps folder
+* perform these steps to create the sym-linked master-apps folder. Note this only works on *nix-based platforms
+* 1. mkdir /opt/splunk/etc/master-apps-for-btool/
+* 2. cd /opt/splunk/etc/master-apps-for-btool/
+* 3. ln -s /opt/splunk/etc/master-apps apps
+* 4. Set this parameter to: btool_dir_for_master_apps = /opt/splunk/etc/master-apps-for-btool
+* For more info on why the symlinking process is necissary, please see: https://answers.splunk.com/answers/731787
+
+btool_dir_for_shcluster_apps = <string>
+* This will enable the btool gutter-hinting in config files to work with config in the shcluster/apps folder
+* Enable this if the current server is a search head deployer.
+* There is no need to create a sym-link for this path, however an absolute path to shcluster must be set.
+* e.g. /opt/splunk/etc/shcluster
+
 
 detect_changed_files = <bool>
 * Check if files that are open have changed on the filesystem and warn if so. 
