@@ -65,8 +65,9 @@ require([
 		'btool-check': 			{ can_rerun: true,  can_reopen: false, },
 		'spec': 				{ can_rerun: false, can_reopen: true,  },
 		'run': 					{ can_rerun: true,  can_reopen: false, },
+		'deployserver': 		{ can_rerun: true,  can_reopen: false, },
 		'read': 				{ can_rerun: false, can_reopen: true,  },
-		'settings':				{ can_rerun: false, can_reopen: false, },		
+		'settings':				{ can_rerun: false, can_reopen: false, },
 		'change-log': 			{ can_rerun: false, can_reopen: false, },
 		'diff': 				{ can_rerun: false, can_reopen: false, },
 		'history': 				{ can_rerun: false, can_reopen: false, },
@@ -105,6 +106,9 @@ require([
 		},
 		'run-safe': function(arg1){
 			runShellCommand(arg1, true);
+		},
+		'deployserver': function(arg1){
+			runReloadDeployServer(arg1);
 		},
 		'read': function(arg1){
 			readFile(arg1);
@@ -378,7 +382,7 @@ require([
 		if ($leftnavElem.hasClass("ce_is_folder")) {
 			for (var j = 0; j < hooksActive.length; j++) {
 				addHookAction(hooksActive[j], thisFile, actions, "folder");
-			}			
+			}
 		}
 		if ($leftnavElem.hasClass("ce_leftnav_editable") && confIsTrue('write_access', false)) {
 			// can rename, can trash
@@ -790,7 +794,7 @@ require([
 		var suggestions = [];
 		for (var j = 0; j < hooksActive.length; j++) {
 			if (hooksActive[j]._match.test(ecfg.file) && hooksActive[j].matchtype == "file" && isTrueValue(hooksActive[j].showWithSave)) {
-				suggestions.push("Suggest: <code style='color:#333'>" + htmlEncode(replaceTokens(hooksActive[j].action, ecfg.file)) + "</code><br>");
+				suggestions.push("Suggest: <code class='ce_postsave_suggestion'>" + htmlEncode(replaceTokens(hooksActive[j].action, ecfg.file)) + "</code><br>");
 			}
 		}
 		showModal({
@@ -817,6 +821,7 @@ require([
 							"<option value='read'>Open file</option>"+
 							"<option value='live'>Show running config</option>"+
 							"<option value='live-diff'>Show running config as diff</option>"+
+							"<option value='deployserver'>Run reload deploy server</option>"+
 						"</select>"+
 						"<input type='text' value='' class='ce_postsave_arg1 ce_prompt_input input input-text'/></div>"+
 					"</div>"+
@@ -835,6 +840,12 @@ require([
 					$(".ce_postsave_strmatch_good").val(p[3]);
 					$(".ce_postsave_strmatch_bad").val(p[4]);
 				}
+				$(".ce_postsave_suggestion").on("click", function(){
+					var s = $(this).html();
+					var sparts = s.split(":");
+					$(".ce_postsave_arg0").val(sparts.shift());
+					$(".ce_postsave_arg1").val(sparts.join(":"));
+				});
 			}, 
 			actions: [{
 				onClick: function(){
@@ -948,6 +959,69 @@ require([
 			}]
 		});
 	}
+
+	// Run button
+	function runReloadDeployServer() {
+		showModal({
+			title: "Reload deploy-server",
+			size: 1000,
+			body: "<div class='ce-deployserver'>Select server class to reload.<br><br><a href='#' class='ce-server-classes-all'>All server classes</a><div class='ce-server-classes'></div></div>",
+			onShow: function(){ 
+				var $serverClasses = $(".ce-server-classes");
+				$ce_spinner.clone().appendTo($serverClasses);
+
+				// | rest /services/deployment/server/serverclasses
+				console.log("doing call");
+				service.get('/services/deployment/server/serverclasses', null, function(err, r) {
+					if (err) {
+						// TODO
+						console.error(err);
+					}
+					var str = "";
+					console.log("resp",r.data);
+					if (r && r.data && r.data.entry) {
+						for (var i = 0; i < r.data.entry.length; i++) {
+							str += "<a href='#'>" + htmlEncode(r.data.entry[i].name) + "</a>";
+						}
+					}
+					$serverClasses.html(str);
+					$(".ce-deployserver").on("click","a",function(e){
+						e.preventDefault();
+						e.stopPropagation();
+						var $this = $(this);
+						$(".modal").modal('hide');
+						if ($this.hasClass("ce-server-classes-all")) {
+							runReloadDeployServerNow();
+						} else {
+							runReloadDeployServerNow($this.text());
+							//runShellCommandNow("./bin/splunk reload deploy-server -class \"" + $this.text() + "\"");
+						}
+					});
+				});
+			},
+			actions: [{
+				onClick: function(){ $(".modal").modal('hide'); },
+				label: "Cancel"
+			}]
+		});
+	}
+
+	function runReloadDeployServerNow(srvclass) {
+		if (typeof srvclass === undefined) {
+			srvclass = "";
+		}
+		var command = "reload deploy-server"
+		if (tabAlreadyOpen('deployserver', "")) {
+			closeTabByName('deployserver', "");
+		}		
+		var ecfg = createTab('deployserver', "", '<span class="ce-dim">$</span> ' + htmlEncode(command));
+		serverActionWithoutFlicker({action: 'deployserver', path: srvclass}).then(function(contents){
+			updateTabAsEditor(ecfg, contents, 'plaintext');
+		}).catch(function(){
+			closeTabByCfg(ecfg);
+		});
+	}
+
 
 	function runShellCommandNow(command, fromFolder){
 		var ecfg = createTab('run', command, '<span class="ce-dim">$</span> ' + htmlEncode(command));
@@ -1080,9 +1154,35 @@ require([
 	}
 	
 	function runBToolList(inPath, type, origPath, replacementPath){
-		var parts = inPath.split(":")
+		var parts = inPath.split(":");
 		var conf_file = parts.shift().replace(/\.conf$/i, "");
 		var path = parts.join(":");
+		// There are three special "paths" which we replace with the dynamic value
+		if (path === "deployment-apps"){
+			if (conf.btool_dir_for_deployment_apps) {
+				path = conf.btool_dir_for_deployment_apps;
+				origPath = conf.btool_dir_for_deployment_apps;
+				replacementPath = "/splunk/etc/deployment-apps/";
+			} else {
+				path = "";
+			}
+		}
+		if (path === "master-apps") {
+			if (conf.btool_dir_for_master_apps) {
+				path = conf.btool_dir_for_master_apps;
+				origPath = conf.btool_dir_for_master_apps;
+				replacementPath = "/splunk/etc/master-apps/";
+			} else {
+				path = "";
+			}
+		}
+		if (path === "shcluster") {
+			if (conf.btool_dir_for_shcluster_apps) {
+				path = conf.btool_dir_for_shcluster_apps;
+			} else {
+				path = "";
+			}
+		}
 		var tab_path_fmt = '<span class="ce-dim">btool:</span> ' + conf_file + (type === "btool" ? "" : " <span class='ce-dim'>(" + type.substr(6) + ")</span>");
 		if (tabAlreadyOpen(type, conf_file + ":" + path)) {
 			closeTabByName(type, conf_file + ":" + path);
@@ -1917,7 +2017,7 @@ require([
 		// check if we need to scroll to a particular location and highlight a line
 		if (doLineHighlight !== "") {
 			var line_nums = doLineHighlight.split(",");
-			console.log(doLineHighlight, line_nums);
+			//console.log(doLineHighlight, line_nums);
 			if (line_nums.length > 1) {
 				ecfg.editor.setSelection(new monaco.Selection(Number(line_nums[0]),1,(Number(line_nums[1]) + 1),1));
 				ecfg.editor.revealLineInCenter(Number(line_nums[0]), 0);
@@ -2022,8 +2122,8 @@ require([
 				label: 'Create link to line/selection',
 				run: function() {
 					var editor_selection = ecfg.editor.getSelection();
-					//console.log("editor_selection",editor_selection);
 					var hashparts = window.location.href.replace(/#.*/,"") + "#0|" + inFolder + "|" + ecfg.type + "|" + ecfg.file + "@" + editor_selection.startLineNumber + "," + editor_selection.endLineNumber;
+					console.log(hashparts);
 					copyTextToClipboard(hashparts);
 				}
 			});
@@ -2337,6 +2437,7 @@ require([
 	// After loading a .conf file or after saving and before any changes are made, red or green colour will
 	// be shown in the gutter about if the current line can be found in the output of btool list.
 	function highlightBadConfig(ecfg){
+//console.log("enter", confIsTrue('conf_validate_on_save', true), ecfg.hasOwnProperty('matchedConf'));
 		if (! confIsTrue('conf_validate_on_save', true)) {
 			return;
 		}
@@ -2345,12 +2446,15 @@ require([
 		}
 		var run_path = "";
 		var run_path_parts = ecfg.file.split(/[\/\\]/);
+		if (run_path_parts[0] === ".") {
+			run_path_parts.shift();
+		}
 		if (run_path_parts.length > 1) {
 			run_path = run_path_parts[1];
 		}
 		// console.log("runpath is ",run_path);
 		// possible locations you can run btool: etc/master-apps, etc/slave-apps, etc/apps, etc/system/local, etc/user, etc/shcluster/apps
-
+//console.log(run_path, conf.btool_dir_for_master_apps);
 		// can also run btool on slave-apps, but who has config explorer installed on an indexer anyway?
 		if (run_path === "apps" || run_path === "system") {
 			serverAction({action: 'btool-list', path: ecfg.matchedConf}).then(function(btoolcontents){
@@ -2385,7 +2489,7 @@ require([
 
 		} else if (run_path === "shcluster" && conf.btool_dir_for_shcluster_apps) {
 			serverAction({action: 'btool-list', path: ecfg.matchedConf, param1: conf.btool_dir_for_shcluster_apps}).then(function(btoolcontents){
-				console.log("btoolcontents",btoolcontents);
+				//console.log("btoolcontents",btoolcontents);
 				highlightBadConfigContinue(ecfg, btoolcontents, run_path);
 			});
 
@@ -2594,7 +2698,7 @@ require([
 						// add gutters now
 						if (g_messages.length) {
 							var g_color = g_sev == 6 ? "ceRedLine" : g_sev == 5 ? "ceOrangeLine" : g_sev == 4 ? "ceBlueLine" : g_sev == 3 ? "ceDimGreeenLine" : "ceGreeenLine";
-							addGutter(newdecorations, i, g_color, "`" + prop + "` " + g_messages.join(". "));
+							addGutter(newdecorations, i, g_color, "`" + prop + "`: " + g_messages.join(". "));
 						}
 					}
 				}
@@ -2818,7 +2922,6 @@ require([
 			navigator.clipboard.writeText(text).then(function() {
 				showToast('Copied to clipboard!');
 			}, function (err) {
-				console.log(text);
 				console.error('Async: Could not copy to clipboard.', err);
 			});
 		}

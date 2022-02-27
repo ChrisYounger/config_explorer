@@ -148,7 +148,7 @@ class req(PersistentServerConnectionApplication):
                     if not os.path.exists(form['path']):
                         shutil.copyfile(os.path.join(os.path.dirname( __file__ ), '..','default', app_name + '.conf.example'), form['path'])
 
-                if form['action'][:5] == 'btool' or form['action'] == 'run' or form['action'] == 'init' or form['action'][:3] == 'git':
+                if form['action'][:5] == 'btool' or form['action'] == 'run' or form['action'] == 'deployserver' or form['action'] == 'init' or form['action'][:3] == 'git':
                     system = platform.system()
                     os.chdir(SPLUNK_HOME)
                     if system != "Windows" and system != "Linux" and system != "Darwin":
@@ -176,6 +176,12 @@ class req(PersistentServerConnectionApplication):
                                 result = runCommand([cmd, 'btool', form['path'], 'list', '--debug'], env_copy)
                             else:
                                 result = runCommand([cmd, 'btool', form['path'], 'list', '--debug', '--dir=' + form['param1']], env_copy)
+
+                        elif form['action'] == 'deployserver':
+                            if form['param1'] == "":
+                                result = runCommand([cmd, 'reload', 'deploy-server'], env_copy)
+                            else:
+                                result = runCommand([cmd, 'reload', 'deploy-server', '-class', form['path']], env_copy)
 
                         elif form['action'] == 'git-log':
                             os.chdir(form['path'])

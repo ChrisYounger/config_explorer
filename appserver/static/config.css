@@ -944,8 +944,24 @@ input.ce_run_cwd_radio[type=radio] {
 .ce_postsave_background {
     width: 60px;
 }
-code {
-    color: white;
-    background-color: black;
+.ce_postsave_suggestion {
+    color:#333;
+    cursor:pointer;
+}
+.monaco-editor .monaco-editor-hover code {
+    color: inherit;
+    background-color: inherit;
     border: 0 none;
+}
+.ce-server-classes a,
+.ce-server-classes-all {
+    margin: 10px 12px 0 0;
+    background-color: #f7f8fa;
+    padding: 6px 10px;
+    display: inline-block;
+    border-radius: 3px;
+}
+.ce-server-classes a:hover,
+.ce-server-classes-all:hover {
+    background-color: #ebeeef;
 }
