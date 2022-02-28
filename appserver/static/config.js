@@ -970,9 +970,7 @@ require([
 				var $serverClasses = $(".ce-server-classes");
 				$ce_spinner.clone().appendTo($serverClasses);
 
-				// | rest /services/deployment/server/serverclasses
-				console.log("doing call");
-				service.get('/services/deployment/server/serverclasses', null, function(err, r) {
+				service.get('/services/deployment/server/serverclasses', {count:0, f:"name"}, function(err, r) {
 					if (err) {
 						// TODO
 						console.error(err);

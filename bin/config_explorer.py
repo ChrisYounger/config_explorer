@@ -178,7 +178,7 @@ class req(PersistentServerConnectionApplication):
                                 result = runCommand([cmd, 'btool', form['path'], 'list', '--debug', '--dir=' + form['param1']], env_copy)
 
                         elif form['action'] == 'deployserver':
-                            if form['param1'] == "":
+                            if form['path'] == "":
                                 result = runCommand([cmd, 'reload', 'deploy-server'], env_copy)
                             else:
                                 result = runCommand([cmd, 'reload', 'deploy-server', '-class', form['path']], env_copy)
