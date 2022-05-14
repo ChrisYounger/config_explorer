@@ -1,8 +1,13 @@
-<form script="ce2.js" stylesheet="ce2.css">
-	<label>CE2</label>
-	<row>
-		<html>
-			<div id="placeholder_for_view">This placeholder should be replaced with the content of the view</div>
-		</html>
-	</row>
-</form>
+<dashboard script="ce2.js" stylesheet="ce2.css,OverlayScrollbars.min.css" hideAppBar="true" version="1.1">
+    <label>Config Explorer</label>
+    <!-- Contents will be injected by Javascript -->
+    <row>
+        <html>
+            <div class="ce_spinner spinner">
+                <div class="bounce1"></div>
+                <div class="bounce2"></div>
+                <div class="bounce3"></div>
+            </div>
+        </html>
+    </row>
+</dashboard>

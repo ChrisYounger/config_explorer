@@ -1,14 +1,31 @@
+body {
+    display: flex;
+    flex-direction: column;
+    position: fixed;
+    width: 100%;
+    height: 100%;
+}
+header {
+    flex: 0 0 auto;
+}
+.dashboard-body {
+    flex: 1 0 0%;
+    position: relative;
+    overflow: hidden;
+	background-color: #1e1e1e;
+}
+.dashboard-title {
+    display: none;
+}
+.panel-body.html {
+    /* this only appears during loading */
+    background-color: #1e1e1e;
+}
 .red {
 	color: #dd6a6f;
 }
 .bold {
 	font-weight: bold;
-}
-.dashboard-body {
-	height: 100%;
-	margin: 0;
-	padding: 0;
-	background-color: #1e1e1e;
 }
 .dashboard-body a,
 .dashboard-body a:hover {

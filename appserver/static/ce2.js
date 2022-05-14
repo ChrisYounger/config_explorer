@@ -21,15 +21,13 @@ window.MonacoEnvironment = {
 			'vs': '../app/config_explorer/node_modules/monaco-editor/'+mode+'/vs', 
 		}
 	});
-	var scripts = document.getElementsByTagName("script");
-	var src = scripts[scripts.length-1].src; 
 	window.MonacoEnvironment = {
 		getWorkerUrl: function(workerId, label) {
 			return "data:text/javascript;charset=utf-8," + encodeURIComponent(
 				//"console.log('shimming i18n_register for worker'); "+
 				"function i18n_register(){/*console.log('i18n_register shimmed');*/} "+
-				"self.MonacoEnvironment = { baseUrl: '" + src.substring(0, src.lastIndexOf('/')) + "/node_modules/monaco-editor/"+mode+"/' }; "+
-				"importScripts('" + src.substring(0, src.lastIndexOf('/')) + "/node_modules/monaco-editor/"+mode+"/vs/base/worker/workerMain.js');"
+				"self.MonacoEnvironment = { baseUrl: '" + window.location.origin + "/static/app/config_explorer/node_modules/monaco-editor/"+mode+"/' }; "+
+				"importScripts('" + window.location.origin + "/static/app/config_explorer/node_modules/monaco-editor/"+mode+"/vs/base/worker/workerMain.js');"
 			);
 		}
 	};
@@ -38,22 +36,106 @@ window.MonacoEnvironment = {
 require([
 	"splunkjs/mvc",
 	"jquery",
-	"splunkjs/mvc/simplexml",
-	"splunkjs/mvc/layoutview",
-	"splunkjs/mvc/simplexml/dashboardview",
 	"vs/editor/editor.main",
 	"app/config_explorer/sortable.min",
 	"app/config_explorer/OverlayScrollbars"
 ], function(
 	mvc,
 	$,
-	DashboardController,
-	LayoutView,
-	Dashboard,
 	wat,
 	Sortable,
 	OverlayScrollbars
 ) {
+
+	// Inject all the HTML contents
+	$(".dashboard-body").html(
+		"<div class='ce_spinner spinner'>"+
+			"<div class='bounce1'></div>"+
+			"<div class='bounce2'></div>"+
+			"<div class='bounce3'></div>"+
+		"</div>"+
+		"<div class='ce_app_bar'></div>"+
+		"<div class='ce_wrap'>"+
+			"<div class='ce_tree_pane'>"+
+				"<div class='ce_tree_icons'>"+
+					"<i title='Previous folder' class='ce_clickable_icon ce_folder_up icon-arrow-left'></i>"+
+					"<i title='Refresh' class='ce_clickable_icon ce_refresh_tree icon-rotate-counter'></i>"+
+					"<i title='Filter files' class='ce_clickable_icon ce_filter icon-text'></i>"+
+					"<i title='Splunk conf files' class='ce_show_confs ce_clickable_icon icon-bulb'></i>"+
+					"<i title='Recent files' class='ce_recent_files ce_clickable_icon icon-list'></i>"+
+					"<!--<i title='Uncommitted changes' class='ce_clickable_icon ce_disabled icon-distributed-environment'></i>-->"+
+					"<i title='Create new folder in current directory' class='ce_add_folder ce_clickable_icon icon-folder'></i>"+
+					"<i title='Create new file in current directory' class='ce_add_file ce_clickable_icon icon-report'></i>"+
+					"<i title='Run a shell command' class='ce_app_run ce_clickable_icon icon-expand-right'></i>"+
+					"<i title='Upload a file' class='ce_upload_file ce_clickable_icon icon-plus'></i>"+
+					"<i title='Sort' class='ce_sort_files ce_clickable_icon icon-sort'></i>"+
+				"</div>"+
+				"<div class='ce_file_path'></div>"+
+				"<div class='ce_file_list'>"+
+					"<div class='ce_file_wrap'></div>"+
+				"</div>"+
+			"</div>"+
+				"<div class='ce_resize_column'></div>"+
+			"<div class='ce_container'>"+
+				"<div class='ce_home_tab ce_active'>"+
+					"<i title='Home' class='ce_home_icon ce_clickable_icon icon-star'></i>"+
+				"</div>"+
+				"<div class='ce_tabs'></div>"+
+				"<div class='ce_contents'></div>"+
+				"<div class='ce_contents_home'>"+
+					"<img class='ce_bg_image' src='/static/app/config_explorer/mirage-upgrade.png' />"+
+					"<div class='ce_app_name'><span class='ce_app_title'>Config Explorer</span> for <i class='icon-splunk'></i></div>"+
+					"<div class='ce_tagline'>by Chris Younger</div>"+
+					"<div class='ce_marginbottom'>"+
+						"<span class='ce_app_settings'><span class='btn'>Settings</span> Change the Config Explorer settings.</span> Theme: "+
+							"<span class='ce_theme ce_link' data-theme='vs-dark'>dark</span> | "+
+							"<span class='ce_theme ce_link'  data-theme='vs'>light</span> | "+
+							"<span class='ce_theme ce_link' data-theme='hc-black'>high contrast</span>"+
+					"</div>"+
+					"<div class='ce_marginbottom ce_app_changelog'>"+
+						"<span class='btn'>Change log</span> Review changes made using Config Explorer."+
+					"</div>"+
+					"<div class='ce_actions_wrapper'>"+
+						"<div>"+
+							"<div class='ce_app_devlinks'>"+
+								"Developer actions"+
+							"</div>"+
+							"<div class='ce_actions_area'>"+
+								"<div class='ce_marginbottom ce_app_errors'>"+
+									"<span class='btn'>btool check</span>"+
+									"Show invalid Splunk configuration"+
+								"</div>"+
+								"<div class='ce_marginbottom'>"+
+									"<span class='ce_splunk_reload btn'>debug/refresh</span>"+
+									"Reload all endpoints"+
+								"</div>"+
+								"<div class=''>"+
+									"<span class='ce_splunk_reload btn' data-endpoint='bump'>bump</span>"+
+									"Splunk cache bump for css and js files."+
+								"</div>"+
+							"</div>"+
+						"</div>"+
+						"<div>"+
+							"<div class='ce_app_devlinks'>"+
+								"Custom actions"+
+							"</div>"+
+							"<div class='ce_custom_actions ce_actions_area'>"+
+							"</div>"+
+						"</div>"+
+					"</div>"+
+					"<div>"+
+						"<a href='/static/docs/style/style-guide.html' target='_blank'>Splunk style guide</a> | "+
+						"<a href='search?q=search%20index%3D_internal%20source%3D*config_explorer.log' target='_blank'>Logging</a> | "+
+						"<a href='https://github.com/ChrisYounger/config_explorer' target='_blank'>Config Explorer help, bugs and enhancements</a>"+
+					"</div>"+
+				"</div>"+
+			"</div>"+
+		"</div>"+
+		"<div class='ce_toaster'><i class='icon-check'></i><span>Saved</span></div>"+
+		"<div class='ce_context_menu_overlay ce_hidden'></div>"+
+		"<div class='ce_context_menu_wrap'></div>"+
+    "</div>");
+
 	// Mapping of all the tab types
 	// can_rerun - has a right click open in the editor for "rerun". This will close and reopen the tab.  If this is "true" it must also exist in the hooksCfg list with the same name!
 	// reopen - tracked through hash and in "recent files". If this is "true" it must also exist in the hooksCfg list with the same name!
@@ -172,7 +254,6 @@ require([
 	var $ce_tabs = $(".ce_tabs");
 	var $ce_home_tab = $(".ce_home_tab");
 	var $ce_context_menu_overlay = $(".ce_context_menu_overlay");
-
 
 	// Set the "save" hotkey at a global level instead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
@@ -3275,22 +3356,6 @@ require([
 		// Add tooltips
 		$ce_tree_icons.find('i').tooltip({delay: 100, placement: 'bottom'});
 
-		// Setup the splunk components properly
-		$('header').remove();
-		new LayoutView({ "hideAppBar": true, "hideChrome": false, "hideFooter": false, "hideSplunkBar": false, layout: "fixed" })
-			.render()
-			.getContainerElement()
-			.appendChild($dashboard_body[0]);
-
-		new Dashboard({
-			id: 'dashboard',
-			el: $dashboard_body,
-			showTitle: true,
-			editable: true
-		}, { tokens: false }).render();
-
-		DashboardController.ready();
-		
 		$("body").css("overflow","");
 
 		readUrlHash();
