@@ -1,0 +1,8 @@
+<form script="ce2.js" stylesheet="ce2.css">
+	<label>CE2</label>
+	<row>
+		<html>
+			<div id="placeholder_for_view">This placeholder should be replaced with the content of the view</div>
+		</html>
+	</row>
+</form>
