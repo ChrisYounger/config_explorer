@@ -294,7 +294,7 @@ input[type=text].ce_treesearch_input::placeholder {
     top: 0;
     display: flex;
     background-color: #404040;
-    color: #ccc;
+    color: #ddd;
     padding-right: 4px;
 }
 .ce_home_tab {
@@ -302,7 +302,7 @@ input[type=text].ce_treesearch_input::placeholder {
     width: 34px;
     line-height: 34px;
     cursor: pointer;
-    color: #ccc;
+    color: #ddd;
     background-color: #404040;
     left: 0;
     padding-left: 6px;
@@ -371,6 +371,12 @@ input[type=text].ce_treesearch_input::placeholder {
     cursor: pointer;
     margin-top:4px;
 }
+.ce_fullPathTab {
+    width: 300px;
+    direction: rtl;
+    padding-right: 15px;
+    text-align: left;
+}
 .ce_pipe  {
     position: absolute;
     right: 0px;
@@ -420,6 +426,9 @@ input[type=text].ce_treesearch_input::placeholder {
     color: white;
 	z-index: 9;
     box-shadow: inset -6px 0 6px 0px #1d1d1d;
+}
+.ce_tab.ce_active {
+    box-shadow: inset -6px 0 6px 0px #1d1d1d, 0 0 15px #404040, 0 0 30px #404040;
 }
 .ce_theme_vs .ce_home_tab.ce_active,
 .ce_theme_vs .ce_tab.ce_active {
@@ -522,6 +531,7 @@ input[type=text].ce_treesearch_input::placeholder {
     position:absolute;
 	overflow: hidden;
     top: 38px;
+   	z-index: 11;
 	bottom: 0;
 	left: 0;
 	right: 0;
@@ -536,6 +546,7 @@ input[type=text].ce_treesearch_input::placeholder {
 	padding-top: 10px;
     bottom: 0;
     left: 0;
+   	z-index: 11;
     right: 0;
     position: absolute;
     background-color: #1e1e1e;

@@ -804,6 +804,7 @@ require([
 					"<br><span class='ce_pref_item'>Enable visible whitespace <label class='ce_pref_label'><input type='checkbox' class='ce_renderWhitespace'></label></span>"+
 					"<br><span class='ce_pref_item'>Reuse tabs for post-save actions <label class='ce_pref_label'><input type='checkbox' class='ce_reuseWindow'></label></span>"+
 					"<br><span class='ce_pref_item'>Hover tooltip <label class='ce_pref_label'><input type='checkbox' class='ce_hideSpecTooltip'></label></span>"+
+					"<br><span class='ce_pref_item'>Show full file path in tab (refresh required)<label class='ce_pref_label'><input type='checkbox' class='ce_fullPathTab'></label></span>"+
 					"<br><br><span class='ce_pref_item'>Advanced editor options (See <a href='https://microsoft.github.io/monaco-editor/api/interfaces/monaco.editor.ieditoroptions.html' target='_blank'>here</a>)<br>"+
 					"<textarea class='ce_pref_advanced'></textarea></span>"+
 				  "</div>",
@@ -822,9 +823,15 @@ require([
 				if (!(preferences.hasOwnProperty("hover") && preferences.hover.hasOwnProperty("enabled") && ! preferences.hover.enabled)) {
 					$(".ce_pref_item .ce_hideSpecTooltip").prop('checked', true);
 				}
+				if (preferences.hasOwnProperty("ce_fullPathTab") && preferences.ce_fullPathTab) {
+					$(".ce_pref_item .ce_fullPathTab").prop('checked', true);
+				}
+
+				
 				delete preferences.wordWrap;
 				delete preferences.renderWhitespace;
 				delete preferences.ce_reuseWindow;
+				delete preferences.ce_fullPathTab;
 				if (preferences.hasOwnProperty("hover")) {
 					delete preferences.hover.enabled;
 					if ($.isEmptyObject(preferences.hover)) {
@@ -843,6 +850,7 @@ require([
 					preferences.wordWrap = ($(".ce_pref_item input.ce_wordWrap:checked").length > 0) ? "on" : "off";
 					preferences.renderWhitespace = ($(".ce_pref_item input.ce_renderWhitespace:checked").length > 0) ? "all" : "none";
 					preferences.ce_reuseWindow = ($(".ce_pref_item input.ce_reuseWindow:checked").length > 0);
+					preferences.ce_fullPathTab = ($(".ce_pref_item input.ce_fullPathTab:checked").length > 0);
 					if (! preferences.hasOwnProperty("hover")) {
 						preferences.hover = {};
 					}
@@ -1597,7 +1605,7 @@ require([
 
 	// Handle clicking an file or folder in the left pane
 	function readFile(path){
-		var label = dodgyBasename(path);
+		var label = preferences.ce_fullPathTab ? "<span style='opacity:0.6'>" + dodgyRemoveRelPath(dodgyDirname(path)) + "</span>" + dodgyBasename(path) : dodgyBasename(path);
 		var type = "read";
 		if (path === "") {
 			label = "Settings";
@@ -2016,7 +2024,7 @@ require([
 		ecfg.container.append($ce_spinner.clone());
 		// Remove the "restore session" link
 		$(".ce_restore_session").remove();
-		ecfg.tab = $("<div class='ce_tab ce_active'>" + label + "</div>").attr("title", ecfg.label).data({"tab": ecfg}).appendTo($ce_tabs);
+		ecfg.tab = $("<div class='ce_tab ce_active " + (preferences.ce_fullPathTab ? "ce_fullPathTab" : "") + "'><bdi>" + label + "</bdi></div>").attr("title", ecfg.label).data({"tab": ecfg}).appendTo($ce_tabs);
 		ecfg.hasChanges = false;
 		ecfg.server_content = '';
 		activateTab(editors.length-1);
@@ -2971,6 +2979,10 @@ require([
 
 	function dodgyDirname(f) {
 		return f.replace(/[^\/\\]*$/,'');
+	}
+
+	function dodgyRemoveRelPath(f) {
+		return f.replace(/^\.[\/\\]/,'');
 	}
 
 	//create a in-memory div, set it's inner text(which jQuery automatically encodes)
