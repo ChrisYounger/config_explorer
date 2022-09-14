@@ -194,7 +194,7 @@ require([
 		},
 		'read': function(arg1){
 			readFile(arg1);
-		},		
+		},
 		'live': function(arg1){
 			runningVsLayered(arg1, false);
 		},
@@ -1336,13 +1336,19 @@ require([
 		readFolderFromServer(inFolder);
 	}
 
-	function getTreeCache(path) {
+	function getTreeCache(path, depth) {
 		var patharray = path.split("/");
+		if (typeof depth === "undefined") {
+			depth = patharray.length;
+		} else {
+			// make sure we arent attempting to go deeper than the length of the path
+			depth = Math.min(patharray.length, depth)
+		}
 		var base = filecache;
 		if (filecache === null) {
 			return base;
 		}
-		for (var i = 1; i < patharray.length; i++) {
+		for (var i = 1; i < depth; i++) {
 			if (base.hasOwnProperty(patharray[i])) {
 				base = base[patharray[i]];
 			} else {
@@ -2216,6 +2222,47 @@ require([
 			});
 		}
 		ecfg.editor.addAction({
+			id: 'attempt-open-file',
+			contextMenuOrder: 0.4,
+			contextMenuGroupId: 'navigation',
+			label: 'Attempt open',
+			run: function(ed) {
+				var position = ed.getPosition();
+				var text = ed.getValue(position);
+				var splitedText=text.split("\n");
+				var line = splitedText[position.lineNumber-1];
+				var replace = "(.{" + position.column + "}[^\\s\'\"]+).*";
+				var re = new RegExp(replace,"g");
+				var newLine = line.replace(re, "$1");
+				newLine = newLine.replace(/.*[\s\"\']/,"")
+				var proposedPaths = {};
+				// we check a few different ways of finding a legitimate path from the highlighted text
+				proposedPaths[dodgyRemoveRelPath(newLine)] = 0;
+				proposedPaths["etc/" + dodgyRemoveRelPath(newLine)] = 0;
+				proposedPaths[dodgyRemoveRelPath(dodgyDirname(ecfg.file) + newLine)] = 0;
+
+				for (var proposedPath in proposedPaths) {
+					if (proposedPaths.hasOwnProperty(proposedPath)) {
+						//console.log("attempting path ==> " + proposedPath);
+						if (filecache !== null) {
+							// we only check if the first 2 parts of the path are legit. If the path is less than two folders deep, then it wont open
+							var base = getTreeCache("./" + proposedPath, 3);
+							console.log("checking file cache for path ", "./" + proposedPath, ":", filecache, base);
+							if (base !== null) {
+								// this doesnt handle the case where its a bare folder with no trailing slash, but its good enough
+								if (proposedPath.slice(-1) === "/") { 
+									readFolder("./" + proposedPath);
+								} else {
+									readFile("./" + proposedPath);
+								}
+								break;
+							}
+						}
+					}
+				}
+			}
+		});
+		ecfg.editor.addAction({
 			id: 'open-prefs-action',
 			contextMenuOrder: 2,
 			contextMenuGroupId: '99_prefs',
@@ -2982,7 +3029,7 @@ require([
 	}
 
 	function dodgyRemoveRelPath(f) {
-		return f.replace(/^\.[\/\\]/,'');
+		return f.replace(/^\.?[\/\\]/,'');
 	}
 
 	//create a in-memory div, set it's inner text(which jQuery automatically encodes)
