@@ -491,13 +491,21 @@ require([
 			actions.push($("<div>Show btool (hide system defaults)</div>").on("click", function(){ 
 				runBToolList(thisFile, 'btool-hidesystemdefaults');
 			}));
-			
+
 			if (conf.btool_dir_for_master_apps) {
 				actions.push($("<div>[master-apps] Show btool</div>").on("click", function(){ 
 					runBToolList(thisFile + ":" + conf.btool_dir_for_master_apps, 'btool', conf.btool_dir_for_master_apps, "/splunk/etc/master-apps/");
 				}));
 				actions.push($("<div>[master-apps] Show btool (hide all defaults)</div>").on("click", function(){ 
 					runBToolList(thisFile + ":" + conf.btool_dir_for_master_apps, 'btool-hidedefaults', conf.btool_dir_for_master_apps, "/splunk/etc/master-apps/");
+				}));
+			}
+			if (conf.btool_dir_for_manager_apps) {
+				actions.push($("<div>[manager-apps] Show btool</div>").on("click", function(){ 
+					runBToolList(thisFile + ":" + conf.btool_dir_for_manager_apps, 'btool', conf.btool_dir_for_manager_apps, "/splunk/etc/manager-apps/");
+				}));
+				actions.push($("<div>[manager-apps] Show btool (hide all defaults)</div>").on("click", function(){ 
+					runBToolList(thisFile + ":" + conf.btool_dir_for_manager_apps, 'btool-hidedefaults', conf.btool_dir_for_manager_apps, "/splunk/etc/manager-apps/");
 				}));
 			}
 			if (conf.btool_dir_for_deployment_apps) {
@@ -1262,6 +1270,15 @@ require([
 				path = conf.btool_dir_for_master_apps;
 				origPath = conf.btool_dir_for_master_apps;
 				replacementPath = "/splunk/etc/master-apps/";
+			} else {
+				path = "";
+			}
+		}
+		if (path === "manager-apps") {
+			if (conf.btool_dir_for_manager_apps) {
+				path = conf.btool_dir_for_manager_apps;
+				origPath = conf.btool_dir_for_manager_apps;
+				replacementPath = "/splunk/etc/manager-apps/";
 			} else {
 				path = "";
 			}
@@ -2654,6 +2671,19 @@ require([
 				highlightBadConfigContinue(ecfg, "", run_path);
 			});
 
+		} else if (run_path === "manager-apps" && conf.btool_dir_for_manager_apps) {
+			serverAction({action: 'btool-list', path: ecfg.matchedConf, param1: conf.btool_dir_for_manager_apps}).then(function(btoolcontents){
+				if (btoolcontents) {
+					var btoolcontents2 = adjustBtoolPaths(btoolcontents, conf.btool_dir_for_manager_apps, "/splunk/etc/manager-apps/");
+					// if the replace did nothing, then the btool gutters are probably going to be all wrong anyway
+					if (btoolcontents2 !== btoolcontents) {
+						highlightBadConfigContinue(ecfg, btoolcontents2, run_path);
+						return;
+					}
+				}
+				highlightBadConfigContinue(ecfg, "", run_path);
+			});
+
 		} else if (run_path === "shcluster" && conf.btool_dir_for_shcluster_apps) {
 			serverAction({action: 'btool-list', path: ecfg.matchedConf, param1: conf.btool_dir_for_shcluster_apps}).then(function(btoolcontents){
 				//console.log("btoolcontents",btoolcontents);
@@ -2689,6 +2719,22 @@ require([
 				masterappsPropsSourcetypeChecks = true;
 			}
 			if (conf.hasOwnProperty("_master_apps_gutter_unnecissary_config_files") && conf._master_apps_gutter_unnecissary_config_files.test(ecfg.matchedConf)) {
+				allConfigsAreUnnecisary = true;
+			}
+		}
+
+		// There is some special logic if we are in the manager-apps directory
+		if (run_path === "manager-apps") {
+			if (conf.hasOwnProperty("_manager_apps_gutter_useful_props_and_transforms") && (ecfg.matchedConf === "props" || ecfg.matchedConf === "transforms")) {
+				// will check for manager_apps_gutter_useful_props_and_transforms
+				managerappsPropsTransformsChecks = true;
+			}
+			// split the manager_apps_allowed_config  by commas, then split each by full colon. ecfg.matchedConf
+			if (conf.hasOwnProperty("_manager_apps_gutter_used_sourcetypes") && ecfg.matchedConf === "props") {
+				// will check for manager_apps_gutter_useful_props_and_transforms
+				managerappsPropsSourcetypeChecks = true;
+			}
+			if (conf.hasOwnProperty("_manager_apps_gutter_unnecissary_config_files") && conf._manager_apps_gutter_unnecissary_config_files.test(ecfg.matchedConf)) {
 				allConfigsAreUnnecisary = true;
 			}
 		}
