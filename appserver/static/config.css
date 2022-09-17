@@ -675,6 +675,7 @@ input[type=text].ce_treesearch_input::placeholder {
     color: white;
 	visibility: hidden;
 	opacity: 0;
+    z-index:11;
 	transform: translateY(30px);
 	transition: all 200ms;
 }

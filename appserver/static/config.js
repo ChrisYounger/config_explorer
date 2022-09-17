@@ -210,6 +210,9 @@ require([
 		'cd': function(arg1){
 			changeDirectory(arg1);
 		},
+		'clipboard': function(arg1){
+			copyTextToClipboard(arg1);
+		},
 	};
 	// globals
 	var debug_gutters = false;
@@ -408,8 +411,8 @@ require([
 		$(".ce_treesearch_input").val("");
 	}
 	
-	function addHookAction(hook, file, actions, matchtype) {
-		if (hook._match.test(file) && hook.matchtype == matchtype) {	
+	function addHookActionToTree(hook, file, actions, matchtype) {
+		if (hook._match.test(file) && hook.matchtype == matchtype && ! (hook.hasOwnProperty("showInPane") && hook.showInPane === "editor")) {
 			actions.push($("<div></div>").text(replaceTokens(hook.label, file)).on("click", function(){ 
 				runAction(hook.action, file); 
 			}));
@@ -420,7 +423,7 @@ require([
 	$ce_file_path.on("contextmenu", function (e) {
 		var actions = [];
 		for (var j = 0; j < hooksActive.length; j++) {
-			addHookAction(hooksActive[j], inFolder, actions, "folder");
+			addHookActionToTree(hooksActive[j], inFolder, actions, "folder");
 		}
 		if (confIsTrue('git_autocommit', false) && conf.git_autocommit_work_tree === "") {
 			actions.push($("<div>Show change log</div>").on("click", function(){ 
@@ -457,12 +460,12 @@ require([
 		if (isFile) {
 			// Add the custom hook actions
 			for (var j = 0; j < hooksActive.length; j++) {
-				addHookAction(hooksActive[j], thisFile, actions, "file");
+				addHookActionToTree(hooksActive[j], thisFile, actions, "file");
 			}
 		}
 		if ($leftnavElem.hasClass("ce_is_folder")) {
 			for (var j = 0; j < hooksActive.length; j++) {
-				addHookAction(hooksActive[j], thisFile, actions, "folder");
+				addHookActionToTree(hooksActive[j], thisFile, actions, "folder");
 			}
 		}
 		if ($leftnavElem.hasClass("ce_leftnav_editable") && confIsTrue('write_access', false)) {
@@ -477,7 +480,7 @@ require([
 		}
 		if ($leftnavElem.hasClass("ce_conf")) {
 			for (var j = 0; j < hooksActive.length; j++) {
-				addHookAction(hooksActive[j], thisFile, actions, "conf");
+				addHookActionToTree(hooksActive[j], thisFile, actions, "conf");
 			}
 			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ 
 				runBToolList(thisFile, 'btool-hidepaths');
@@ -1448,7 +1451,7 @@ require([
 			leftPaneRemoveSpinner();
 			$ce_file_wrap.empty();
 			$ce_file_path.empty();
-			$("<div class='ce_treenothing'><i class='icon-warning'></i>Error occured. <span class='ce_link ce_tree_retry'>Retry</span> / <span class='ce_link ce_tree_reset'>Home</span></div>").appendTo($ce_file_wrap);
+			$("<div class='ce_treenothing'><i class='icon-warning'></i>Error loading folder contents<br />(was folder deleted?)<br/><br/><span class='ce_link ce_tree_retry'>Retry</span> or <span class='ce_link ce_tree_reset'>Go to SPLUNK_HOME</span></div>").appendTo($ce_file_wrap);
 			$ce_file_wrap.find(".ce_tree_retry").on("click", function(){
 				return readFolderFromServer(path, direction);
 			});
@@ -1610,7 +1613,7 @@ require([
 	}
 
 	// Handle clicking an file or folder in the left pane
-	function readFile(path){
+	function readFile(path, customErrorCB){
 		var label = preferences.ce_fullPathTab ? "<span style='opacity:0.6'>" + dodgyRemoveRelPath(dodgyDirname(path)) + "</span>" + dodgyBasename(path) : dodgyBasename(path);
 		var type = "read";
 		if (path === "") {
@@ -1619,7 +1622,7 @@ require([
 		}		
 		if (! tabAlreadyOpen(type, path)) {
 			var ecfg = createTab(type, path, label);
-			serverActionWithoutFlicker({action: 'read', path: path}).then(function(contents){
+			serverActionWithoutFlicker({action: 'read', path: path}, customErrorCB).then(function(contents){
 				updateTabAsEditor(ecfg, contents);
 				if (ecfg.hasOwnProperty('matchedConf')) {
 					highlightBadConfig(ecfg);
@@ -2039,7 +2042,7 @@ require([
 	}
 
 	function addHookActionToEditor(hook, ecfg) {
-		if (hook._match.test(ecfg.file) && hook.matchtype == "file") {
+		if (hook._match.test(ecfg.file) && hook.matchtype == "file" && ! (hook.hasOwnProperty("showInPane") && hook.showInPane === "tree")) {
 			var lab = replaceTokens(hook.label, ecfg.file);
 			if (isTrueValue(hook.showWithSave) && ecfg.canBeSaved) {
 				ecfg.editor.addAction({
@@ -2054,6 +2057,7 @@ require([
 					}
 				});
 			}
+
 			ecfg.editor.addAction({
 				id: lab,
 				contextMenuOrder: 0.3,
@@ -2233,32 +2237,57 @@ require([
 				var line = splitedText[position.lineNumber-1];
 				var replace = "(.{" + position.column + "}[^\\s\'\"]+).*";
 				var re = new RegExp(replace,"g");
-				var newLine = line.replace(re, "$1");
-				newLine = newLine.replace(/.*[\s\"\']/,"")
+				var filename_string = line.replace(re, "$1");
+				filename_string = filename_string.replace(/.*[\s\"\']/,"")
+				if (filename_string.length <= 3) {
+					showModal({
+						title: "Warning",
+						body: "<div class='alert alert-warning'><i class='icon-alert'></i> Use the 'Attempt Open' menu option on editor text for a file/folder path</div>",
+						size: 350
+					});
+					return;
+				}
 				var proposedPaths = {};
 				// we check a few different ways of finding a legitimate path from the highlighted text
-				proposedPaths[dodgyRemoveRelPath(newLine)] = 0;
-				proposedPaths["etc/" + dodgyRemoveRelPath(newLine)] = 0;
-				proposedPaths[dodgyRemoveRelPath(dodgyDirname(ecfg.file) + newLine)] = 0;
-
+				proposedPaths[dodgyRemoveRelPath(filename_string)] = 2;
+				// when looking in etc/ it needs to be 3 folders deep
+				proposedPaths["etc/" + dodgyRemoveRelPath(filename_string)] = 3;
+				// if its a "run" editor tab, then the fromFolder will be set.
+				if (ecfg.hasOwnProperty("fromFolder")) {
+					proposedPaths[dodgyRemoveRelPath(ecfg.fromFolder + "/" + filename_string)] = 2;
+				} else {
+					proposedPaths[dodgyRemoveRelPath(dodgyDirname(ecfg.file) + filename_string)] = 2;
+				}
+				var success = false;
+				var errorFunction = function(){
+					showModal({
+						title: "Warning",
+						body: "<div class='alert alert-warning'><i class='icon-alert'></i> Unable to find file or folder path to open: <code>" + htmlEncode(filename_string) + "</code><br /><br />(Looked in $SPLUNK_HOME, $SPLUNK_HOME/etc and relative to current file)</div>",
+						size: 450
+					});
+				};
 				for (var proposedPath in proposedPaths) {
 					if (proposedPaths.hasOwnProperty(proposedPath)) {
 						//console.log("attempting path ==> " + proposedPath);
 						if (filecache !== null) {
 							// we only check if the first 2 parts of the path are legit. If the path is less than two folders deep, then it wont open
-							var base = getTreeCache("./" + proposedPath, 3);
-							console.log("checking file cache for path ", "./" + proposedPath, ":", filecache, base);
+							var base = getTreeCache("./" + proposedPath, 1 + proposedPaths[proposedPath]);
+							//console.log("checking file cache for path ", "./" + proposedPath, ":", filecache, base);
 							if (base !== null) {
 								// this doesnt handle the case where its a bare folder with no trailing slash, but its good enough
 								if (proposedPath.slice(-1) === "/") { 
 									readFolder("./" + proposedPath);
 								} else {
-									readFile("./" + proposedPath);
+									readFile("./" + proposedPath, errorFunction);
 								}
+								success = true;
 								break;
 							}
 						}
 					}
+				}
+				if (!success) {
+					errorFunction();
 				}
 			}
 		});
@@ -2435,8 +2464,8 @@ require([
 	}
 	
 	// Make sure the server action that results in a tab open, takes a minimum amount of time so as not to flicker and look dumb
-	function serverActionWithoutFlicker(postData) {
-		var promise = serverAction(postData);
+	function serverActionWithoutFlicker(postData, customErrorCB) {
+		var promise = serverAction(postData, customErrorCB);
 		var promiseTimeout = new Promise(function(resolve) {
 			setTimeout(resolve, 800);
 		});
@@ -2447,11 +2476,11 @@ require([
 	}
 
 	// Make a rest call to our backend python script
-	function serverAction(postData) {
+	function serverAction(postData, customErrorCB) {
 		return new Promise(function(resolve, reject) {
 			inFlightRequests++;
 			$('.ce_saving_icon').removeClass('ce_hidden');
-			console.log(postData);
+			//console.log(postData);
 			service.post('/services/config_explorer', postData, function(err, r) {
 				inFlightRequests--;
 				if (inFlightRequests === 0) {
@@ -2494,10 +2523,14 @@ require([
 				if (errText) {
 					// dont show the error for background requests such as filemods
 					if (postData.action !== "filemods") {
-						showModal({
-							title: "Error",
-							body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + postData.action + ": " + (postData.hasOwnProperty("path") ? postData.path : "") + "<br><br><br>" + errText + "</pre></div>",
-						});
+						if (typeof customErrorCB === "undefined") {
+							showModal({
+								title: "Error",
+								body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + postData.action + ": " + (postData.hasOwnProperty("path") ? postData.path : "") + "<br><br><br>" + errText + "</pre></div>",
+							});
+						} else {
+							customErrorCB();
+						}
 					}
 					reject(Error("error"));
 				} else {

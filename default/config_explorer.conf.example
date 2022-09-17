@@ -142,6 +142,7 @@ hide_settings = false
 #action = run:echo ${BASEFILE}
 #disabled = false
 #showWithSave = true 
+#showInPane = both
 #order = 10
 
 # An example hook showing how to run "git status" on a folder

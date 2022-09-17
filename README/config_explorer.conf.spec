@@ -135,8 +135,12 @@ match = <regular expression>
   e.g. /(?:local|default))/[^\/]*\.conf$
 
 matchtype = <string>
-* The type of of tree element to match. Can be either "file", "folder", "conf" (the conf files screen).
+* The type of tree element to match. Can be either "file", "folder", "conf" (the conf files screen).
 * Default is "file"
+
+showInPane = <string>
+* Limit in which pane the right click hook will be displayed. Can be either "tree", "editor", "both"
+* Default is "both"
 
 action = <string>
 * The action name to run, full colon, then the argument (if required). Example: "run:ls -l ${FILENAME}"
@@ -154,6 +158,7 @@ action = <string>
     live:(1) - Show the current running config for the specified conf file. Uses the "/services/configs/conf-*" endpoint.
     live-diff:(1) - Show the current running config as a diff comparison of what is reported by btool.
     cd:(1) - Change the current directory in config explorer to the path specified. Path should be relative to $SPLUNKHOME
+    clipboard:(1) - Copy the argument string to the clipboard
 * The following variables can be used after the full colon:
     ${FILE} = Filename with path
     ${BASEFILE} = Filename without path
