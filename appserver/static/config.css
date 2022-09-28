@@ -557,8 +557,53 @@ input[type=text].ce_treesearch_input::placeholder {
 .ce_theme_hc-black .ce_contents {
 	background-color: black;
 }
-.ce_contents > div {
-    height: 100%
+.ce_tab_container, 
+.ce_editor_container,
+.ce_editor_sidecar_editor {
+    height: 100%;
+    margin: 6px;
+}
+.ce_editor_sidecar {
+    position: absolute;
+    height: 500px;
+    width: 600px;
+    border-left: 3px solid #5c5c5c;
+    border-right: 3px solid #5c5c5c;
+    bottom: 0;
+    right: 150px;
+    background-color: #1e1e1e;
+    opacity: 0;
+    transform: translateY(467px);
+    transition: transform 300ms;
+    box-shadow: 0 19px 38px rgba(0,0,0,0.30), 0 15px 12px rgba(0,0,0,0.22);
+}
+.ce_theme_vs .ce_editor_sidecar {
+    background-color: #ffffff;
+}
+.ce_editor_sidecar_title {
+    height: 35px;
+    background-color: #5c5c5c;
+    color: white;
+    line-height: 35px;
+    padding-left: 10px;
+    cursor: pointer;
+    text-overflow: ellipsis;
+    padding-right: 27px;
+    white-space: nowrap;
+    overflow: hidden;
+}
+.ce_editor_sidecar_autohide {
+    height: 2px;
+    border-left-width: 0px;
+    border-left-color: transparent;
+    border-left-style: solid;
+    transition: border-left-width 5000ms;
+}
+.ce_editor_sidecar .icon-close {
+    margin-top: 5px;
+}
+.ce_editor_sidecar .ce_spinner {
+	margin-top: 50px;
 }
 .ce_contents a,
 .ce_contents a:hover {
@@ -605,7 +650,7 @@ input[type=text].ce_treesearch_input::placeholder {
     /* transition: opacity 300ms; */
     background-color: #2d2f31;
     padding: 8px;
-    box-shadow: 0 2px 8px #000;
+    box-shadow: 0 19px 38px rgba(0,0,0,0.30), 0 15px 12px rgba(0,0,0,0.22);
     font-size: 13px;
     color: #bbb;
     z-index: 13;
@@ -646,7 +691,7 @@ input[type=text].ce_treesearch_input::placeholder {
     max-width: 440px;
     overflow: hidden;
     text-overflow: ellipsis;
-    box-shadow: 0 2px 8px #000;
+    box-shadow: 0 19px 38px rgba(0,0,0,0.30), 0 15px 12px rgba(0,0,0,0.22);
     font-size: 13px;
     color: #bbb;
     white-space: nowrap;
@@ -667,16 +712,16 @@ input[type=text].ce_treesearch_input::placeholder {
     width: 232px;
     height: 60px;
     position: absolute;
-    right: 40px;
-    bottom: 50px;
+    right: 50px;
+    top: 80px;
     line-height: 60px;
     padding: 0 20px;
-    box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
+    box-shadow: 0 19px 38px rgba(0,0,0,0.30), 0 15px 12px rgba(0,0,0,0.22);
     color: white;
 	visibility: hidden;
 	opacity: 0;
     z-index:11;
-	transform: translateY(30px);
+	transform: translateX(30px);
 	transition: all 200ms;
 }
 .ce_toaster i {
@@ -690,7 +735,7 @@ input[type=text].ce_treesearch_input::placeholder {
 .ce_toaster.ce_show {
 	opacity: 1;
 	visibility: visible;
-	transform: translateY(0);
+	transform: translateX(0);
 }
 .modal-body {
 	overflow: auto;
@@ -700,7 +745,7 @@ input[type=text].ce_treesearch_input::placeholder {
 	padding: 0;
 	border: 0 none;
 }
-.modal-body  img{
+.modal-body img{
 	margin-bottom: 16px;
 	box-shadow: 0 10px 20px rgba(0,0,0,0.19), 0 6px 6px rgba(0,0,0,0.23);
     border: 1px solid #e2e2e2;

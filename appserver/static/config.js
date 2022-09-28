@@ -165,52 +165,52 @@ require([
 	//  - Editor>RightClick>Rerun option is chosen  (can_rerun=true above)
 	//  - custom [hook:<unique_name>] right-click option
 	var hooksCfg = {
-		'btool': function(arg1){ 
+		'btool': function(arg1, arg2, embeddedMode){ 
 			runBToolList(arg1, 'btool'); 
 		},
-		'btool-hidepaths': function(arg1){
-			runBToolList(arg1, 'btool-hidepaths');			
+		'btool-hidepaths': function(arg1, arg2, embeddedMode){
+			runBToolList(arg1, 'btool-hidepaths');
 		},
-		'btool-hidedefaults':function(arg1){
+		'btool-hidedefaults':function(arg1, arg2, embeddedMode){
 			runBToolList(arg1, 'btool-hidedefaults');
 		},
-		'btool-hidesystemdefaults':function(arg1){
+		'btool-hidesystemdefaults':function(arg1, arg2, embeddedMode){
 			runBToolList(arg1, 'btool-hidesystemdefaults');
-		},		
-		'btool-check': function(arg1){
+		},
+		'btool-check': function(arg1, arg2, embeddedMode){
 			runBToolCheck();
 		},
-		'spec': function(arg1){
+		'spec': function(arg1, arg2, embeddedMode){
 			displaySpecFile(arg1);
 		},
-		'run': function(arg1, arg2){
-			runShellCommandNow(arg1, arg2);
+		'run': function(arg1, arg2, embeddedMode){
+			runShellCommandNow(arg1, arg2, embeddedMode);
 		},
-		'run-safe': function(arg1){
+		'run-safe': function(arg1, arg2, embeddedMode){
 			runShellCommand(arg1, true);
 		},
-		'deployserver': function(arg1){
+		'deployserver': function(arg1, arg2, embeddedMode){
 			runReloadDeployServer(arg1);
 		},
-		'read': function(arg1){
+		'read': function(arg1, arg2, embeddedMode){
 			readFile(arg1);
 		},
-		'live': function(arg1){
+		'live': function(arg1, arg2, embeddedMode){
 			runningVsLayered(arg1, false);
 		},
-		'live-diff': function(arg1){
+		'live-diff': function(arg1, arg2, embeddedMode){
 			runningVsLayered(arg1, true);
 		},
-		'bump': function(){
-			debugRefreshBumpHook("bump");
+		'bump': function(arg1, arg2, embeddedMode){
+			debugRefreshBumpHook("bump", embeddedMode);
 		},
-		'refresh': function(arg1){
-			debugRefreshBumpHook(arg1);
+		'refresh': function(arg1, arg2, embeddedMode){
+			debugRefreshBumpHook(arg1, embeddedMode);
 		},
-		'cd': function(arg1){
+		'cd': function(arg1, arg2, embeddedMode){
 			changeDirectory(arg1);
 		},
-		'clipboard': function(arg1){
+		'clipboard': function(arg1, arg2, embeddedMode){
 			copyTextToClipboard(arg1);
 		},
 	};
@@ -414,7 +414,7 @@ require([
 	function addHookActionToTree(hook, file, actions, matchtype) {
 		if (hook._match.test(file) && hook.matchtype == matchtype && ! (hook.hasOwnProperty("showInPane") && hook.showInPane === "editor")) {
 			actions.push($("<div></div>").text(replaceTokens(hook.label, file)).on("click", function(){ 
-				runAction(hook.action, file); 
+				runAction(hook.action, file, false); 
 			}));
 		}
 	}
@@ -660,10 +660,14 @@ require([
 		});
 	}
 	
-	function debugRefreshBumpHook(endpoint){
+	function debugRefreshBumpHook(endpoint, embeddedMode){
 		// get localisation url
 		var url = "/" + document.location.pathname.split("/")[1] + "/";
 		var label = "";
+		var ecfg;
+		if (typeof embeddedMode === "undefined") {
+			embeddedMode = false;
+		}
 		if (endpoint && endpoint !== "all") {
 			if (endpoint === "bump") {
 				url += "_bump";
@@ -677,20 +681,37 @@ require([
 			url += "debug/refresh";
 			endpoint = "all";
 		}
-		var ecfg = createTab('refresh', endpoint, label);
+		if (embeddedMode) {
+			ecfg = createTabSidecar(label);
+		} else {
+			// Load as a stand alone tab
+			ecfg = createTab('refresh', endpoint, label);
+		}
+
 		$.post(url, function(data){
 			if (endpoint === "bump") {
-				updateTabAsEditor(ecfg, $('<div/>').html(data).text(), 'plaintext');
+				data = $('<div/>').html(data).text();
 			} else {
-				updateTabAsEditor(ecfg, data.replace(/'''[\s\S]*'''/,""), 'plaintext');
+				data = data.replace(/'''[\s\S]*'''/,"");
 			}
+			if (embeddedMode) {
+				updateSidecarAsEditor(ecfg, data);
+			} else {
+				updateTabAsEditor(ecfg, data, 'plaintext');
+			}
+			
 		}).fail(function(jqXHR, textStatus, errorThrown) {
-			closeTabByCfg(ecfg);
-			showModal({
-				title: "Error",
-				body: "<div class='alert alert-error'><i class='icon-alert'></i>" + label + " - Error occurred!<br><br>Status code: " + jqXHR.status + "<br><br><pre>" + htmlEncode(errorThrown) + "</pre></div>",
-			});
+			if (embeddedMode) {
+				updateSidecarAsEditor(ecfg, "Status code: " + jqXHR.status + "\n\n" + errorThrown);
+			} else {
+				closeTabByCfg(ecfg);
+				showModal({
+					title: "Error",
+					body: "<div class='alert alert-error'><i class='icon-alert'></i>" + label + " - Error occurred!<br><br>Status code: " + jqXHR.status + "<br><br><pre>" + htmlEncode(errorThrown) + "</pre></div>",
+				});
+			}
 		});
+		
 	}
 
 	function changeDirectory(dir){
@@ -705,14 +726,14 @@ require([
 		return str.replace(/\$\{FILE\}/g, file).replace(/\$\{BASEFILE\}/g, basefile).replace(/\$\{DIRNAME\}/g, dirname);
 	}
 	
-	function runAction(actionStr, file) {
+	function runAction(actionStr, file, embeddedMode) {
 		var parts = actionStr.split(":");
 		var action = parts.shift();
 		var args = parts.join(":");
 		if (file !== undefined) {
 			args = replaceTokens(args, file);
 		}
-		hooksCfg[action](args);
+		hooksCfg[action](args, undefined, embeddedMode);
 	}
 
 	// Keep track of what tabs are open in local storage. 
@@ -813,7 +834,7 @@ require([
 			body: "<div>Preferences will only affect sessions from this browser."+
 					"<br><br><span class='ce_pref_item'>Enable word-wrap <label class='ce_pref_label'><input type='checkbox' class='ce_wordWrap'></label></span>"+
 					"<br><span class='ce_pref_item'>Enable visible whitespace <label class='ce_pref_label'><input type='checkbox' class='ce_renderWhitespace'></label></span>"+
-					"<br><span class='ce_pref_item'>Reuse tabs for post-save actions <label class='ce_pref_label'><input type='checkbox' class='ce_reuseWindow'></label></span>"+
+					//"<br><span class='ce_pref_item'>Reuse tabs for post-save actions <label class='ce_pref_label'><input type='checkbox' class='ce_reuseWindow'></label></span>"+
 					"<br><span class='ce_pref_item'>Hover tooltip <label class='ce_pref_label'><input type='checkbox' class='ce_hideSpecTooltip'></label></span>"+
 					"<br><span class='ce_pref_item'>Show full file path in tab (refresh required)<label class='ce_pref_label'><input type='checkbox' class='ce_fullPathTab'></label></span>"+
 					"<br><br><span class='ce_pref_item'>Advanced editor options (See <a href='https://microsoft.github.io/monaco-editor/api/interfaces/monaco.editor.ieditoroptions.html' target='_blank'>here</a>)<br>"+
@@ -828,9 +849,9 @@ require([
 				if (preferences.hasOwnProperty("renderWhitespace") && preferences.renderWhitespace === "all") {
 					$(".ce_pref_item .ce_renderWhitespace").prop('checked', true);
 				}
-				if (preferences.hasOwnProperty("ce_reuseWindow") && preferences.ce_reuseWindow) {
-					$(".ce_pref_item .ce_reuseWindow").prop('checked', true);
-				}
+				//if (preferences.hasOwnProperty("ce_reuseWindow") && preferences.ce_reuseWindow) {
+				//	$(".ce_pref_item .ce_reuseWindow").prop('checked', true);
+				//}
 				if (!(preferences.hasOwnProperty("hover") && preferences.hover.hasOwnProperty("enabled") && ! preferences.hover.enabled)) {
 					$(".ce_pref_item .ce_hideSpecTooltip").prop('checked', true);
 				}
@@ -860,7 +881,7 @@ require([
 					}
 					preferences.wordWrap = ($(".ce_pref_item input.ce_wordWrap:checked").length > 0) ? "on" : "off";
 					preferences.renderWhitespace = ($(".ce_pref_item input.ce_renderWhitespace:checked").length > 0) ? "all" : "none";
-					preferences.ce_reuseWindow = ($(".ce_pref_item input.ce_reuseWindow:checked").length > 0);
+					//preferences.ce_reuseWindow = ($(".ce_pref_item input.ce_reuseWindow:checked").length > 0);
 					preferences.ce_fullPathTab = ($(".ce_pref_item input.ce_fullPathTab:checked").length > 0);
 					if (! preferences.hasOwnProperty("hover")) {
 						preferences.hover = {};
@@ -925,10 +946,10 @@ require([
 						"</select>"+
 						"<input type='text' value='' class='ce_postsave_arg1 ce_prompt_input input input-text'/></div>"+
 					"</div>"+
-					"<div>Run in background tab: <select class='ce_postsave_background'><option value='yes' selected='selected'>Yes</option><option value='no'>No</option></select></div>"+
-					"<div>The following options will check the returned content from a post-save action for a specific string and will show a success or failure icon on the tab. Only one value is required for the icon to be displayed.</div>"+
-					"<div>Content match for success: <input type='text' value='' class='ce_postsave_strmatch_good ce_prompt_input input input-text'/></div>"+
-					"<div>Content match for failure: <input type='text' value='' class='ce_postsave_strmatch_bad ce_prompt_input input input-text'/></div>"+
+					//"<div>Run in background tab: <select class='ce_postsave_background'><option value='yes' selected='selected'>Yes</option><option value='no'>No</option></select></div>"+
+					//"<div>The following options will check the returned content from a post-save action for a specific string and will show a success or failure icon on the tab. Only one value is required for the icon to be displayed.</div>"+
+					//"<div>Content match for success: <input type='text' value='' class='ce_postsave_strmatch_good ce_prompt_input input input-text'/></div>"+
+					//"<div>Content match for failure: <input type='text' value='' class='ce_postsave_strmatch_bad ce_prompt_input input input-text'/></div>"+
 				  "</div>",
 			onShow: function(){
 				// On load set the fields to the current values
@@ -936,9 +957,9 @@ require([
 				if (p !== null) {
 					$(".ce_postsave_arg0").val(p[0]);
 					$(".ce_postsave_arg1").val(p[1]);
-					$(".ce_postsave_background").val(p[2]);
-					$(".ce_postsave_strmatch_good").val(p[3]);
-					$(".ce_postsave_strmatch_bad").val(p[4]);
+					//$(".ce_postsave_background").val(p[2]);
+					//$(".ce_postsave_strmatch_good").val(p[3]);
+					//$(".ce_postsave_strmatch_bad").val(p[4]);
 				}
 				$(".ce_postsave_suggestion").on("click", function(){
 					var s = $(this).html();
@@ -952,13 +973,13 @@ require([
 					var postsave = (JSON.parse(localStorage.getItem('ce_postsave')) || {});
 					var arg0 = $(".ce_postsave_arg0").val();
 					var arg1 = $(".ce_postsave_arg1").val();
-					var background = $(".ce_postsave_background").val();
-					var strmatch_good = $(".ce_postsave_strmatch_good").val();
-					var strmatch_bad = $(".ce_postsave_strmatch_bad").val();
+					//var background = $(".ce_postsave_background").val();
+					//var strmatch_good = $(".ce_postsave_strmatch_good").val();
+					//var strmatch_bad = $(".ce_postsave_strmatch_bad").val();
 					if (arg0 === "nothing") {
 						delete postsave[ecfg.file];
 					} else {
-						postsave[ecfg.file] = [arg0, arg1, background, strmatch_good, strmatch_bad];
+						postsave[ecfg.file] = [arg0, arg1]; //, background, strmatch_good, strmatch_bad];
 					}
 					localStorage.setItem('ce_postsave', JSON.stringify(postsave));
 					$(".modal").modal('hide');
@@ -1044,9 +1065,9 @@ require([
 						var command = $input.val();
 						if (command) {
 							if (runDir) {
-								runShellCommandNow(command, "");
+								runShellCommandNow(command, "", false);
 							} else {
-								runShellCommandNow(command, inFolder);
+								runShellCommandNow(command, inFolder, false);
 							}
 						}
 					}).modal('hide');
@@ -1072,8 +1093,11 @@ require([
 
 				service.get('/services/deployment/server/serverclasses', {count:0, f:"name"}, function(err, r) {
 					if (err) {
-						// TODO
 						console.error(err);
+						showModal({
+							title: "Error",
+							body: "<div class='alert alert-error'><i class='icon-alert'></i>Unexpected error occurred retreiving serverclasses list <br><br><pre>" + htmlEncode(JSON.stringify(err)) + "</pre></div>",
+						});
 					}
 					var str = "";
 					console.log("resp",r.data);
@@ -1121,10 +1145,22 @@ require([
 	}
 
 
-	function runShellCommandNow(command, fromFolder){
-		var ecfg = createTab('run', command, '<span class="ce-dim">$</span> ' + htmlEncode(command));
+	function runShellCommandNow(command, fromFolder, embeddedMode){
+		if (typeof embeddedMode === "undefined") {
+			embeddedMode = false;
+		}
+		var ecfg;
+		var label = '<span class="ce-dim">$</span> ' + htmlEncode(command);
+		var timer = $("<div class='ce_timer'></div>");
+		if (embeddedMode) {
+ 			ecfg = createTabSidecar(label);
+			timer.appendTo(ecfg.sidecar_editor_container);
+		} else {
+			ecfg = createTab('run', command, label);
+			timer.appendTo(ecfg.editor_container);
+		}
 		//var cancel = $("<div class='ce_cancel ce_internal_link'>Cancel</div>").appendTo(ecfg.container);
-		var timer = $("<div class='ce_timer'></div>").appendTo(ecfg.container);
+		
 		var started = Date.now();
 		var interval = setInterval(function() {
 			var tt = Math.round((Date.now() - started) / 1000);
@@ -1145,13 +1181,21 @@ require([
 		if (typeof fromFolder === "undefined") {
 			fromFolder = "";
 		}
-		ecfg.fromFolder = fromFolder;	
+		ecfg.fromFolder = fromFolder;
 		serverActionWithoutFlicker({action: 'run', path: command, param1: fromFolder}).then(function(contents){
 			clearInterval(interval);
-			updateTabAsEditor(ecfg, contents, 'plaintext');
+			if (embeddedMode) {
+				updateSidecarAsEditor(ecfg, contents);
+			} else {
+				updateTabAsEditor(ecfg, contents, 'plaintext');
+			}
 		}).catch(function(){
 			clearInterval(interval);
-			closeTabByCfg(ecfg);
+			if (embeddedMode) {
+				updateSidecarAsEditor(ecfg, "An unexpected error occured.");
+			} else {
+				closeTabByCfg(ecfg);
+			}
 		});
 	}
 
@@ -1873,7 +1917,7 @@ require([
 		activeTab = idx;
 		if (idx !== -1) {
 			editors[idx].tab.addClass('ce_active');
-			editors[idx].container.removeClass('ce_hidden');
+			editors[idx].tab_container.removeClass('ce_hidden');
 			editors[idx].last_opened = Date.now();
 		} else {
 			$ce_home_tab.addClass('ce_active');
@@ -1939,7 +1983,7 @@ require([
 	}
 
 	function closeTabByHookDetails(arg0, arg1) {
-		if (preferences.ce_reuseWindow) {
+		//if (preferences.ce_reuseWindow) {
 			if (arg0 === "bump") {
 				closeTabByName("refresh", "bump")
 			} else if (arg0 === "run-safe") {
@@ -1947,7 +1991,7 @@ require([
 			} else {
 				closeTabByName(arg0, arg1);
 			}
-		}
+		//}
 	}
 
 	// Check if tab is already open, and if so, active it instead.
@@ -2017,8 +2061,14 @@ require([
 		if (editors[idx].hasOwnProperty("model")) {
 			editors[idx].model.dispose();
 		}
+		if (editors[idx].hasOwnProperty("sidecar_editor")) {
+			editors[idx].sidecar_editor.dispose();
+		}
+		if (editors[idx].hasOwnProperty("sidecar_model")) {
+			editors[idx].sidecar_model.dispose();
+		}
 		editors[idx].tab.remove();
-		editors[idx].container.remove();
+		editors[idx].tab_container.remove();
 		editors.splice(idx, 1);
 		openTabsListChanged();
 		// if there are still tabs open, find the most recently used tab and activate that one
@@ -2038,6 +2088,78 @@ require([
 		}
 	}
 
+	function createTabSidecar(label) {
+		var ecfg = editors[activeTab];
+		if (! ecfg.sidecar_container) {
+			ecfg.sidecar_container = $("<div class='ce_editor_sidecar'></div>").appendTo(ecfg.tab_container);
+			$("<i class='icon-close ce_clickable_icon ce_right_icon'></i>").appendTo(ecfg.sidecar_container)
+				.on("click", function(){
+					if (ecfg.hasOwnProperty("sidecar_editor")) {
+						ecfg.sidecar_editor.dispose();
+					}
+					if (ecfg.hasOwnProperty("sidecar_model")) {
+						ecfg.sidecar_model.dispose();
+					}
+					ecfg.sidecar_container.remove();
+					ecfg.sidecar_container = null;
+				});
+			ecfg.sidecar_title = $("<div class='ce_editor_sidecar_title'></div>").appendTo(ecfg.sidecar_container).on("click", function(){
+				console.log("ecfg.sidecar_container.css.transform=", ecfg.sidecar_container.css("transform"));
+				// if the sidecar is collapsed
+				if (ecfg.sidecar_container.css("transform") === "matrix(1, 0, 0, 1, 0, 467)") {
+					ecfg.sidecar_container.css({transform: "translateY(0)"});
+					// if sidecar is expanded
+				} else if (ecfg.sidecar_container.css("transform") === "matrix(1, 0, 0, 1, 0, 0)"){
+					ecfg.sidecar_container.css({transform: ""});
+				}
+			});
+			ecfg.sidecar_autohide = $("<div class='ce_editor_sidecar_autohide'></div>").appendTo(ecfg.sidecar_container);
+			ecfg.sidecar_editor_container = $("<div class='ce_editor_sidecar_editor'></div>").appendTo(ecfg.sidecar_container);
+		}
+		ecfg.sidecar_title.html(label);
+		ecfg.sidecar_editor_container.empty().append($ce_spinner.clone());
+		setTimeout(function(){
+			ecfg.sidecar_container.css({transform: "translateY(350px)", opacity: "1"});
+		}, 100);
+		ecfg.sidecar_autohide.css({"border-left-width":"1px"}); 
+		return ecfg;
+	}
+
+	function updateSidecarAsEditor(ecfg, contents) {
+		ecfg.sidecar_editor_container.empty();
+		// The monaco URL must be unique or it will silently close. We use the same file when running different versions of btool and in other circumstances so need to prefix with a unique id.
+		var url = "T" + (tabCreationCount++) + "/" + ecfg.file;
+		ecfg.sidecar_model = monaco.editor.createModel(contents, "plaintext", monaco.Uri.file(url));
+
+		var options = {
+			automaticLayout: true,
+			model: ecfg.sidecar_model,
+			minimap: {
+				enabled: false
+			},
+			lineNumbers: 'off',
+			folding: false,
+			lineDecorationsWidth: 0,
+			lineNumbersMinChars: 0,
+			glyphMargin: false,
+			hover: { delay: 700 }
+		};
+		ecfg.sidecar_editor = monaco.editor.create(ecfg.sidecar_editor_container[0], options);
+		//ecfg.server_content = ecfg.editor.getValue();
+		var autohideTimeout = setTimeout(function(){
+			ecfg.sidecar_container.css({transform: ""});
+			ecfg.sidecar_autohide.css({"border-left-color":"transparent", "border-left-width":"1px"});
+		},5000);
+		setTimeout(function(){ 
+			ecfg.sidecar_autohide.css({"border-left-width":"597px", "border-left-color":"rgba(255,255,255,0.5)"}); 
+		}, 10); 
+		ecfg.sidecar_container.css({transform: "translateY(0)"});
+		ecfg.sidecar_editor.onMouseDown(function(e) {
+			clearTimeout(autohideTimeout);
+			ecfg.sidecar_autohide.css({"border-left-color":"transparent", "border-left-width":"1px"});
+		});
+	}
+
 	function createTab(type, file, label){
 		var ecfg = {
 			type: type, 
@@ -2046,8 +2168,9 @@ require([
 			id: tabid++
 		};
 		editors.push(ecfg);
-		ecfg.container = $("<div></div>").appendTo($ce_contents);
-		ecfg.container.append($ce_spinner.clone());
+		ecfg.tab_container = $("<div class='ce_tab_container'></div>").appendTo($ce_contents);
+		ecfg.editor_container = $("<div class='ce_editor_container'></div>").appendTo(ecfg.tab_container);
+		ecfg.editor_container.append($ce_spinner.clone());
 		// Remove the "restore session" link
 		$(".ce_restore_session").remove();
 		ecfg.tab = $("<div class='ce_tab ce_active " + (preferences.ce_fullPathTab ? "ce_fullPathTab" : "") + "'><bdi>" + label + "</bdi></div>").attr("title", ecfg.label).data({"tab": ecfg}).appendTo($ce_tabs);
@@ -2069,7 +2192,7 @@ require([
 					label: "Save and " + lab,
 					run: function() {
 						saveActiveTab(function(){
-							runAction(hook.action, ecfg.file);
+							runAction(hook.action, ecfg.file, true);
 						});
 					}
 				});
@@ -2081,7 +2204,7 @@ require([
 				contextMenuGroupId: 'navigation',
 				label: lab,
 				run: function() {
-					runAction(hook.action, ecfg.file);
+					runAction(hook.action, ecfg.file, true);
 				}
 			});
 		}
@@ -2108,7 +2231,7 @@ require([
 		}
 		ecfg.saving = false;
 		ecfg.decorations = [];
-		ecfg.container.empty();
+		ecfg.editor_container.empty();
 		// The monaco URL must be unique or it will silently close. We use the same file when running different versions of btool and in other circumstances so need to prefix with a unique id.
 		var url = "T" + (tabCreationCount++) + "/" + ecfg.file;
 		ecfg.model = monaco.editor.createModel(contents, language, monaco.Uri.file(url));
@@ -2125,7 +2248,7 @@ require([
 			glyphMargin: true,
 			hover: { delay: 700 }
 		});
-		ecfg.editor = monaco.editor.create(ecfg.container[0], options);
+		ecfg.editor = monaco.editor.create(ecfg.editor_container[0], options);
 		ecfg.server_content = ecfg.editor.getValue();
 
 		// check if we need to scroll to a particular location and highlight a line
@@ -2388,7 +2511,7 @@ require([
 							showModal({
 								title: "Confirm post-save action ",
 								body: "<div>The following action is configured to run after every save:<br><br><code>" + htmlEncode(p[0]) + ":" + htmlEncode(p[1]) + "</code></div>",
-								size: 500,
+								size: 600,
 								actions: [{
 									onClick: function(){
 										$(".modal").modal('hide');
@@ -2422,55 +2545,55 @@ require([
 	}
 
 	function runPostSaveAction(parts) {
-		var ptab = activeTab;
+		//var ptab = activeTab;
 		closeTabByHookDetails(parts[0], parts[1]);
-		hooksCfg[parts[0]](parts[1]);
-		var ntab = activeTab;
+		hooksCfg[parts[0]](parts[1], undefined, true);
+		//var ntab = activeTab;
 		// quickly swap back to prev tab
-		if (parts[2] === "yes") {
-			activateTab(ptab);
-		}
-		if (parts[3] || parts[4]) {
-			// Check the contents of the tab
-			editors[ntab].tab.on("ce_loaded", function(){
-				// Get the contents, update the tab
-				var contents = editors[ntab].editor.getValue();
-				var status = "";
-				// Good match
-				if (parts[3]){
-					if (contents.indexOf(parts[3]) > -1) {
-						status = "good";
-					} else {
-						status = "bad";
-					}
-				}
-				// Bad match
-				if (parts[4]){
-					if (contents.indexOf(parts[4]) > -1) {
-						status = "bad";
-					} else if (status !== "bad") {
-						status = "good";
-					}
-				}
-				if (status === "good"){
-					editors[ntab].tab.append("<i class='ce_right_icon ce_clickable_icon icon-check' style='color:green'></i>");
-				} else if (status === "bad") {
-					editors[ntab].tab.append("<i class='ce_right_icon ce_clickable_icon icon-x-circle' style='color:red'></i>");
-				}
-			});
-		}
+		//if (parts[2] === "yes") {
+		//	activateTab(ptab);
+		//}
+		// if (parts[3] || parts[4]) {
+		// 	// Check the contents of the tab
+		// 	editors[ntab].tab.on("ce_loaded", function(){
+		// 		// Get the contents, update the tab
+		// 		var contents = editors[ntab].editor.getValue();
+		// 		var status = "";
+		// 		// Good match
+		// 		if (parts[3]){
+		// 			if (contents.indexOf(parts[3]) > -1) {
+		// 				status = "good";
+		// 			} else {
+		// 				status = "bad";
+		// 			}
+		// 		}
+		// 		// Bad match
+		// 		if (parts[4]){
+		// 			if (contents.indexOf(parts[4]) > -1) {
+		// 				status = "bad";
+		// 			} else if (status !== "bad") {
+		// 				status = "good";
+		// 			}
+		// 		}
+		// 		if (status === "good"){
+		// 			editors[ntab].tab.append("<i class='ce_right_icon ce_clickable_icon icon-check' style='color:green'></i>");
+		// 		} else if (status === "bad") {
+		// 			editors[ntab].tab.append("<i class='ce_right_icon ce_clickable_icon icon-x-circle' style='color:red'></i>");
+		// 		}
+		// 	});
+		// }
 	}
 
 	function updateTabHTML(ecfg, contents) {
-		ecfg.container.html(contents).css("overflow", "auto");
+		ecfg.editor_container.html(contents).css("overflow", "auto");
 		ecfg.tab.trigger("ce_loaded");
 	}
 
 	function updateTabAsDiffer(ecfg, left, right) {
 		var originalModel = monaco.editor.createModel(left);
 		var modifiedModel = monaco.editor.createModel(right);
-		ecfg.container.empty();
-		ecfg.editor = monaco.editor.createDiffEditor(ecfg.container[0],{
+		ecfg.editor_container.empty();
+		ecfg.editor = monaco.editor.createDiffEditor(ecfg.editor_container[0],{
 			automaticLayout: true,
 		});
 		ecfg.editor.setModel({
@@ -3437,7 +3560,7 @@ require([
 						// add to the home screen
 						(function(a, i, l){
 							var button = $("<span class='ce_custom_action btn'></span>").text(a.label).on("click", function(){
-								runAction(a.action);
+								runAction(a.action, undefined, false);
 							});
 							var elem = $("<div class='" + ((i+1 < l) ? "ce_marginbottom" : "") + "'></div>").text(a.description).prepend(button);
 							elem.appendTo(ce_custom_actions);
