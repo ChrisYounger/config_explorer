@@ -2138,6 +2138,7 @@ require([
 				enabled: false
 			},
 			lineNumbers: 'off',
+			wordWrap: 'on',
 			folding: false,
 			lineDecorationsWidth: 0,
 			lineNumbersMinChars: 0,
