@@ -1354,7 +1354,7 @@ require([
 				closeTabByCfg(ecfg);
 				showModal({
 					title: "Warning",
-					body: "<div class='alert alert-warning'><i class='icon-alert'></i>No contents for \"<strong>" + tab_path_fmt + "</strong>\"</div>",
+					body: "<div class='alert alert-warning'><i class='icon-alert'></i>No contents for \"<strong>" + htmlEncode(tab_path_fmt) + "</strong>\"</div>",
 					size: 300
 				});
 			}
@@ -1743,7 +1743,7 @@ require([
 	
 	function fileSystemUpload(parentPath){
 		showModal({
-			title: "File upload ",
+			title: "File upload",
 			size: 300,
 			body: "<div>Select file:<br><br>"+
 					"<input type='file' style='width: 100%;' class='ce_file_upload_input'/><br><br><br>"+
@@ -2667,7 +2667,7 @@ require([
 						if (typeof customErrorCB === "undefined") {
 							showModal({
 								title: "Error",
-								body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + postData.action + ": " + (postData.hasOwnProperty("path") ? postData.path : "") + "<br><br><br>" + errText + "</pre></div>",
+								body: "<div class='alert alert-error'><i class='icon-alert'></i>An error occurred!<br><br>" + htmlEncode(postData.action) + ": " + htmlEncode(postData.hasOwnProperty("path") ? postData.path : "") + "<br><br><br>" + errText + "</pre></div>",
 							});
 						} else {
 							customErrorCB();
