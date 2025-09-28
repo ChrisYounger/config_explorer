@@ -1,5 +1,17 @@
 // Copyright (C) 2018 Chris Younger
 
+/* jslint bitwise: true */
+/* globals require, monaco, BroadcastChannel, Promise */
+
+/* 
+
+TODO
+ - Option to open a blank diffing window
+ - ability to stream results from a run window
+ - ability to see running config explorer commands and kill them?
+ - what happens if you hit save when a post-save action is already running - Two things run at once. Seems its not too bad anyway.
+
+*/
 // Loading monaco from the CDN
 /*
 require.config({ paths: { 'vs': 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.15.0/min/vs' }});
@@ -58,22 +70,28 @@ require([
 		"<div class='ce_wrap'>"+
 			"<div class='ce_tree_pane'>"+
 				"<div class='ce_tree_icons'>"+
-					"<i title='Previous folder' class='ce_clickable_icon ce_folder_up icon-arrow-left'></i>"+
-					"<i title='Refresh' class='ce_clickable_icon ce_refresh_tree icon-rotate-counter'></i>"+
-					"<i title='Filter files' class='ce_clickable_icon ce_filter icon-text'></i>"+
-					"<i title='Splunk conf files' class='ce_show_confs ce_clickable_icon icon-bulb'></i>"+
-					"<i title='Recent files' class='ce_recent_files ce_clickable_icon icon-list'></i>"+
-					"<!--<i title='Uncommitted changes' class='ce_clickable_icon ce_disabled icon-distributed-environment'></i>-->"+
-					"<i title='Create new folder in current directory' class='ce_add_folder ce_clickable_icon icon-folder'></i>"+
-					"<i title='Create new file in current directory' class='ce_add_file ce_clickable_icon icon-report'></i>"+
-					"<i title='Run a shell command' class='ce_app_run ce_clickable_icon icon-expand-right'></i>"+
-					"<i title='Upload a file' class='ce_upload_file ce_clickable_icon icon-plus'></i>"+
-					"<i title='Sort' class='ce_sort_files ce_clickable_icon icon-sort'></i>"+
+					"<i title='Filesystem' class='ce_show_filesystem ce_selected ce_clickable_icon ce_tree_btn_tab icon-dashboard'></i>"+
+					"<i title='Recent files' class='ce_recent_files ce_clickable_icon ce_tree_btn_tab icon-list'></i>"+
+					"<i title='Splunk .conf files' class='ce_show_confs ce_clickable_icon ce_tree_btn_tab icon-bulb'></i>"+
+					"<i title='Splunk REST API' class='ce_show_rest ce_clickable_icon ce_tree_btn_tab icon-distributed-environment' style='display:none;'></i>"+
+					"<span class='ce_icons_divider'></span>"+
+					"<i title='Previous folder' class='ce_clickable_icon ce_tree_btn ce_folder_up ce_tree_btn_show icon-arrow-left'></i>"+
+					"<i title='Back' class='ce_clickable_icon ce_tree_btn ce_folder_up_rest icon-arrow-left'></i>"+
+					"<i title='Refresh' class='ce_clickable_icon ce_refresh_tree ce_tree_btn ce_tree_btn_show icon-rotate-counter'></i>"+
+					//"<i title='Refresh' class='ce_clickable_icon ce_refresh_tree_rest ce_tree_btn  icon-rotate-counter'></i>"+
+					//"<i title='Filter files' class='ce_clickable_icon ce_tree_btn ce_filter ce_tree_btn_show icon-text'></i>"+
+					//"<i title='Create new file or folder in current directory' class='ce_add_folder ce_tree_btn ce_clickable_icon ce_tree_btn_show icon-folder'></i>"+
+					//"<i title='Create new file in current directory' class='ce_clickable_icon icon-report'></i>"+
+					"<i title='Create file, create folder or upload a file' class='ce_upload_file ce_clickable_icon ce_tree_btn ce_tree_btn_show icon-plus'></i>"+
+					"<i title='Run a shell command' class='ce_app_run ce_clickable_icon ce_tree_btn ce_tree_btn_show icon-expand-right'></i>"+
+					"<i title='Sort' class='ce_sort_files ce_clickable_icon ce_tree_btn ce_tree_btn_show icon-sort'></i>"+
+					"<i title='Sort' class='ce_sort_files_rest ce_clickable_icon ce_tree_btn  icon-settings'></i>"+
 				"</div>"+
 				"<div class='ce_file_path'></div>"+
 				"<div class='ce_file_list'>"+
 					"<div class='ce_file_wrap'></div>"+
 				"</div>"+
+				"<input class='ce_treesearch_input' autocorrect='off' autocapitalize='off' spellcheck='false' type='text' wrap='off' aria-label='Filter list' placeholder='Filter list' title='Filter list'>"+
 			"</div>"+
 				"<div class='ce_resize_column'></div>"+
 			"<div class='ce_container'>"+
@@ -106,8 +124,12 @@ require([
 									"Show invalid Splunk configuration"+
 								"</div>"+
 								"<div class='ce_marginbottom'>"+
-									"<span class='ce_splunk_reload btn'>debug/refresh</span>"+
+									"<span class='ce_splunk_reload btn'>debug/refresh all</span>"+
 									"Reload all endpoints"+
+								"</div>"+
+								"<div class='ce_marginbottom'>"+
+									"<span class='ce_splunk_reload_specific btn'>debug/refresh endpoint</span>"+
+									"Reload a specific endpoint"+
 								"</div>"+
 								"<div class=''>"+
 									"<span class='ce_splunk_reload btn' data-endpoint='bump'>bump</span>"+
@@ -158,6 +180,7 @@ require([
 		'live-diff': 			{ can_rerun: false, can_reopen: false, },
 		'refresh': 				{ can_rerun: true,  can_reopen: false, },
 		'internal': 			{ can_rerun: false, can_reopen: false, },
+		'rest': 			    { can_rerun: false, can_reopen: true, },
 	};
 	// This is what will be executed in the following circumstances:
 	//  - the URL hash on load (can_reopen=true above)
@@ -213,12 +236,23 @@ require([
 		'clipboard': function(arg1, arg2, embeddedMode){
 			copyTextToClipboard(arg1);
 		},
+		'rest': function(arg1, arg2, embeddedMode){
+			readFileRest(arg1);
+		},
+		'openurl': function(arg1, arg2, embeddedMode){
+			// set the target to the base64 representation of the URL so we can keep opening in the same tab for the same url
+			window.open(arg1, btoa(arg1));
+		}
 	};
 	// globals
 	var debug_gutters = false;
 	var service = mvc.createService({owner: "nobody"});
+	//var username = Splunk.util.getConfigValue("USERNAME");
 	var editors = [];  
 	var inFolder = (localStorage.getItem('ce_current_path') || './etc/apps');
+	var inFolderRestApp = (localStorage.getItem('ce_current_path_restapp') || '');
+	var inFolderRestType = "views";
+	var regex_file_path_to_dashboard_parts = /.*\/(apps|users\/[^\/]+)\/([^\/]+)\/(?:local|default)\/data\/ui\/views\/(.*)\.xml$/;
 	var openingFolder;
 	var folderContents;
 	var run_history = (JSON.parse(localStorage.getItem('ce_run_history')) || []);
@@ -242,6 +276,10 @@ require([
 	var fileModsCheckTimerInProgress = false;
 	var sortMode = "name";
 	var sortAsc = true;
+	var treeSearchFocus = false;
+	var sortModeRest = (localStorage.getItem('ce_sort_mode_rest') || 'label');
+	var sortAscRest = (localStorage.getItem('ce_sort_asc_rest') || '1');
+	var displayModeRest = (localStorage.getItem('ce_display_mode_rest') || 'ln');
 	var doLineHighlight = "";
 	var $dashboard_body = $('.dashboard-body');
 	var $ce_tree_pane = $(".ce_tree_pane");
@@ -257,6 +295,8 @@ require([
 	var $ce_tabs = $(".ce_tabs");
 	var $ce_home_tab = $(".ce_home_tab");
 	var $ce_context_menu_overlay = $(".ce_context_menu_overlay");
+	var broadcastChannel = new BroadcastChannel("config_explorer");
+	broadcastChannel.onmessage = handleBroadcastMessage;
 
 	// Set the "save" hotkey at a global level instead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
@@ -314,6 +354,9 @@ require([
 	$(".ce_splunk_reload").on("click", function(){ 
 		debugRefreshBumpHook( $(this).attr("data-endpoint") );
 	});
+	$(".ce_splunk_reload_specific").on("click", function(){ 
+		debugRefreshEndpointSelection();
+	});
 	$ce_home_tab.on("click", function(){ 
 		activateTab(-1);
 	});
@@ -322,64 +365,65 @@ require([
 	$ce_tree_icons.on("click", "i", function(e){
 		e.stopPropagation();
 		var elem = $(this);
+		var $menu;
 		if (elem.hasClass("ce_disabled")) {
 			return;
 		}
-		if (elem.hasClass("ce_add_file")) {
-			fileSystemCreateNew(inFolder, true);
-		} else if (elem.hasClass("ce_add_folder")) {
-			fileSystemCreateNew(inFolder, false);
-		} else if (elem.hasClass("ce_upload_file")) {
+
+		if (elem.hasClass("ce_upload_file")) {
 			fileSystemUpload(inFolder);
 		} else if (elem.hasClass("ce_refresh_tree")) {
 			refreshFolder();
+		} else if (elem.hasClass("ce_refresh_tree_rest")) {
+			delete restTypes.views.cache;
+			delete restTypes.apps.cache;
+			leftPaneRestList();			
 		} else if (elem.hasClass("ce_folder_up")) {
 			readFolder(inFolder.replace(/[\/\\][^\/\\]*$/,''), 'back');
-		} else if (elem.hasClass("ce_filter")) {
-			if (elem.hasClass("ce_selected")) {
-				leftPaneFileList();
-				filterModeOff();
+		} else if (elem.hasClass("ce_folder_up_rest")) {
+			if (inFolderRestApp !== "") {
+				inFolderRestApp = "";
 			} else {
-				var $in = $('<input class="ce_treesearch_input" autocorrect="off" autocapitalize="off" spellcheck="false" type="text" wrap="off" aria-label="Filter text" placeholder="Filter text" title="Filter text">');
-				$ce_file_path.css("margin-top", "30px");
-				$ce_file_list.css("top", "100px");
+				inFolderRestType = "";
+			}
+			leftPaneRestList();
+
+// TODO [low] it should remember which file system tab you are on
+		} else if (elem.hasClass("ce_show_filesystem")) {
+			if (! elem.hasClass("ce_selected")) {
+				filterModeReset();
+				$ce_tree_icons.find(".ce_clickable_icon").removeClass("ce_selected ce_tree_btn_show");
 				elem.addClass("ce_selected");
-				$in.appendTo($ce_tree_pane).focus().on("input ",function(){
-					leftPaneFileList($(this).val().toLowerCase());
-				}).on("keydown", function(e){
-					// select the top item
-					if (e.which === 13) {
-						$ce_file_wrap.find(".ce_leftnav").eq(0).click();
-					// If user hits backspace with nothing in box then navigate back
-					} else if (e.which === 8 && $in.val() === "") {
-						// navigate back
-						$(".ce_folder_up").click();
-					}
-				});
+				$(".ce_folder_up, .ce_refresh_tree, .ce_filter, .ce_add_folder, .ce_app_run, .ce_upload_file, .ce_sort_files").addClass("ce_tree_btn_show");
+				leftPaneFileList();
+			}
+		} else if (elem.hasClass("ce_recent_files")) {
+			if (! elem.hasClass("ce_selected")) {
+				filterModeReset();
+				$ce_tree_icons.find(".ce_clickable_icon").removeClass("ce_selected ce_tree_btn_show");
+				elem.addClass("ce_selected");
+				leftPaneRecentList();
 			}
 		} else if (elem.hasClass("ce_show_confs")) {
-			if (elem.hasClass("ce_selected")) {
-				elem.removeClass("ce_selected");
-				leftPaneFileList();
-				
-			} else {
-				filterModeOff();
+			if (! elem.hasClass("ce_selected")) {
+				filterModeReset();
+				$ce_tree_icons.find(".ce_clickable_icon").removeClass("ce_selected ce_tree_btn_show");
 				elem.addClass("ce_selected");
 				leftPaneConfList();
 			}
-		} else if (elem.hasClass("ce_recent_files")) {
-			if (elem.hasClass("ce_selected")) {
-				leftPaneFileList();
-				elem.removeClass("ce_selected");
-			} else {
-				filterModeOff();
-				leftPaneRecentList();
+		} else if (elem.hasClass("ce_show_rest")) {
+			if (! elem.hasClass("ce_selected")) {
+				filterModeReset();
+				$ce_tree_icons.find(".ce_clickable_icon").removeClass("ce_selected ce_tree_btn_show");
 				elem.addClass("ce_selected");
-			}
+				$(".ce_folder_up_rest, .ce_refresh_tree_rest, .ce_sort_files_rest").addClass("ce_tree_btn_show");
+				leftPaneRestList();
+			}			
+
 		} else if (elem.hasClass('ce_app_run')) {
 			runShellCommand();
 		} else if (elem.hasClass('ce_sort_files')) {
-			var $menu = $("<div class='ce_sort_menu_wrap'>Sort by:"+
+			$menu = $("<div class='ce_sort_menu_wrap'>Sort by:"+
 				"<div><i class='icon-chevron-down ce_clickable_icon ce_sortby_name'></i><i class='icon-chevron-up ce_clickable_icon ce_sortby_name'></i>Name</div>"+
 				"<div><i class='icon-chevron-down ce_clickable_icon ce_sortby_size'></i><i class='icon-chevron-up ce_clickable_icon ce_sortby_size'></i>Size</div>"+
 				"<div><i class='icon-chevron-down ce_clickable_icon ce_sortby_time'></i><i class='icon-chevron-up ce_clickable_icon ce_sortby_time'></i>Modified date</div></div>").appendTo($dashboard_body);
@@ -397,15 +441,89 @@ require([
 				$menu.remove();
 				e2.preventDefault();
 			});
+		} else if (elem.hasClass('ce_sort_files_rest')) {
+			$menu = $("<div class='ce_sort_menu_wrap'><div>Display:</div>"+
+				"<div><i class='icon-string ce_clickable_icon ce_display_ln'></i>Title (URL)</div>"+
+				"<div><i class='icon-string ce_clickable_icon ce_display_nl'></i>URL (Title)</div>"+
+				"<div><i class='icon-string ce_clickable_icon ce_display_l'></i>Title</div>"+
+				"<div><i class='icon-string ce_clickable_icon ce_display_n'></i>URL</div>"+
+				"<div>Sort by:</div>"+
+				"<div><i class='icon-chevron-down ce_clickable_icon ce_sortby_label'></i><i class='icon-chevron-up ce_clickable_icon ce_sortby_label'></i>Label</div>"+
+				"<div><i class='icon-chevron-down ce_clickable_icon ce_sortby_time'></i><i class='icon-chevron-up ce_clickable_icon ce_sortby_time'></i>Last updated</div></div>").appendTo($dashboard_body);
+			$menu.find(".ce_sortby_" + sortModeRest + "." + (sortAscRest==="1" ? 'icon-chevron-down' : 'icon-chevron-up')).addClass("ce_sortby_selected");
+			$menu.find(".ce_display_" + displayModeRest).addClass("ce_sortby_selected");
+			$menu.css({right: $(window).width() - parseInt($ce_tree_pane.css("width")) + 2, top: 41});
+			$menu.on("click", ".ce_clickable_icon", function(){
+				var $t = $(this);
+				if ($t.hasClass("icon-string")) {
+					displayModeRest = $t.hasClass("ce_display_ln") ? "ln" : $t.hasClass("ce_display_nl") ? "nl" : $t.hasClass("ce_display_l") ? "l" : "n";
+					localStorage.setItem('ce_display_mode_rest', displayModeRest);					
+				} else {
+					sortModeRest = $t.hasClass("ce_sortby_name") ? "name" : $t.hasClass("ce_sortby_label") ? "label" : "time";
+					sortAscRest = $t.hasClass("icon-chevron-down") ? "1" : "0";
+					localStorage.setItem('ce_sort_mode_rest', sortModeRest);
+					localStorage.setItem('ce_sort_asc_rest', sortAscRest);
+				}
+				leftPaneRestList();
+			});
+			$ce_context_menu_overlay.removeClass("ce_hidden");
+			$(document).one("click contextmenu", function(e2) {
+				$ce_context_menu_overlay.addClass("ce_hidden");
+				$menu.remove();
+				e2.preventDefault();
+			});
 		}
 	});
+
+	$('.ce_treesearch_input').on("input", function(){
+		if ($(".ce_tree_icons .ce_show_filesystem.ce_selected").length) {
+			leftPaneFileList($(this).val().toLowerCase());
+		}
+		if ($(".ce_tree_icons .ce_recent_files.ce_selected").length) {
+			leftPaneRecentList($(this).val().toLowerCase());
+		}
+		if ($(".ce_tree_icons .ce_show_confs.ce_selected").length) {
+			leftPaneConfList($(this).val().toLowerCase());
+		}
+		if ($(".ce_tree_icons .ce_show_rest.ce_selected").length) {
+			leftPaneRestList($(this).val().toLowerCase());
+		}		
+	}).on("focus", function(e){
+		if ($(".ce_leftnav_keyboard_selected").length == 0) {
+			$ce_file_wrap.children(".ce_leftnav").first().addClass("ce_leftnav_keyboard_selected");
+		} 
+		treeSearchFocus = true;
+	}).on("blur", function(e){
+		$(".ce_leftnav_keyboard_selected").removeClass("ce_leftnav_keyboard_selected"); 
+		treeSearchFocus = false;				
+	}).on("keydown", function(e){
+		// select the top item
+		var $keyFocused = $(".ce_leftnav_keyboard_selected");
+		if (e.which === 13) {
+			$keyFocused.click();
+		} else if (e.which === 38) { // up
+			e.preventDefault();
+			if ($keyFocused && $keyFocused.index() > 0) {
+				$keyFocused.prev().addClass("ce_leftnav_keyboard_selected");
+				$keyFocused.removeClass("ce_leftnav_keyboard_selected");
+			}
+		} else if (e.which === 40) { // down
+			e.preventDefault();	
+			if ($keyFocused && $keyFocused.index() < $keyFocused.parent().children().length - 1) {
+				$keyFocused.next().addClass("ce_leftnav_keyboard_selected");
+				$keyFocused.removeClass("ce_leftnav_keyboard_selected");
+			}
+
+		// If user hits backspace with nothing in box then navigate back
+		} else if (e.which === 8 && $(this).val() === "" && $(".ce_tree_icons .ce_show_filesystem.ce_selected").length) {
+			// navigate back
+			$(".ce_folder_up").click();
+		} else if (e.which === 8 && $(this).val() === "" && $(".ce_tree_icons .ce_show_rest.ce_selected").length) {
+			// navigate back
+			$(".ce_folder_up_rest").click();
+		}
+	});	
 	
-	function filterModeOff() {
-		$(".ce_filter").removeClass("ce_selected");
-		$(".ce_treesearch_input").remove();
-		$ce_file_path.css("margin-top", "");
-		$ce_file_list.css("top", "");
-	}
 
 	function filterModeReset(){
 		$(".ce_treesearch_input").val("");
@@ -419,18 +537,22 @@ require([
 		}
 	}
 
-	// add folder hooks to the path display
+	// add folder hooks to the path display at the top of the left pane
 	$ce_file_path.on("contextmenu", function (e) {
-		var actions = [];
-		for (var j = 0; j < hooksActive.length; j++) {
-			addHookActionToTree(hooksActive[j], inFolder, actions, "folder");
-		}
-		if (confIsTrue('git_autocommit', false) && conf.git_autocommit_work_tree === "") {
-			actions.push($("<div>Show change log</div>").on("click", function(){ 
-				showChangeLog();
-			}));
-		}
-		buildLeftContextMenu(actions, e);
+		// only allow right clicking on the "path" when in filesystem mode
+		if ($(".ce_tree_icons .ce_show_filesystem.ce_selected").length) {
+			var actions = [];
+			for (var j = 0; j < hooksActive.length; j++) {
+				addHookActionToTree(hooksActive[j], inFolder, actions, "folder");
+			}
+			// todo check: git_autocommit is working or not
+			if (confIsTrue('git_autocommit', false) && conf.git_autocommit_work_tree === "") {
+				actions.push($("<div>Show change log</div>").on("click", function(){ 
+					showChangeLog();
+				}));
+			}
+			buildLeftContextMenu(actions, e);
+		} 
 	});
 	
 	// Click handler for left pane items
@@ -445,6 +567,17 @@ require([
 		// recent files list
 		} else if (elem.hasClass("ce_leftnav_reopen")) {
 			hooksCfg[elem.attr('type')](elem.attr('file'));
+		// rest app 
+		} else if (elem.hasClass("ce_leftnav_restapp")) {
+			inFolderRestApp = elem.attr('restapp');
+			leftPaneRestList();
+		// rest type 
+		} else if (elem.hasClass("ce_leftnav_resttype")) {
+			inFolderRestType = elem.attr('resttype');
+			leftPaneRestList();		
+		// rest file 
+		} else if (elem.hasClass("ce_leftnav_restfile")) {
+			readFileRest(elem.attr('restfile'));
 		// Folder
 		} else {
 			if (! leftpane_ignore) {
@@ -457,14 +590,33 @@ require([
 		var isFile = $leftnavElem.hasClass("ce_is_report");
 		var thisFile = $leftnavElem.attr('file');
 		var actions = [];
+		var j;
 		if (isFile) {
 			// Add the custom hook actions
-			for (var j = 0; j < hooksActive.length; j++) {
-				addHookActionToTree(hooksActive[j], thisFile, actions, "file");
+			for (j = 0; j < hooksActive.length; j++) {
+				addHookActionToTree(hooksActive[j], thisFile, actions, "file");			
 			}
+			// gate behind flag
+			if (confIsTrue('dashboard_xml_file_experimental_actions', false)) {
+				var file_parts_for_openurl = thisFile.match(regex_file_path_to_dashboard_parts);
+				if (file_parts_for_openurl) {				
+					actions.push($("<div>Attempt view in browser</div>").on("click", function(){ 
+						hooksCfg.openurl("/app/" + file_parts_for_openurl[2] + "/" + file_parts_for_openurl[3]);
+					}));
+					actions.push($("<div>Attempt edit via REST API</div>").on("click", function(){ 
+						if (file_parts_for_openurl[1]=="apps") {
+							hooksCfg.rest("/servicesNS/nobody/" + file_parts_for_openurl[2] + "/data/ui/views/" + file_parts_for_openurl[3]);	
+						} else {
+							hooksCfg.rest("/servicesNS/" + file_parts_for_openurl[1].substr(6) + "/" + file_parts_for_openurl[2] + "/data/ui/views/" + file_parts_for_openurl[3]);	
+						}
+					}));					
+
+
+				}
+			}			
 		}
 		if ($leftnavElem.hasClass("ce_is_folder")) {
-			for (var j = 0; j < hooksActive.length; j++) {
+			for (j = 0; j < hooksActive.length; j++) {
 				addHookActionToTree(hooksActive[j], thisFile, actions, "folder");
 			}
 		}
@@ -479,7 +631,7 @@ require([
 			
 		}
 		if ($leftnavElem.hasClass("ce_conf")) {
-			for (var j = 0; j < hooksActive.length; j++) {
+			for (j = 0; j < hooksActive.length; j++) {
 				addHookActionToTree(hooksActive[j], thisFile, actions, "conf");
 			}
 			actions.push($("<div>Show btool (hide paths)</div>").on("click", function(){ 
@@ -548,10 +700,10 @@ require([
 				serverAction({action: 'filedownload', path: inFolder, param1: thisFile}).then(function(b64data){
 					var byteCharacters = atob(b64data);
 					var byteArrays = [];
-					for (let offset = 0; offset < byteCharacters.length; offset += 512) {
+					for (var offset = 0; offset < byteCharacters.length; offset += 512) {
 						var slice = byteCharacters.slice(offset, offset + 512);
 						var byteNumbers = new Array(slice.length);
-						for (let i = 0; i < slice.length; i++) {
+						for (var i = 0; i < slice.length; i++) {
 							byteNumbers[i] = slice.charCodeAt(i);
 						}
 						var byteArray = new Uint8Array(byteNumbers);
@@ -590,6 +742,16 @@ require([
 				}));
 			}
 		}
+
+		if ($leftnavElem.hasClass("ce_leftnav_restfile")) {
+			var file_parts_for_openurl_rest = $leftnavElem.attr('restfile').match(/([^\/]+)\/data\/ui\/views\/(.*)$/);
+			if (file_parts_for_openurl_rest) {	
+				actions.push($("<div>Attempt view in browser</div>").on("click", function(){ 
+					hooksCfg.openurl("/app/" + file_parts_for_openurl_rest[1] + "/" + file_parts_for_openurl_rest[2]);
+				}));	
+			}
+		}
+
 		if (actions.length) {
 			buildLeftContextMenu(actions, e, $leftnavElem);
 		}
@@ -649,6 +811,8 @@ require([
 	
 	function compareFiles(rightFile, leftFile) {
 		var ecfg = createTab('diff', rightFile + " " + leftFile, "<span class='ce-dim'>diff:</span> " + rightFile + " " + leftFile);
+		ecfg.diffFileRight = rightFile;
+		ecfg.diffFileLeft = leftFile;
 		// get both files 
 		Promise.all([
 			serverActionWithoutFlicker({action: 'read', path: leftFile}),
@@ -808,6 +972,22 @@ require([
 		}
 	}
 
+	// This can be used like so:
+	// var bc = new BroadcastChannel("config_explorer"); bc.postMessage({action:"open",type:"rest",path:"/servicesNS/admin/search/data/ui/views/aaa_dump"})
+	function handleBroadcastMessage(event) {
+		console.log("Received broadcast message", event);
+		if (event.data && event.data.hasOwnProperty("action") && event.data.action==="open") {
+			if (tabCfg[event.data.type].can_reopen) {
+				hooksCfg[event.data.type](event.data.path);
+				broadcastChannel.postMessage({
+					action:"opened",
+					type: event.data.type,
+					path: event.data.path
+				});
+			}
+		}
+	}
+
 	function getPreferences() {
 		var preferences;
 		try {
@@ -827,7 +1007,6 @@ require([
 	}
 	// This is an action that will occur after saving the file
 	function openPreferences() {
-		var ecfg = editors[activeTab];
 		showModal({
 			title: "Preferences",
 			size: 500,
@@ -920,7 +1099,7 @@ require([
 		}
 		showModal({
 			title: "Set post-save action",
-			size: 800,
+			size: 900,
 			body: "<div>Enter a command to automatically run after successful save of this file only. This action will be saved in your browser local storage "+
 						"(it will not affect other users or other browsers you use, but it will be remembered after browser refresh). "+
 						"Run commands will be executed from the SPLUNK_HOME directory.<br><br>"+
@@ -940,9 +1119,11 @@ require([
 							"<option value='btool-hidesystemdefaults'>Btool list (hide system defaults)</option>"+
 							"<option value='spec'>Open Spec file</option>"+
 							"<option value='read'>Open file</option>"+
+							"<option value='rest'>Open file using REST API</option>"+
 							"<option value='live'>Show running config</option>"+
 							"<option value='live-diff'>Show running config as diff</option>"+
 							"<option value='deployserver'>Run reload deploy server</option>"+
+							"<option value='openurl'>Open browser tab to url</option>"+
 						"</select>"+
 						"<input type='text' value='' class='ce_postsave_arg1 ce_prompt_input input input-text'/></div>"+
 					"</div>"+
@@ -995,16 +1176,17 @@ require([
 
 	// Read local storage to get any post-save action that exists for this file
 	function getPostSave(file) {
+		var parts;
 		var postsave = (JSON.parse(localStorage.getItem('ce_postsave')) || {});
 		if (postsave.hasOwnProperty(file)){
 			// Handle legacy format
 			if (typeof postsave[file] === "string") {
-				var parts = postsave[file].split(":");
+				parts = postsave[file].split(":");
 				var action = parts.shift();
 				var args = replaceTokens(parts.join(":"), file);
 				return [action,args];
 			} else {
-				var parts = postsave[file];
+				parts = postsave[file];
 				parts[1] = replaceTokens(parts[1], file);
 				return parts;
 			}
@@ -1081,6 +1263,40 @@ require([
 		});
 	}
 
+	function debugRefreshEndpointSelection() {
+		showModal({
+			title: "Debug/refresh endpoints",
+			size: 1000,
+			body: "<div class='ce-deployserver'>Select endpoint to debug/refresh. This list of endpoints is configured in Settings (config_explorer.conf) property: <code>debug_refresh_endpoints</code><br><br><div class='ce-debugrefresh-endpoints'></div></div>",
+			onShow: function(){ 
+				var $debugrefreshEndpoints = $(".ce-debugrefresh-endpoints");
+				var str ="";
+				for (var i = 0; i < conf._debug_refresh_endpoints.length; i++) {
+					var epoint = $.trim(conf._debug_refresh_endpoints[i]);
+					if (epoint) {
+						str += "<a href='#'>" + htmlEncode(epoint) + "</a>";
+					}
+				}
+
+				$debugrefreshEndpoints
+				.html(str)
+				.on("click","a",function(e){
+					e.preventDefault();
+					e.stopPropagation();
+					var $this = $(this);
+					$(".modal").modal('hide');
+					debugRefreshBumpHook( $this.text() );
+				});
+			},
+			actions: [{
+				onClick: function(){ $(".modal").modal('hide'); },
+				label: "Cancel"
+			}]
+		});		
+	}
+
+	
+
 	// Run button
 	function runReloadDeployServer() {
 		showModal({
@@ -1100,7 +1316,7 @@ require([
 						});
 					}
 					var str = "";
-					console.log("resp",r.data);
+					//console.log("resp",r.data);
 					if (r && r.data && r.data.entry) {
 						for (var i = 0; i < r.data.entry.length; i++) {
 							str += "<a href='#'>" + htmlEncode(r.data.entry[i].name) + "</a>";
@@ -1132,7 +1348,7 @@ require([
 		if (typeof srvclass === undefined) {
 			srvclass = "";
 		}
-		var command = "reload deploy-server"
+		var command = "reload deploy-server";
 		if (tabAlreadyOpen('deployserver', "")) {
 			closeTabByName('deployserver', "");
 		}		
@@ -1187,7 +1403,13 @@ require([
 			if (embeddedMode) {
 				updateSidecarAsEditor(ecfg, contents);
 			} else {
-				updateTabAsEditor(ecfg, contents, 'plaintext');
+				if (/git +diff/.test(command)) {
+					updateTabAsEditor(ecfg, contents, "git-diff");
+				} else if (/git +log/.test(command)) {
+					updateTabAsEditor(ecfg, contents, "git-log");
+				} else {
+					updateTabAsEditor(ecfg, contents, 'plaintext');
+				}
 			}
 		}).catch(function(){
 			clearInterval(interval);
@@ -1219,10 +1441,39 @@ require([
 		});
 	}
 
+	function getRest(path, args) {
+		return new Promise(function(resolve, reject){
+			service.get(path, args, function(err, r) {
+				if (err) {
+					reject(err);
+				}
+				if (r && r.data && r.data.entry) {
+					// for (var i = 0; i < r.data.entry.length; i++) {
+					// 	str += "[" + r.data.entry[i].name + "]\n";
+					// 	var props = Object.keys(r.data.entry[i].content);
+					// 	props.sort();
+					// 	for (var j = 0; j < props.length; j++) {
+					// 		if (props[j].substr(0,4) !== "eai:" && !(props[j] === "disabled" && ! r.data.entry[i].content[props[j]])) {
+					// 			str += props[j] + " = " + r.data.entry[i].content[props[j]] + "\n";
+					// 		}
+					// 	}
+					// }
+					//if (str) {
+						resolve(r.data.entry);
+					//} else {
+					//	reject();
+					//}
+				} else {
+					reject();
+				}
+			});
+		});
+	}
+
 	function getRunningConfig(path) {
 		path = path.replace(/\.conf$/i,"");
 		return new Promise(function(resolve, reject){
-			service.get('/services/configs/conf-' + path, null, function(err, r) {
+			service.get('/servicesNS/-/-/configs/conf-' + path, null, function(err, r) {
 				if (err) {
 					reject(err);
 				}
@@ -1406,7 +1657,7 @@ require([
 			depth = patharray.length;
 		} else {
 			// make sure we arent attempting to go deeper than the length of the path
-			depth = Math.min(patharray.length, depth)
+			depth = Math.min(patharray.length, depth);
 		}
 		var base = filecache;
 		if (filecache === null) {
@@ -1575,12 +1826,12 @@ require([
 	}
 
 	function formatSize(bytes) {
-		if (bytes === 0) return '0 <span class="ce_leftnav_size_unit">B</span>';
-		const k = 1024;
-		const dm = 2;
-		const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
-		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' <span class="ce_leftnav_size_unit">' + sizes[i] + '</span>';
+		if (bytes === 0) return '0 <span class="ce_opacity06">B</span>';
+		var k = 1024;
+		var dm = 2;
+		var sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB'];
+		var i = Math.floor(Math.log(bytes) / Math.log(k));
+		return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' <span class="ce_opacity06">' + sizes[i] + '</span>';
 	}
 
 	function formatDate(val) {
@@ -1599,9 +1850,7 @@ require([
 			$(".ce_folder_up").removeClass("ce_disabled");
 		}
 		$("<span></span><bdi></bdi>").appendTo($ce_file_path);
-		$ce_file_path.find("span, bdi").attr("title", inFolder).text(inFolder + '/');
-		filePathRTLCheck();
-		var files = false;
+		var files = 0;
 		var filter_re;
 		if (filter) {
 			filter_re = new RegExp(escapeRegExp(filter), 'gi'); 
@@ -1611,43 +1860,306 @@ require([
 			if (! filter || item.toLowerCase().indexOf(filter) > -1) {
 				var icon = (folderContents[i].dir) ? "folder" : "report";
 				var text = htmlEncode(item);
-				files = true;
 				if (filter) {
 					text = text.replace(filter_re, "<span class='ce_treehighlight'>$&</span>");
 				}
-				$("<div class='ce_leftnav ce_leftnav_editable ce_is_" + icon + "'>"+
+				$("<div class='ce_leftnav ce_leftnav_editable ce_is_" + icon + " " + (filter && !files ? "ce_leftnav_keyboard_selected" : "") + "'>"+
 					"<i class='icon-" + icon + "'></i> " +
 					"<div class='ce_leftnav_name'>" + text + "</div>"+
 					"<div class='ce_leftnav_size'>" + (folderContents[i].size > -1 && folderContents[i].hasOwnProperty("size") ? formatSize(folderContents[i].size) : "") + "</div>"+
 					"<div class='ce_leftnav_time'>" + (folderContents[i].time > -1 && folderContents[i].hasOwnProperty("time") ? formatDate(folderContents[i].time) : "") + "</div>"+
 				"</div>").attr("file", inFolder + "/" + item).appendTo($ce_file_wrap);
+				files++;
 			}
 		}
-		if (!files) {
+		if (files===0) {
 			if (filter) {
 				$("<div class='ce_treenothing'><i class='icon-warning'></i>Not found: <span class='ce_treenothing_text'>" + htmlEncode(filter) + "<span></div>").appendTo($ce_file_wrap);
 			} else {
 				$("<div class='ce_treeempty'><i class='icon-warning'></i>Folder empty</div>").appendTo($ce_file_wrap);
 			}
+		} else {
+			if (treeSearchFocus && $(".ce_leftnav_keyboard_selected").length == 0) {
+				$ce_file_wrap.children(".ce_leftnav").first().addClass("ce_leftnav_keyboard_selected");
+			}
+			
+		}
+		$ce_file_path.find("span, bdi").attr("title", inFolder).text(inFolder + '/' + (files > 1 ? '\xa0\xa0\xa0\xa0\xa0' + files : ""));
+		filePathRTLCheck();		
+	}
+
+	function leftPaneRestList(filter){
+		//leftPaneRemoveSpinner();
+		$ce_file_wrap.empty();
+		$ce_file_path.empty();
+		$ce_tree_icons.find('i').removeClass("ce_disabled");
+		var crumbs = "";
+		if (inFolderRestType === "") {
+			$(".ce_folder_up_rest").addClass("ce_disabled");
+			//leftPaneRestListGetTypes();
+		} else if (inFolderRestApp === "") {
+			$(".ce_folder_up_rest").addClass("ce_disabled");
+			crumbs = "."; //inFolderRestType;
+			leftPaneRestListGet("apps", filter);
+		} else {
+			crumbs =  "./" + inFolderRestApp; //inFolderRestType +
+			leftPaneRestListGet(inFolderRestType, filter);
+		}
+		$("<span></span><bdi></bdi>").appendTo($ce_file_path);
+		$ce_file_path.find("span, bdi").attr("title", crumbs).text(crumbs + '/');
+		filePathRTLCheck();
+		localStorage.setItem('ce_current_path_restapp', inFolderRestApp);
+	}
+
+	var restTypes = {
+		"views": {
+			endpoint: "/data/ui/views",
+			args: {
+				count:0, 
+				f: "label",
+				search: "(isDashboard=1 AND (rootNode=\"dashboard\" OR rootNode=\"form\" OR rootNode=\"view\" OR rootNode=\"html\") AND isVisible=1)"
+			}
+		}, 
+		"apps": {
+			endpoint: "/services/apps/local",
+		},
+
+	};
+
+	function leftPaneRestListGet(type, filter) {
+		var label;
+		var files = false;
+		var i;
+		var filter_re;
+		if (filter) {
+			filter_re = new RegExp(escapeRegExp(filter), 'gi'); 
+		}
+		
+		// if app's cache doesnt exist, do that
+		if (! restTypes.apps.hasOwnProperty("cache")) {
+			getRest(restTypes.apps.endpoint, {count:0, f:"label"}).then(function(restData) {
+				//console.log(restData);
+				restTypes.apps.cache = {};
+				for (var i = 0; i < restData.length; i++) {
+					restTypes.apps.cache[restData[i].name] = restData[i].content.label;
+				}
+				// try again
+				leftPaneRestListGet(type, filter);
+			}).catch(function(){
+				showModal({
+					title: "Warning",
+					body: "<div class='alert alert-warning'><i class='icon-alert'></i>Could not get rest data for apps</div>",
+					size: 300
+				});
+			});			
+			
+		
+		// if we dont have a cached copy of the data we need e.g. views, then get it now
+		} else if (! restTypes[inFolderRestType].hasOwnProperty("cache") ) {
+			getRest(restTypes[inFolderRestType].endpoint, restTypes[inFolderRestType].args).then(function(restData) {
+				//console.log(restData);
+				restTypes[inFolderRestType].cache = [];
+				for (var i = 0; i < restData.length; i++) {
+					var item = {
+						date: new Date(restData[i].updated).valueOf(),
+						link: restData[i].links.alternate,
+						app: restData[i].acl.app,
+						label: restData[i].content.hasOwnProperty("label") ? restData[i].content.label : "",
+						name: restData[i].name,
+					};
+					restTypes[inFolderRestType].cache.push(item);
+				}
+				// try again
+				leftPaneRestListGet(type, filter);
+			}).catch(function(){
+				showModal({
+					title: "Warning",
+					body: "<div class='alert alert-warning'><i class='icon-alert'></i>Could not get rest data for " + htmlEncode(inFolderRestType) + "</div>",
+					size: 300
+				});
+			});
+
+		// we have the apps list and the data list 
+		} else {
+			//console.log("using " + inFolderRestType + " cache",  restTypes[inFolderRestType].cache);
+			if (type === "apps") {
+				var appList = {};
+				var appListArray = [];
+				for (i = 0; i < restTypes[inFolderRestType].cache.length; i++) {
+					var app = restTypes[inFolderRestType].cache[i].app;
+					if (! appList.hasOwnProperty(app)) {
+						appList[app] = {
+							count:0, 
+							latest:0,
+							app: app,
+							label_orig: restTypes.apps.cache[app]
+						};
+						appListArray.push(appList[app]);
+						if (! restTypes.apps.cache[app] || displayModeRest==="n") {
+							appList[app].label = htmlEncode(app);
+						} else if (displayModeRest==="l") {
+							appList[app].label = htmlEncode(restTypes.apps.cache[app]);
+						} else if (displayModeRest==="ln") {
+							appList[app].label = htmlEncode(restTypes.apps.cache[app]) + " <span class='ce_opacity06'>(" + htmlEncode(app) + ")</span>";
+						} else { //nl
+							appList[app].label = htmlEncode(app) + " <span class='ce_opacity06'>(" + htmlEncode(restTypes.apps.cache[app]) + ")</span>";
+						}								
+					}
+					appList[app].count++;
+					if (appList[app].latest < restTypes[inFolderRestType].cache[i].date) {
+						appList[app].latest = restTypes[inFolderRestType].cache[i].date;
+					}
+				}
+
+				// sort apps
+				appListArray.sort(function(a, b) {
+					if (sortModeRest==="label"){
+						return sortAscRest==="1" ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label);
+					} else if ( sortModeRest==="time"){
+						return sortAscRest==="1" ? a.latest - b.latest : b.latest - a.latest;
+					}
+				});
+
+				for (i = 0; i < appListArray.length; i++) {
+						if (! filter || appListArray[i].app.toLowerCase().indexOf(filter) > -1 || appListArray[i].label_orig.toLowerCase().indexOf(filter) > -1) {
+
+							files = true;
+							if (filter) {
+								appListArray[i].label = appListArray[i].label.replace(filter_re, "<span class='ce_treehighlight'>$&</span>");
+							}							
+							$("<div class='ce_leftnav ce_leftnav_restapp'>"+
+								"<i class='icon-folder'></i> " +
+								"<div>" + appListArray[i].label + " <span style='font-size:11px;margin-left:5px;'>" + appListArray[i].count + "</span></div>"+
+							"</div>").attr("restapp", appListArray[i].app).appendTo($ce_file_wrap);
+						}
+					
+				} 
+			} else {
+
+				// sort views / etc
+				restTypes[type].cache.sort(function(a, b) {
+					if (sortModeRest==="label"){
+						if (displayModeRest==="l" || displayModeRest==="ln") {
+							return sortAscRest==="1" ? a.label.localeCompare(b.label) : b.label.localeCompare(a.label);
+						} else {
+							return sortAscRest==="1" ? a.name.localeCompare(b.name) : b.name.localeCompare(a.name);
+						}
+					} else if ( sortModeRest==="time"){
+						return sortAscRest==="1" ? a.date - b.date : b.date - a.date;
+					}
+				});
+
+				for (i = 0; i < restTypes[type].cache.length; i++) {
+					if (restTypes[type].cache[i].app === inFolderRestApp) {
+						if (! filter || restTypes[type].cache[i].name.toLowerCase().indexOf(filter) > -1 || restTypes[type].cache[i].label.toLowerCase().indexOf(filter) > -1) {
+							files = true;
+							if (! restTypes[type].cache[i].label || displayModeRest==="n") {
+								label = htmlEncode(restTypes[type].cache[i].name);
+							} else if (displayModeRest==="l") {
+								label = htmlEncode(restTypes[type].cache[i].label);
+							} else if (displayModeRest==="ln") {
+								label = htmlEncode(restTypes[type].cache[i].label) + " <span class='ce_opacity06'>(" + htmlEncode(restTypes[type].cache[i].name) + ")</span>";
+							} else { //nl
+								label = htmlEncode(restTypes[type].cache[i].name) + " <span class='ce_opacity06'>(" + htmlEncode(restTypes[type].cache[i].label) + ")</span>";
+							}
+							if (filter) {
+								label = label.replace(filter_re, "<span class='ce_treehighlight'>$&</span>");
+							}		
+							$("<div class='ce_leftnav ce_leftnav_restfile'>"+
+								"<i class='icon-report'></i> <div>" + label + "</div>"+
+							"</div>").attr("restfile", restTypes[type].cache[i].link).appendTo($ce_file_wrap);
+						}
+					}
+				}
+			}
+			if (!files) {
+				$("<div class='ce_treeempty'><i class='icon-warning'></i>Nothing found</div>").appendTo($ce_file_wrap);
+			} else {
+				if (treeSearchFocus && $(".ce_leftnav_keyboard_selected").length == 0) {
+					$ce_file_wrap.children(".ce_leftnav").first().addClass("ce_leftnav_keyboard_selected");
+				}
+			}
 		}
 	}
 
+	// Handle clicking a rest link in the left pane, to open it in the right pane
+	function readFileRest(path){
+		var label = preferences.ce_fullPathTab ? "<span style='opacity:0.6'>" + dodgyRemoveRelPath(dodgyDirname(path)) + "</span>" + dodgyBasename(path) : dodgyBasename(path);
+		var type = "rest";
+		if (! tabAlreadyOpen(type, path)) {
+			var ecfg = createTab(type, path, label);
+			getRest(path, null).then(function(restData) {
+				//console.log(restData); //?output_mode=json&count=0&f=title&f=label
+				if (restData.length === 0) {
+					showModal({
+						title: "Warning",
+						body: "<div class='alert alert-warning'><i class='icon-alert'></i>Nothing returned from REST API at:  " + htmlEncode(path) + "</div>",
+						size: 300
+					});
+					closeTabByCfg(ecfg);					
+				} else if (restData.length === 1) {
+					updateTabAsEditor(ecfg, restData[0].content['eai:data'], "xml");
+				} else {
+					showModal({
+						title: "Warning",
+						body: "<div class='alert alert-warning'><i class='icon-alert'></i>unexpectedly returned too many items from REST API at:  " + htmlEncode(path) + "</div>",
+						size: 300
+					});
+					closeTabByCfg(ecfg);	
+				}
+
+			}).catch(function(){
+				showModal({
+					title: "Warning",
+					body: "<div class='alert alert-warning'><i class='icon-alert'></i>Unexpected error getting data from Splunk REST api:  " + htmlEncode(path) + "</div>",
+					size: 300
+				});
+				closeTabByCfg(ecfg);
+			});
+		}
+	}
+
+
 	// The conf file list
-	function leftPaneConfList() {
+	function leftPaneConfList(filter) {
 		$ce_file_wrap.empty();
 		$ce_file_path.removeClass('ce_rtl').empty();
-		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_recent_files, .ce_app_run").addClass("ce_disabled");
+		var filter_re;
+		var files = false;
+		if (filter) {
+			filter_re = new RegExp(escapeRegExp(filter), 'gi'); 
+		}		
 		$("<span>Splunk conf files</span>").appendTo($ce_file_path);
 		for (var i = 0; i < confFilesSorted.length; i++) {
-			$("<div class='ce_leftnav ce_conf'></div>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-bulb'></i> ").appendTo($ce_file_wrap);
+			if (! filter) {
+				$("<div class='ce_leftnav ce_conf'></div>").text(confFilesSorted[i]).attr("file", confFilesSorted[i]).prepend("<i class='icon-bulb'></i> ").appendTo($ce_file_wrap);
+				files = true;
+
+			} else if (confFilesSorted[i].toLowerCase().indexOf(filter) > -1) {
+				var text = htmlEncode(confFilesSorted[i]);
+				text = text.replace(filter_re, "<span class='ce_treehighlight'>$&</span>");
+				$("<div class='ce_leftnav ce_conf'></div>").html(text).attr("file", confFilesSorted[i]).prepend("<i class='icon-bulb'></i> ").appendTo($ce_file_wrap);
+				files = true;
+			} 			
 		}
+		if (!files){
+			$("<div class='ce_treenothing'><i class='icon-warning'></i>Not found: <span class='ce_treenothing_text'>" + htmlEncode(filter) + "<span></div>").appendTo($ce_file_wrap);
+		} else {
+			if (treeSearchFocus && $(".ce_leftnav_keyboard_selected").length == 0) {
+				$ce_file_wrap.children(".ce_leftnav").first().addClass("ce_leftnav_keyboard_selected");
+			}
+		}	
 	}
 
 	// Click handler for Recent Files button in top right
-	function leftPaneRecentList() {
+	// TODO [low] can we enhance this so it shows files by how often you use them?
+	function leftPaneRecentList(filter) {
 		$ce_file_wrap.empty();
 		$ce_file_path.removeClass('ce_rtl').empty();
-		$(".ce_folder_up, .ce_refresh_tree, .ce_add_folder, .ce_add_file, .ce_filter, .ce_show_confs, .ce_app_run").addClass("ce_disabled");
+		var filter_re;
+		if (filter) {
+			filter_re = new RegExp(escapeRegExp(filter), 'gi'); 
+		}		
 		$("<span>Recent files</span>").appendTo($ce_file_path);
 		var counter = 0;
 		var openlabels = [];
@@ -1660,16 +2172,31 @@ require([
 			}
 			// hide item if they are actually open at the moment
 			if (openlabels.indexOf(closed_tabs[i].label) === -1) {
-				counter++;
-				var icon = "report";
-				if (closed_tabs[i].type !== "read") {
-					icon = "bulb";
+				var text = closed_tabs[i].label.replace(/^read:\s/,"");
+				if (! filter || text.toLowerCase().indexOf(filter) > -1) {
+					text = htmlEncode(text);
+					if (filter) {
+						text = text.replace(filter_re, "<span class='ce_treehighlight'>$&</span>");
+					}					
+					var icon = "report";
+					if (closed_tabs[i].type !== "read") {
+						icon = "bulb";
+					}
+					counter++;
+					$("<div class='ce_leftnav ce_leftnav_reopen'><i class='icon-" + icon + "'></i> " + text + "</div>").attr("file", closed_tabs[i].file).attr("title", closed_tabs[i].file).attr("type", closed_tabs[i].type).appendTo($ce_file_wrap);
 				}
-				$("<div class='ce_leftnav ce_leftnav_reopen'><i class='icon-" + icon + "'></i> " + htmlEncode(closed_tabs[i].label).replace(/^read:\s/,"") + "</div>").attr("file", closed_tabs[i].file).attr("title", closed_tabs[i].file).attr("type", closed_tabs[i].type).appendTo($ce_file_wrap);
 			}
 		}
 		if (counter === 0) {
-			$("<div class='ce_treeempty'><i class='icon-warning'></i>Nothing here</div>").appendTo($ce_file_wrap);
+			if (filter) {
+				$("<div class='ce_treenothing'><i class='icon-warning'></i>Not found: <span class='ce_treenothing_text'>" + htmlEncode(filter) + "<span></div>").appendTo($ce_file_wrap);
+			} else {
+				$("<div class='ce_treeempty'><i class='icon-warning'></i>Nothing here</div>").appendTo($ce_file_wrap);
+			}				
+		} else {
+			if (treeSearchFocus && $(".ce_leftnav_keyboard_selected").length == 0) {
+				$ce_file_wrap.children(".ce_leftnav").first().addClass("ce_leftnav_keyboard_selected");
+			}
 		}
 	}
 
@@ -1699,58 +2226,48 @@ require([
 		}
 	}
 
-	// Create new file or folder with a prompt window
-	function fileSystemCreateNew(parentPath, type){
-		if (type){
-			type = "file";
-		} else {
-			type = "folder";
-		}
+
+	function fileSystemUpload(parentPath){
 		showModal({
-			title: "New " + type,
-			size: 300,
-			body: "<div>Enter new " + type + " name:<br><br><input type='text' value='' class='ce_prompt_input input input-text' style='width: 100%; background-color: #3d424d; color: #cccccc;'/></div>",
+			title: "Create file, create folder or upload a file",
+			size: 580,
+			body: "<div>"+
+			"<div style='margin-top: 30px; margin-bottom: 40px;border-bottom: 1px solid #eaeaea; padding-bottom: 40px;'><span style='display:inline-block;width:124px;'>New file name:</span><input type='text' value='' class='ce_prompt_input_file input input-text' style='background-color: #3d424d; color: #cccccc; transform: translateY(5px);margin-right:10px;width: 302px;'/><button type='button' class='btn btn-primary ce_prompt_btn_file'>Create</button></div>"+
+
+			"<div style='margin-top: 40px; margin-bottom: 40px; border-bottom: 1px solid #eaeaea;padding-bottom: 40px;'><span style='display:inline-block;width:124px;'>New folder name:</span><input type='text' value='' class='ce_prompt_input_folder input input-text' style='background-color: #3d424d; color: #cccccc; transform: translateY(5px);margin-right:10px;width: 302px;'/><button type='button' class='btn btn-primary ce_prompt_btn_folder'>Create</button></div>"+
+
+			"<div style='margin-bottom:50px;'>Select upload file: <input type='file' class='ce_file_upload_input' style='width: 245px;'/> <label style='display:inline; margin-right:10px; '><input type='checkbox' class='ce_file_upload_extract' />Extract</label><button type='button' class='btn btn-primary ce_prompt_btn_upload'>Upload</button></div>"+
+				"</div>",
 			onShow: function(){ 
-				$('.ce_prompt_input').focus().on('keydown', function(e) {
-					if (e.which === 13) {
-						$('.modal').find('button:first-child').click();
-					}
-				}); 
-			},
-			actions: [{
-				onClick: function(){
+				$('.ce_prompt_btn_file').on("click", function(){
 					$('.modal').one('hidden.bs.modal', function() {
-						var fname = $('.ce_prompt_input').val();
+						var fname = $('.ce_prompt_input_file').val();
 						if (fname) {
 							showTreePaneSpinner();
-							serverAction({action: 'new' + type, path: parentPath, param1: fname}).then(function(){
+							serverAction({action: 'newfile', path: parentPath, param1: fname}).then(function(){
 								refreshFolder();
 								showToast('Success');
 							}).catch(function(){
 								refreshFolder();
 							});
 						}
-					}).modal('hide');
-				},
-				cssClass: 'btn-primary',
-				label: "Create"
-			},{
-				onClick: function(){ $(".modal").modal('hide'); },
-				label: "Cancel"
-			}]
-		});
-	}
-	
-	function fileSystemUpload(parentPath){
-		showModal({
-			title: "File upload",
-			size: 300,
-			body: "<div>Select file:<br><br>"+
-					"<input type='file' style='width: 100%;' class='ce_file_upload_input'/><br><br><br>"+
-					"<label><input type='checkbox' class='ce_file_upload_extract' />Extract file after upload</label><br><br>"+
-					"</div>",
-			actions: [{
-				onClick: function(){
+					}).modal('hide');					
+				});
+				$('.ce_prompt_btn_folder').on("click", function(){
+					$('.modal').one('hidden.bs.modal', function() {
+						var fname = $('.ce_prompt_input_folder').val();
+						if (fname) {
+							showTreePaneSpinner();
+							serverAction({action: 'newfolder', path: parentPath, param1: fname}).then(function(){
+								refreshFolder();
+								showToast('Success');
+							}).catch(function(){
+								refreshFolder();
+							});
+						}
+					}).modal('hide');					
+				});			
+				$('.ce_prompt_btn_upload').on("click", function(){
 					$('.modal').one('hidden.bs.modal', function() {
 						var file = $('.ce_file_upload_input')[0].files[0];
 						var reader = new FileReader();
@@ -1776,16 +2293,12 @@ require([
 								}
 								refreshFolder();
 							});
-						}
+						};
 						reader.readAsDataURL(file);
 					}).modal('hide');
-				},
-				cssClass: 'btn-primary',
-				label: "Upload"
-			},{
-				onClick: function(){ $(".modal").modal('hide'); },
-				label: "Cancel"
-			}]
+				});			
+			},					
+			actions: []
 		});
 	}
 
@@ -1907,7 +2420,7 @@ require([
 	}
 
 	function activateTab(idx){
-		if (idx < -1 || idx > (editors.length - 1)) {
+		if (idx < -1 || idx > (editors.length - 1) || activeTab === idx) {
 			return;
 		}
 		$ce_contents.children().addClass("ce_hidden");
@@ -1928,6 +2441,9 @@ require([
 		if (editors[idx] && editors[idx].hasOwnProperty("editor")) {
 			editors[idx].editor.focus();
 		}
+		// switching tabs. check for changes
+		clearTimeout(fileModsCheckTimer);
+		fileModsCheckTimer = setTimeout(function(){ checkFileMods(); }, 1000);
 	}
 
 	// The pipe seperators are between active tabs but not on the currently active tab or the one to its left.
@@ -1985,9 +2501,9 @@ require([
 	function closeTabByHookDetails(arg0, arg1) {
 		//if (preferences.ce_reuseWindow) {
 			if (arg0 === "bump") {
-				closeTabByName("refresh", "bump")
+				closeTabByName("refresh", "bump");
 			} else if (arg0 === "run-safe") {
-				closeTabByName("run", arg1)
+				closeTabByName("run", arg1);
 			} else {
 				closeTabByName(arg0, arg1);
 			}
@@ -2091,8 +2607,8 @@ require([
 	function createTabSidecar(label) {
 		var ecfg = editors[activeTab];
 		if (! ecfg.sidecar_container) {
-			ecfg.sidecar_container = $("<div class='ce_editor_sidecar'></div>").appendTo(ecfg.tab_container);
-			$("<i class='icon-close ce_clickable_icon ce_right_icon'></i>").appendTo(ecfg.sidecar_container)
+			ecfg.sidecar_container = $("<div class='ce_editor_sidecar ce_editor_sidecar_autohide_on'></div>").appendTo(ecfg.tab_container);
+			$("<i class='icon-close ce_clickable_icon ce_right_icon' title='Close'></i>").appendTo(ecfg.sidecar_container)
 				.on("click", function(){
 					if (ecfg.hasOwnProperty("sidecar_editor")) {
 						ecfg.sidecar_editor.dispose();
@@ -2103,24 +2619,60 @@ require([
 					ecfg.sidecar_container.remove();
 					ecfg.sidecar_container = null;
 				});
+			$("<i class='icon-location ce_clickable_icon ce_right_icon ce_right_two ce_editor_sidecar_pin_button' title='Pin window'></i>").appendTo(ecfg.sidecar_container)
+				.on("click", function(){
+					if(ecfg.sidecar_container.hasClass("ce_editor_sidecar_autohide_on")) {
+						ecfg.sidecar_container.removeClass("ce_editor_sidecar_autohide_on");
+					} else {
+						ecfg.sidecar_container.addClass("ce_editor_sidecar_autohide_on");
+					} 
+					
+				});				
 			ecfg.sidecar_title = $("<div class='ce_editor_sidecar_title'></div>").appendTo(ecfg.sidecar_container).on("click", function(){
-				console.log("ecfg.sidecar_container.css.transform=", ecfg.sidecar_container.css("transform"));
+				//console.log("ecfg.sidecar_container.css.transform=", ecfg.sidecar_container.css("transform"));
 				// if the sidecar is collapsed
-				if (ecfg.sidecar_container.css("transform") === "matrix(1, 0, 0, 1, 0, 467)") {
-					ecfg.sidecar_container.css({transform: "translateY(0)"});
+				//if (ecfg.sidecar_container.css("transform") === "matrix(1, 0, 0, 1, 0, 467)") {
+					
 					// if sidecar is expanded
-				} else if (ecfg.sidecar_container.css("transform") === "matrix(1, 0, 0, 1, 0, 0)"){
-					ecfg.sidecar_container.css({transform: ""});
+				//} else 
+				if (ecfg.sidecar_container.css("transform") === "" || ecfg.sidecar_container.css("transform") === "none" || ecfg.sidecar_container.css("transform") === "matrix(1, 0, 0, 1, 0, 0)"){
+					ecfg.sidecar_container.css({transform: "translateY(" + (ecfg.sidecar_container.height() - 35) + "px)"});
+				} else {
+					ecfg.sidecar_container.css({transform: "translateY(0)"});
 				}
 			});
+			ecfg.sidecar_resizer = $("<div class='ce_editor_sidecar_resizer'></div>").appendTo(ecfg.sidecar_container);
 			ecfg.sidecar_autohide = $("<div class='ce_editor_sidecar_autohide'></div>").appendTo(ecfg.sidecar_container);
 			ecfg.sidecar_editor_container = $("<div class='ce_editor_sidecar_editor'></div>").appendTo(ecfg.sidecar_container);
+
+			// // Handler for resizing the tree pane/editor divider
+			ecfg.sidecar_resizer.on("mousedown", function(e) {
+				e.preventDefault();
+				var was_autohide_on = !! ecfg.sidecar_container.hasClass("ce_editor_sidecar_autohide_on");
+				ecfg.sidecar_container.removeClass("ce_editor_sidecar_autohide_on");
+				$(document).one("mouseup",function(e) {
+					if (was_autohide_on) {
+						ecfg.sidecar_container.addClass("ce_editor_sidecar_autohide_on");
+					}
+					$(document).off('mousemove.sidecar_resize');
+				});					
+				$(document).on("mousemove.sidecar_resize", function(e) {
+					ecfg.sidecar_container.css({
+						"transform": "translateY(0)",
+						"width": Math.min($ce_contents.width()-158, Math.max(360, (window.innerWidth - 150 - e.pageX))) + "px",
+						"height": Math.min($ce_contents.height(), Math.max(190, (window.innerHeight - e.pageY))) + "px"
+					});
+				});
+			});
+
 		}
 		ecfg.sidecar_title.html(label);
 		ecfg.sidecar_editor_container.empty().append($ce_spinner.clone());
-		setTimeout(function(){
-			ecfg.sidecar_container.css({transform: "translateY(350px)", opacity: "1"});
-		}, 100);
+			setTimeout(function(){
+				if (ecfg.sidecar_container.hasClass("ce_editor_sidecar_autohide_on")) {	
+					ecfg.sidecar_container.css({transform: "translateY(0)", opacity: "1"});
+				}
+			}, 100);
 		ecfg.sidecar_autohide.css({"border-left-width":"1px"}); 
 		return ecfg;
 	}
@@ -2148,13 +2700,17 @@ require([
 		ecfg.sidecar_editor = monaco.editor.create(ecfg.sidecar_editor_container[0], options);
 		//ecfg.server_content = ecfg.editor.getValue();
 		var autohideTimeout = setTimeout(function(){
-			ecfg.sidecar_container.css({transform: ""});
+			if (ecfg.sidecar_container.hasClass("ce_editor_sidecar_autohide_on")) {	
+				ecfg.sidecar_container.css({transform: "translateY(" + (ecfg.sidecar_container.height() - 35) + "px)"});
+			}
 			ecfg.sidecar_autohide.css({"border-left-color":"transparent", "border-left-width":"1px"});
 		},5000);
 		setTimeout(function(){ 
-			ecfg.sidecar_autohide.css({"border-left-width":"597px", "border-left-color":"rgba(255,255,255,0.5)"}); 
+			ecfg.sidecar_autohide.css({"border-left-width":(ecfg.sidecar_container.width() - 4) + "px", "border-left-color":"rgba(255,255,255,0.5)"}); 
 		}, 10); 
-		ecfg.sidecar_container.css({transform: "translateY(0)"});
+		if (ecfg.sidecar_container.hasClass("ce_editor_sidecar_autohide_on")) {	
+			ecfg.sidecar_container.css({transform: "translateY(0)"});
+		}
 		ecfg.sidecar_editor.onMouseDown(function(e) {
 			clearTimeout(autohideTimeout);
 			ecfg.sidecar_autohide.css({"border-left-color":"transparent", "border-left-width":"1px"});
@@ -2185,7 +2741,7 @@ require([
 	function addHookActionToEditor(hook, ecfg) {
 		if (hook._match.test(ecfg.file) && hook.matchtype == "file" && ! (hook.hasOwnProperty("showInPane") && hook.showInPane === "tree")) {
 			var lab = replaceTokens(hook.label, ecfg.file);
-			if (isTrueValue(hook.showWithSave) && ecfg.canBeSaved) {
+			if (isTrueValue(hook.showWithSave) && ecfg.canBeSavedFile) {
 				ecfg.editor.addAction({
 					id: "Save and " + lab,
 					contextMenuOrder: 0.2,
@@ -2220,11 +2776,12 @@ require([
 		}
 		var re = /([^\/\\]+).conf$/;
 		var found = ecfg.file.match(re);
-		ecfg.canBeSaved = (ecfg.type === "read" || ecfg.type === "settings");
-		if (found && ecfg.canBeSaved && found[1] !== 'app') {
+		ecfg.canBeSavedFile = (ecfg.type === "read" || ecfg.type === "settings");
+		ecfg.canBeSavedRest = (ecfg.type === "rest");
+		if (found && ecfg.canBeSavedFile && found[1] !== 'app') {
 			ecfg.matchedConf = found[1];
 		}
-		if (ecfg.canBeSaved) {
+		if (ecfg.canBeSavedFile || ecfg.canBeSavedRest) {
 			// Start the process of checking filemodtimes
 			// A filemodcheck might be about to occur, but delay it another 100ms in case its the first load a bunch of tabs are opening at once.
 			clearTimeout(fileModsCheckTimer);
@@ -2245,7 +2802,7 @@ require([
 			model: ecfg.model,
 			lineNumbersMinChars: 3,
 			ariaLabel: ecfg.file,
-			//readOnly: ! ecfg.canBeSaved,
+			//readOnly: ! ecfg.canBeSavedFile,
 			glyphMargin: true,
 			hover: { delay: 700 }
 		});
@@ -2264,7 +2821,7 @@ require([
 			doLineHighlight = "";
 		}
 
-		if (ecfg.canBeSaved) {
+		if (ecfg.canBeSavedFile || ecfg.canBeSavedRest) {
 			ecfg.editor.onDidChangeModelContent(function() {
 				// check against saved copy
 				if (ecfg.editor.getValue() !== ecfg.server_content) {
@@ -2334,7 +2891,7 @@ require([
 				return null;
 			}
 		});
-		if (ecfg.canBeSaved) {
+		if (ecfg.canBeSavedFile || ecfg.canBeSavedRest) {
 			ecfg.editor.addAction({
 				id: 'save-file',
 				contextMenuOrder: 0.1,
@@ -2344,6 +2901,8 @@ require([
 					saveActiveTab();
 				}
 			});
+		}
+		if (ecfg.canBeSavedFile) {
 			ecfg.editor.addAction({
 				id: 'save-file-action',
 				contextMenuOrder: 1,
@@ -2353,6 +2912,8 @@ require([
 					setPostSaveAction();
 				}
 			});
+		}
+		if (ecfg.canBeSavedFile) {
 			ecfg.editor.addAction({
 				id: 'link-to-highlight',
 				contextMenuOrder: 3,
@@ -2366,72 +2927,74 @@ require([
 				}
 			});
 		}
-		ecfg.editor.addAction({
-			id: 'attempt-open-file',
-			contextMenuOrder: 0.4,
-			contextMenuGroupId: 'navigation',
-			label: 'Attempt open',
-			run: function(ed) {
-				var position = ed.getPosition();
-				var text = ed.getValue(position);
-				var splitedText=text.split("\n");
-				var line = splitedText[position.lineNumber-1];
-				var replace = "(.{" + position.column + "}[^\\s\'\"]+).*";
-				var re = new RegExp(replace,"g");
-				var filename_string = line.replace(re, "$1");
-				filename_string = filename_string.replace(/.*[\s\"\']/,"")
-				if (filename_string.length <= 3) {
-					showModal({
-						title: "Warning",
-						body: "<div class='alert alert-warning'><i class='icon-alert'></i> Use the 'Attempt Open' menu option on editor text for a file/folder path</div>",
-						size: 350
-					});
-					return;
-				}
-				var proposedPaths = {};
-				// we check a few different ways of finding a legitimate path from the highlighted text
-				proposedPaths[dodgyRemoveRelPath(filename_string)] = 2;
-				// when looking in etc/ it needs to be 3 folders deep
-				proposedPaths["etc/" + dodgyRemoveRelPath(filename_string)] = 3;
-				// if its a "run" editor tab, then the fromFolder will be set.
-				if (ecfg.hasOwnProperty("fromFolder")) {
-					proposedPaths[dodgyRemoveRelPath(ecfg.fromFolder + "/" + filename_string)] = 2;
-				} else {
-					proposedPaths[dodgyRemoveRelPath(dodgyDirname(ecfg.file) + filename_string)] = 2;
-				}
-				var success = false;
-				var errorFunction = function(){
-					showModal({
-						title: "Warning",
-						body: "<div class='alert alert-warning'><i class='icon-alert'></i> Unable to find file or folder path to open: <code>" + htmlEncode(filename_string) + "</code><br /><br />(Looked in $SPLUNK_HOME, $SPLUNK_HOME/etc and relative to current file)</div>",
-						size: 450
-					});
-				};
-				for (var proposedPath in proposedPaths) {
-					if (proposedPaths.hasOwnProperty(proposedPath)) {
-						//console.log("attempting path ==> " + proposedPath);
-						if (filecache !== null) {
-							// we only check if the first 2 parts of the path are legit. If the path is less than two folders deep, then it wont open
-							var base = getTreeCache("./" + proposedPath, 1 + proposedPaths[proposedPath]);
-							//console.log("checking file cache for path ", "./" + proposedPath, ":", filecache, base);
-							if (base !== null) {
-								// this doesnt handle the case where its a bare folder with no trailing slash, but its good enough
-								if (proposedPath.slice(-1) === "/") { 
-									readFolder("./" + proposedPath);
-								} else {
-									readFile("./" + proposedPath, errorFunction);
+		if (ecfg.type !== "rest") {
+			ecfg.editor.addAction({
+				id: 'attempt-open-file',
+				contextMenuOrder: 0.4,
+				contextMenuGroupId: 'navigation',
+				label: 'Attempt open',
+				run: function(ed) {
+					var position = ed.getPosition();
+					var text = ed.getValue(position);
+					var splitedText=text.split("\n");
+					var line = splitedText[position.lineNumber-1];
+					var replace = "(.{" + position.column + "}[^\\s\'\"]+).*";
+					var re = new RegExp(replace,"g");
+					var filename_string = line.replace(re, "$1");
+					filename_string = filename_string.replace(/.*[\s\"\']/,"");
+					if (filename_string.length <= 3) {
+						showModal({
+							title: "Warning",
+							body: "<div class='alert alert-warning'><i class='icon-alert'></i> Use the 'Attempt Open' menu option on editor text for a file/folder path</div>",
+							size: 350
+						});
+						return;
+					}
+					var proposedPaths = {};
+					// we check a few different ways of finding a legitimate path from the highlighted text
+					proposedPaths[dodgyRemoveRelPath(filename_string)] = 2;
+					// when looking in etc/ it needs to be 3 folders deep
+					proposedPaths["etc/" + dodgyRemoveRelPath(filename_string)] = 3;
+					// if its a "run" editor tab, then the fromFolder will be set.
+					if (ecfg.hasOwnProperty("fromFolder")) {
+						proposedPaths[dodgyRemoveRelPath(ecfg.fromFolder + "/" + filename_string)] = 2;
+					} else {
+						proposedPaths[dodgyRemoveRelPath(dodgyDirname(ecfg.file) + filename_string)] = 2;
+					}
+					var success = false;
+					var errorFunction = function(){
+						showModal({
+							title: "Warning",
+							body: "<div class='alert alert-warning'><i class='icon-alert'></i> Unable to find file or folder path to open: <code>" + htmlEncode(filename_string) + "</code><br /><br />(Looked in $SPLUNK_HOME, $SPLUNK_HOME/etc and relative to current file)</div>",
+							size: 450
+						});
+					};
+					for (var proposedPath in proposedPaths) {
+						if (proposedPaths.hasOwnProperty(proposedPath)) {
+							//console.log("attempting path ==> " + proposedPath);
+							if (filecache !== null) {
+								// we only check if the first 2 parts of the path are legit. If the path is less than two folders deep, then it wont open
+								var base = getTreeCache("./" + proposedPath, 1 + proposedPaths[proposedPath]);
+								//console.log("checking file cache for path ", "./" + proposedPath, ":", filecache, base);
+								if (base !== null) {
+									// this doesnt handle the case where its a bare folder with no trailing slash, but its good enough
+									if (proposedPath.slice(-1) === "/") { 
+										readFolder("./" + proposedPath);
+									} else {
+										readFile("./" + proposedPath, errorFunction);
+									}
+									success = true;
+									break;
 								}
-								success = true;
-								break;
 							}
 						}
 					}
+					if (!success) {
+						errorFunction();
+					}
 				}
-				if (!success) {
-					errorFunction();
-				}
-			}
-		});
+			});
+		}
 		ecfg.editor.addAction({
 			id: 'open-prefs-action',
 			contextMenuOrder: 2,
@@ -2441,9 +3004,11 @@ require([
 				openPreferences();
 			}
 		});
-		for (var j = 0; j < hooksActive.length; j++) {
-			var hook = hooksActive[j];
-			addHookActionToEditor(hook, ecfg);
+		if (ecfg.type === "read") {
+			for (var j = 0; j < hooksActive.length; j++) {
+				var hook = hooksActive[j];
+				addHookActionToEditor(hook, ecfg);
+			}
 		}
 		if (ecfg.type === "read") {
 			ecfg.editor.addAction({
@@ -2456,6 +3021,71 @@ require([
 					hooksCfg[ecfg.type](ecfg.file, ecfg.fromFolder);
 				}
 			});
+			ecfg.editor.addAction({
+				id: 'editorchanges',
+				contextMenuOrder: 0.3,
+				contextMenuGroupId: 'navigation',
+				label: 'Diff unsaved changes',
+				run: function() {
+					openDiffOfUnsavedChanges(ecfg);
+				}
+			});	
+
+			// If this is an XML file, provide an option to try opening it 
+			// warning: There are plenty of situations where this wont work, becuase of permissions layering etc
+			if (confIsTrue('dashboard_xml_file_experimental_actions', false)) {
+				var file_parts_for_openurl = ecfg.file.match(regex_file_path_to_dashboard_parts);
+				if (file_parts_for_openurl) {
+					ecfg.editor.addAction({
+						id: 'opendashboard',
+						contextMenuOrder: 0.31,
+						contextMenuGroupId: 'navigation',
+						label: 'Attempt view in browser',
+						run: function() {
+							hooksCfg.openurl("/app/" + file_parts_for_openurl[2] + "/" + file_parts_for_openurl[3]);
+						}
+					});	
+					ecfg.editor.addAction({
+						id: 'editrestdashboard',
+						contextMenuOrder: 0.32,
+						contextMenuGroupId: 'navigation',
+						label: 'Attempt edit via REST API',
+						run: function() {
+							if (file_parts_for_openurl[1]=="apps") {
+								hooksCfg.rest("/servicesNS/nobody/" + file_parts_for_openurl[2] + "/data/ui/views/" + file_parts_for_openurl[3]);	
+							} else {
+								hooksCfg.rest("/servicesNS/" + file_parts_for_openurl[1].substr(6) + "/" + file_parts_for_openurl[2] + "/data/ui/views/" + file_parts_for_openurl[3]);	
+							}
+						}
+					});					
+				}
+			}
+		
+		}
+		if (ecfg.type === "rest") {
+			// reload rest 
+			ecfg.editor.addAction({
+				id: 'reload',
+				contextMenuOrder: 0.2,
+				contextMenuGroupId: 'navigation',
+				label: 'Reload from REST API',
+				run: function() {
+					closeTabByCfg(ecfg);
+					hooksCfg.rest(ecfg.file);
+				}
+			});
+			var file_parts_for_openurl_rest = ecfg.file.match(/([^\/]+)\/data\/ui\/views\/(.*)$/);
+			if (file_parts_for_openurl_rest) {		
+				ecfg.editor.addAction({
+					id: 'opendashboard',
+					contextMenuOrder: 0.31,
+					contextMenuGroupId: 'navigation',
+					label: 'Attempt view in browser',
+					run: function() {
+						hooksCfg.openurl("/app/" + file_parts_for_openurl_rest[1] + "/" + file_parts_for_openurl_rest[2]);
+					}
+				});	
+			}
 		}
 		// Add a right-click option 
 		if (tabCfg[ecfg.type].can_rerun) {
@@ -2473,15 +3103,54 @@ require([
 		openTabsListChanged();
 		ecfg.tab.trigger("ce_loaded");
 	}
+
+	function openDiffOfUnsavedChanges(ecfg) {
+		var ecfgDiff = createTab('diff', ecfg.file, "<span class='ce-dim'>diff:</span> " + ecfg.file);
+		var saved_value = ecfg.editor.getValue();
+		serverActionWithoutFlicker({action: 'read', path: ecfg.file}).then(function(contents){
+			updateTabAsDiffer(ecfgDiff, ecfg.file + " (on disk)\n" + contents, "(Unsaved changes)\n" + saved_value);
+		}).catch(function(){ 
+			closeTabByCfg(ecfgDiff);
+		});			
+	}
 	
 	function saveActiveTab(cb){
+		var saved_value;
 		if (activeTab === null || activeTab === -1) {
 			return;
 		}
 		var ecfg = editors[activeTab];
-		if (ecfg.canBeSaved) {
+		if (ecfg.canBeSavedFile) {
 			if (! ecfg.saving) {
-				var saved_value = ecfg.editor.getValue();
+				/// Warn again if file has changed
+				var $warn_msg = ecfg.tab.find(".ce_modified_on_disk");
+				if ($warn_msg.length > 0 && ! ecfg.modified_on_disk_ignored) {
+					showModal({
+						title: "Warning",
+						body: "<div class='alert alert-warning'><i class='icon-alert'></i>" + $warn_msg.attr("title").replace(/\..*/,"") + "<br></div>",
+						size: 600,
+						actions: [{
+							label: "Save anyway",
+							onClick: function(){
+								$(".modal").modal('hide');
+								// set a flag and resave
+								ecfg.modified_on_disk_ignored = true;
+								saveActiveTab(cb);
+							}
+						},{
+							label: "Cancel and diff",
+							onClick: function(){ 
+								$(".modal").modal('hide'); 
+								openDiffOfUnsavedChanges(ecfg);						
+							}
+						},{
+							label: "Cancel",
+							onClick: function(){ $(".modal").modal('hide'); }
+						}]
+					});					
+					return;
+				}
+				saved_value = ecfg.editor.getValue();
 				ecfg.saving = true;
 				ecfg.tab.append("<i class='ce_right_icon ce_right_two ce_tab_saving_icon icon-two-arrows-cycle' title='Saving...'></i>");
 				serverAction({action: 'save', path: ecfg.file, file: saved_value}).then(function(){
@@ -2489,10 +3158,12 @@ require([
 					delete ecfg.filemod;
 					// remove unsaved changes icon from tab
 					ecfg.tab.find('.ce_modified_on_disk').remove();
+					ecfg.tab.css("color","");
 					clearTimeout(fileModsCheckTimer);
 					fileModsCheckTimer = setTimeout(function(){ checkFileMods(); }, 100);
 					
 					ecfg.saving = false;
+					ecfg.modified_on_disk_ignored = false;
 					ecfg.tab.find('.ce_tab_saving_icon').remove();
 					showToast('Saved');
 					ecfg.server_content = saved_value;
@@ -2536,6 +3207,57 @@ require([
 				});
 			}
 			return null;
+		} else if (ecfg.canBeSavedRest) {
+			if (! ecfg.saving) {
+				saved_value = ecfg.editor.getValue();
+				ecfg.saving = true;
+				ecfg.tab.append("<i class='ce_right_icon ce_right_two ce_tab_saving_icon icon-two-arrows-cycle' title='Saving...'></i>");
+
+				service.post(ecfg.file, {"eai:data": saved_value}, function(err, r) {
+					if (err) {
+						showModal({
+							title: "Warning",
+							body: "<div class='alert alert-warning'><i class='icon-alert'></i>Error while saving: <pre>" + htmlEncode(err) + "</pre></div>", // err.data.messages["0"].text
+							size: 500
+						});							
+						console.log(err);
+				 		ecfg.saving = false;
+				 		ecfg.tab.find('.ce_tab_saving_icon').remove();						
+					}
+					if (r && r.data) {
+						//console.log("ok saving to rest", r.data);
+						ecfg.tab.find('.ce_modified_on_disk').remove();
+						ecfg.tab.css("color","");
+						clearTimeout(fileModsCheckTimer);
+						fileModsCheckTimer = setTimeout(function(){ checkFileMods(); }, 100);
+							
+						ecfg.saving = false;
+						ecfg.tab.find('.ce_tab_saving_icon').remove();
+						showToast('Saved');
+						ecfg.server_content = saved_value;
+						ecfg.tab.find('.icon-alert-circle').remove();
+						ecfg.hasChanges = false;	
+
+						// send broadcast message:
+						broadcastChannel.postMessage({
+							action:"saved",
+							type: ecfg.type,
+							path: ecfg.file
+						});
+					
+					} else {
+						console.error("unexpected error when saving", r.data);
+				 		ecfg.saving = false;
+				 		ecfg.tab.find('.ce_tab_saving_icon').remove();
+						showModal({
+							title: "Warning",
+							body: "<div class='alert alert-warning'><i class='icon-alert'></i>Unpexpected error while saving!</div>", // err.data.messages["0"].text
+							size: 500
+						});						 
+					}
+				});
+			}
+			return null;
 		} else {
 			showModal({
 				title: "Warning",
@@ -2546,43 +3268,8 @@ require([
 	}
 
 	function runPostSaveAction(parts) {
-		//var ptab = activeTab;
 		closeTabByHookDetails(parts[0], parts[1]);
 		hooksCfg[parts[0]](parts[1], undefined, true);
-		//var ntab = activeTab;
-		// quickly swap back to prev tab
-		//if (parts[2] === "yes") {
-		//	activateTab(ptab);
-		//}
-		// if (parts[3] || parts[4]) {
-		// 	// Check the contents of the tab
-		// 	editors[ntab].tab.on("ce_loaded", function(){
-		// 		// Get the contents, update the tab
-		// 		var contents = editors[ntab].editor.getValue();
-		// 		var status = "";
-		// 		// Good match
-		// 		if (parts[3]){
-		// 			if (contents.indexOf(parts[3]) > -1) {
-		// 				status = "good";
-		// 			} else {
-		// 				status = "bad";
-		// 			}
-		// 		}
-		// 		// Bad match
-		// 		if (parts[4]){
-		// 			if (contents.indexOf(parts[4]) > -1) {
-		// 				status = "bad";
-		// 			} else if (status !== "bad") {
-		// 				status = "good";
-		// 			}
-		// 		}
-		// 		if (status === "good"){
-		// 			editors[ntab].tab.append("<i class='ce_right_icon ce_clickable_icon icon-check' style='color:green'></i>");
-		// 		} else if (status === "bad") {
-		// 			editors[ntab].tab.append("<i class='ce_right_icon ce_clickable_icon icon-x-circle' style='color:red'></i>");
-		// 		}
-		// 	});
-		// }
 	}
 
 	function updateTabHTML(ecfg, contents) {
@@ -2602,6 +3289,20 @@ require([
 			modified: modifiedModel
 		});
 		ecfg.tab.trigger("ce_loaded");
+
+		if (ecfg.hasOwnProperty("diffFileRight")) {
+
+			ecfg.editor.addAction({
+				id: 'updatediffer',
+				contextMenuOrder: 0.3,
+				contextMenuGroupId: 'navigation',
+				label: 'Rerun diff',
+				run: function() {
+					compareFiles(ecfg.diffFileRight, ecfg.diffFileLeft);
+					closeTabByCfg(ecfg);
+				}
+			});				
+		}
 	}
 	
 	// Make sure the server action that results in a tab open, takes a minimum amount of time so as not to flicker and look dumb
@@ -2618,6 +3319,7 @@ require([
 
 	// Make a rest call to our backend python script
 	function serverAction(postData, customErrorCB) {
+		//console.log("CBY SERVERACTION:", postData);
 		return new Promise(function(resolve, reject) {
 			inFlightRequests++;
 			$('.ce_saving_icon').removeClass('ce_hidden');
@@ -2679,7 +3381,7 @@ require([
 					if (r.data.git && r.data.git_status !== -1) {
 						var git_autocommit_show_output = "auto";
 						if (conf.hasOwnProperty("git_autocommit_show_output")) {
-							git_autocommit_show_output = conf['git_autocommit_show_output'].toLowerCase();
+							git_autocommit_show_output = conf.git_autocommit_show_output.toLowerCase();
 						}
 						if (git_autocommit_show_output === "true" || (git_autocommit_show_output === "auto" && r.data.git_status > 0)) {
 							var git_output = "<h2>";
@@ -2745,7 +3447,6 @@ require([
 	// After loading a .conf file or after saving and before any changes are made, red or green colour will
 	// be shown in the gutter about if the current line can be found in the output of btool list.
 	function highlightBadConfig(ecfg){
-//console.log("enter", confIsTrue('conf_validate_on_save', true), ecfg.hasOwnProperty('matchedConf'));
 		if (! confIsTrue('conf_validate_on_save', true)) {
 			return;
 		}
@@ -2762,7 +3463,6 @@ require([
 		}
 		// console.log("runpath is ",run_path);
 		// possible locations you can run btool: etc/master-apps, etc/slave-apps, etc/apps, etc/system/local, etc/user, etc/shcluster/apps
-//console.log(run_path, conf.btool_dir_for_master_apps);
 		// can also run btool on slave-apps, but who has config explorer installed on an indexer anyway?
 		if (run_path === "apps" || run_path === "system") {
 			serverAction({action: 'btool-list', path: ecfg.matchedConf}).then(function(btoolcontents){
@@ -2832,14 +3532,12 @@ require([
 		var allConfigsAreUnnecisary = false;
 
 		// There is some special logic if we are in the master-apps directory
-		if (run_path === "master-apps") {
+		if (run_path === "master-apps" || run_path === "manager-apps") {
 			if (conf.hasOwnProperty("_master_apps_gutter_useful_props_and_transforms") && (ecfg.matchedConf === "props" || ecfg.matchedConf === "transforms")) {
-				// will check for master_apps_gutter_useful_props_and_transforms
 				masterappsPropsTransformsChecks = true;
 			}
 			// split the master_apps_allowed_config  by commas, then split each by full colon. ecfg.matchedConf
 			if (conf.hasOwnProperty("_master_apps_gutter_used_sourcetypes") && ecfg.matchedConf === "props") {
-				// will check for master_apps_gutter_useful_props_and_transforms
 				masterappsPropsSourcetypeChecks = true;
 			}
 			if (conf.hasOwnProperty("_master_apps_gutter_unnecissary_config_files") && conf._master_apps_gutter_unnecissary_config_files.test(ecfg.matchedConf)) {
@@ -2847,21 +3545,6 @@ require([
 			}
 		}
 
-		// There is some special logic if we are in the manager-apps directory
-		if (run_path === "manager-apps") {
-			if (conf.hasOwnProperty("_manager_apps_gutter_useful_props_and_transforms") && (ecfg.matchedConf === "props" || ecfg.matchedConf === "transforms")) {
-				// will check for manager_apps_gutter_useful_props_and_transforms
-				managerappsPropsTransformsChecks = true;
-			}
-			// split the manager_apps_allowed_config  by commas, then split each by full colon. ecfg.matchedConf
-			if (conf.hasOwnProperty("_manager_apps_gutter_used_sourcetypes") && ecfg.matchedConf === "props") {
-				// will check for manager_apps_gutter_useful_props_and_transforms
-				managerappsPropsSourcetypeChecks = true;
-			}
-			if (conf.hasOwnProperty("_manager_apps_gutter_unnecissary_config_files") && conf._manager_apps_gutter_unnecissary_config_files.test(ecfg.matchedConf)) {
-				allConfigsAreUnnecisary = true;
-			}
-		}
 
 		if (! $.trim(btoolcontents)) {
 			console.log("no btool contents for ", ecfg.matchedConf);
@@ -2971,7 +3654,6 @@ require([
 					
 							// If a spec file exists
 							if (ecfg.hasOwnProperty('hinting') && found.length > 2) {
-								foundSpec = false;
 								// Look in the unstanzaed part of the spec
 								if (ecfg.hinting[""].hasOwnProperty(found[2])) {
 									//addGutter(newdecorations, i, 'ceGreeenLine', "Found in \"btool\" output and spec file. (Stanza=\"\" Property=\"" + found[2] + "\")");
@@ -3048,11 +3730,11 @@ require([
 	// from the current editor is being recognised by btool or not.
 	function buildBadCodeLookup(contents){
 		//(conf file path)(property)(stanza)
-		var rex = /^.+?splunk([\/\\]etc[\/\\].*?\.conf)\s+(?:([^=\s\[]+)\s*=|(\[[^\]]+\]))/gim,
-			res,
-			currentStanza = "",
-			currentField = "",
-			ret = {"": {"":""}};
+		var rex = /^.+?splunk([\/\\]etc[\/\\].*?\.conf)\s+(?:([^=\s\[]+)\s*=|(\[[^\]]+\]))/gim;
+		var res;
+		var currentStanza = "";
+		var currentField = "";
+		var ret = {"": {"":""}};
 		while(res = rex.exec(contents)) {
 			if (res[2]) {
 				currentField = res[2];
@@ -3075,10 +3757,10 @@ require([
 	// parse the spec file and build a lookup to use for code completion
 	function buildHintingLookup(conf, contents){
 		// left side is for properties, right size for stanzas
-		var rex = /^(?:([\w\.]+).*=|(\[\w+))?.*$/gm,
-			res,
-			currentStanza = "",
-			currentField = "";
+		var rex = /^(?:([\w\.]+).*=|(\[\w+))?.*$/gm;
+		var res;
+		var currentStanza = "";
+		var currentField = "";
 		confFiles[conf] = {"": {"":{t:"", c:""}}};
 		while(res = rex.exec(contents)) {
 			// need this because our rex can match a zero length string
@@ -3116,12 +3798,12 @@ require([
 				// do somthing
 				if (editors[activeTab].hasOwnProperty('hinting')) {
 					// get all text up to hovered line becuase we need to find what stanza we are in
-					var contents = model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber))),
-						rex = /^(?:([\w\.]+)|(\[\w+))?.*$/gm,
-						currentStanza = "",
-						currentField = "",
-						hintdata,
-						res;
+					var contents = model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber)));
+					var rex = /^(?:([\w\.]+)|(\[\w+))?.*$/gm;
+					var currentStanza = "";
+					var currentField = "";
+					var hintdata;
+					var res;
 					while(res = rex.exec(contents)) {
 						// need this because our rex can match a zero length string
 						if (res.index == rex.lastIndex) {
@@ -3169,11 +3851,11 @@ require([
 		provideCompletionItems: function(model, position) {
 			if (editors[activeTab].hasOwnProperty('hinting')) {
 				// get all text up to hovered line becuase we need to find what stanza we are in
-				var contents = model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber))),
-					ret = [],
-					rex = /[\s\S]*\n\s*(\[\w+)/,
-					currentStanza = "",
-					found = contents.match(rex);
+				var contents = model.getValueInRange(new monaco.Range(1, 1, position.lineNumber, model.getLineMaxColumn(position.lineNumber)));
+				var ret = [];
+				var rex = /[\s\S]*\n\s*(\[\w+)/;
+				var currentStanza = "";
+				var found = contents.match(rex);
 				if (found && editors[activeTab].hinting.hasOwnProperty(found[1])) {
 					if (found[1].substr(0,9) === "[default]") {
 						currentStanza = "";
@@ -3202,11 +3884,12 @@ require([
 	monaco.languages.setMonarchTokensProvider('git-diff', {
 		tokenizer: {
 			root: [
-				[/^\+[^\n]+/, "comment"], // additions
-				[/^\-[^\n]+/, "metatag"], // deletions
-				[/^(?:commit|Author|Date)[^\n]+/, "strong"], // important messages 
-				[/@@.+?@@/, "constant"],   // line number
-				[/^\s[^\n]+/, "delimiter.xml"], // other lines
+				[/^diff.*/, "constant"],
+				[/^\+[^\n]*/, "comment"], // additions
+				[/^\-[^\n]*/, "metatag"], // deletions
+				[/^@@.+?@@/, "regexp"],
+				[/^\w[^\n]+/, "white"],
+				[/\s[^\n]+/, "delimiter.xml"], // other lines
 			]
 		}
 	});
@@ -3216,7 +3899,7 @@ require([
 	monaco.languages.setMonarchTokensProvider('git-log', {
 		tokenizer: {
 			root: [
-				[/^commit[^\n]+/, "constant"], // additions
+				[/^(commit|Author:|Date:)[^\n]+/, "constant"], // additions
 				[/(?:\++(?=[\-\s]*$)|\(\+\))/, "comment"], // plus (?:\++(?=[\-\s]*$)|(?<=\()\+(?=\)))
 				[/(?:(\-+)\s*$|\(\-\))/, "metatag"], // minus (?:(\-+)\s*$|(?<=\()\-(?=\)))
 			]
@@ -3279,7 +3962,7 @@ require([
 			if (successful) {
 				showToast('Copied to clipboard!');
 			} else {
-				console.error('Fallback2: Could not copy to clipboard.', err);
+				console.error('Fallback2: Could not copy to clipboard.');
 			}
 		} catch (err) {
 			console.error('Fallback: Could not copy to clipboard.', err);
@@ -3346,75 +4029,121 @@ require([
 		monaco.editor.setTheme(mode);
 		// save to local storage
 		localStorage.setItem('ce_theme', mode);
-	};
+	}
 
 	function checkFileMods() {
 		var files = {};
 		var problems = [];
 		var hasFiles = false;
+		var ecfg;
 		// check if change detection is disabled
 		if (!confIsTrue('detect_changed_files', true)) {
 			return;
 		}
 		clearTimeout(fileModsCheckTimer);
 		fileModsCheckTimer = setTimeout(checkFileMods, fileModsCheckTimerPeriod);
-		for (var j = 0; j < editors.length; j++){
-			if (editors[j].type === "read") {
-				files[editors[j].file] = 0;
-				hasFiles = true;
-			}
+
+		if (fileModsCheckTimerInProgress) {
+			return;
 		}
-		if (hasFiles && ! fileModsCheckTimerInProgress) {
-			fileModsCheckTimerInProgress = true;
-			serverAction({action: 'filemods', paths: JSON.stringify(files)}).then(function(filemods) {
-				fileModsCheckTimerInProgress = false;
-				var editorMap = {};
-				for (var i = 0; i < editors.length; i++) {
-					if (editors[i].type === "read") {
-						editorMap[editors[i].file] = editors[i];
+
+		// if current focused tab is "rest" then check it to see if it has changed
+		if (activeTab > 0 && editors[activeTab].type === "rest") {
+			ecfg = editors[activeTab];
+			if (ecfg.tab.find(".ce_modified_on_disk").length === 0 ) {
+				//console.log("check for REST changes in ", ecfg);
+				fileModsCheckTimerInProgress = true;
+
+				getRest(ecfg.file, null).then(function(restData) {
+					fileModsCheckTimerInProgress = false;
+					//console.log(restData); //?output_mode=json&count=0&f=title&f=label
+					if (restData.length === 0) {
+							ecfg.tab.css("color","orange").append("<i class='ce_modified_on_disk ce_right_icon ce_right_two ce_clickable_icon icon-alert' style='color:orange' title='File might have been deleted since it was opened.'></i>");					
+							showModal({
+								title: "Warning",
+								body: "<div class='alert alert-warning'><i class='icon-alert'></i>Warning: Unable to check for changes. File might have been deleted, moved or had its permissions changed.<br><br><code>" + htmlEncode(ecfg.file) + "</code></div>",
+								size: 600
+							});						
+					} else if (restData.length === 1) {
+						if (ecfg.server_content !== restData[0].content['eai:data']) {
+							ecfg.tab.css("color","orange").append("<i class='ce_modified_on_disk ce_right_icon ce_right_two ce_clickable_icon icon-alert' style='color:orange' title='File might have changed on disk since it was opened. Either save or reload from disk.'></i>");
+							showModal({
+								title: "Warning",
+								body: "<div class='alert alert-warning'><i class='icon-alert'></i>Warning: File has unexpectedly changed while open.<br><br><code>" + htmlEncode(ecfg.file) + "</code></div>",
+								size: 600
+							});								
+						}
+					} else {
+						console.error("Unexpeted response when checking if rest dashboard contents has changed while open - returned dashboards: " + restData.length);
 					}
+
+				}).catch(function(){
+					fileModsCheckTimerInProgress = false;
+					console.error("Unexpeted response when checking if rest dashboard contents has changed while open");
+				});	
+			}		
+
+		} else {
+			for (var j = 0; j < editors.length; j++){
+				if (editors[j].type === "read") {
+					files[editors[j].file] = 0;
+					hasFiles = true;
 				}
-				for (var file in files) {
-					if (files.hasOwnProperty(file)) {
-						if (filemods.hasOwnProperty(file)) {
-							if (filemods[file] === "") {
-								// file was deleted
-								if (editorMap[file].tab.find(".ce_modified_on_disk").length === 0) {
-									problems.push("Deleted: <code>" + htmlEncode(file) + "</code>");
-									editorMap[file].tab.append("<i class='ce_modified_on_disk ce_right_icon ce_right_two ce_clickable_icon icon-alert' style='color:orange' title='File might have been deleted or moved since it was opened. Either save or attempt to reload from disk.'></i>");
-								}
-							} else if (! editorMap[file].hasOwnProperty("filemod")) {
-								// first time we have checked filemod on this file. so store the response
-								editorMap[file].filemod = filemods[file];
-							} else if (filemods[file] > editorMap[file].filemod + 10) { // add a buffer of 10 seconds
-								// file has updated behind the scenes
-								if (editorMap[file].tab.find(".ce_modified_on_disk").length === 0) {
-									problems.push("Changed: <code>" + htmlEncode(file) + "</code>");
-									editorMap[file].tab.append("<i class='ce_modified_on_disk ce_right_icon ce_right_two ce_clickable_icon icon-alert' style='color:orange' title='File might have changed on disk since it was opened. Either save or reload from disk.'></i>");
+			}			
+			if (hasFiles && ! fileModsCheckTimerInProgress) {
+				//console.log("check for FILE changes");
+				fileModsCheckTimerInProgress = true;
+				serverAction({action: 'filemods', paths: JSON.stringify(files)}).then(function(filemods) {
+					fileModsCheckTimerInProgress = false;
+					var editorMap = {};
+					for (var i = 0; i < editors.length; i++) {
+						if (editors[i].type === "read") {
+							editorMap[editors[i].file] = editors[i];
+						}
+					}
+					for (var file in files) {
+						if (files.hasOwnProperty(file)) {
+							if (filemods.hasOwnProperty(file)) {
+								if (filemods[file] === "") {
+									// file was deleted
+									if (editorMap[file].tab.find(".ce_modified_on_disk").length === 0) {
+										problems.push("Deleted: <code>" + htmlEncode(file) + "</code>");
+										editorMap[file].tab.css("color","orange").append("<i class='ce_modified_on_disk ce_right_icon ce_right_two ce_clickable_icon icon-alert' style='color:orange' title='File might have been deleted or moved since it was opened. Either save or attempt to reload from disk.'></i>");
+									}
+								} else if (! editorMap[file].hasOwnProperty("filemod")) {
+									// first time we have checked filemod on this file. so store the response
+									editorMap[file].filemod = filemods[file];
+								} else if (filemods[file] > editorMap[file].filemod + 10) { // add a buffer of 10 seconds
+									// file has updated behind the scenes
+									if (editorMap[file].tab.find(".ce_modified_on_disk").length === 0) {
+										problems.push("Changed: <code>" + htmlEncode(file) + "</code>");
+										editorMap[file].tab.css("color","orange").append("<i class='ce_modified_on_disk ce_right_icon ce_right_two ce_clickable_icon icon-alert' style='color:orange' title='File might have changed on disk since it was opened. Either save or reload from disk.'></i>");
+									}
 								}
 							}
 						}
 					}
-				}
-				if (problems.length) {
-					showModal({
-						title: "Warning",
-						body: "<div class='alert alert-warning'><i class='icon-alert'></i>Warning: An open file has unexpectedly changed on disk. Either save or reload from disk.<br><br>" + problems.join("<br>") + "</div>",
-						size: 600
-					});
-				}
-			}).catch(function(){
-				fileModsCheckTimerInProgress = false;
-			});
+					if (problems.length) {
+						showModal({
+							title: "Warning",
+							body: "<div class='alert alert-warning'><i class='icon-alert'></i>Warning: An open file has unexpectedly changed on disk. You should right-click in the affected editor and select either: 'Diff unsaved changes' to see what might have changed, or 'Reload from disk'.<br><br>" + problems.join("<br>") + "</div>",
+							size: 600
+						});
+					}
+				}).catch(function(){
+					fileModsCheckTimerInProgress = false;
+				});
+			}
 		}
-	};
+	}
 
 	// Build the list of config files, 
 	// This function is also called after settings are changed.
 	function loadPermissionsAndConfList(){
 		return serverAction({action:'init'}).then(function(data) {
-			var rex = /^Checking: .*[\/\\]([^\/\\]+?).conf\s*$/gmi,
-				res;
+			var rex = /^Checking: .*[\/\\]([^\/\\]+?).conf\s*$/gmi;
+			var res;
+			var stanza;
 			conf = data.conf.global;
 			if (! conf.hasOwnProperty('git_autocommit_work_tree')) {
 				conf.git_autocommit_work_tree = "";
@@ -3489,10 +4218,27 @@ require([
 				}
 			}
 
+			if (conf.hasOwnProperty('debug_refresh_endpoints')) {
+				conf._debug_refresh_endpoints = conf.debug_refresh_endpoints.split("|");
+			} else {
+				conf._debug_refresh_endpoints = [];
+			}
+			if ($.trim(conf.debug_refresh_endpoints) !== "") {
+				$(".ce_splunk_reload_specific").parent().css("display","block");
+			} else {
+				$(".ce_splunk_reload_specific").parent().css("display","none");
+			}
+
+			if (confIsTrue('rest_api_dashboard_list', false)) {
+				$(".ce_show_rest").css("display","");
+			} else {
+				$(".ce_show_rest").css("display","none");
+			}
+
 			// Build the quick access hooksActive object
 			hooksActive = [];
 			var hookDefaults = data.conf.hook || {};
-			for (var stanza in data.conf) {
+			for (stanza in data.conf) {
 				if (data.conf.hasOwnProperty(stanza)) {
 					if (stanza.substr(0,5) === "hook:") {
 						data.conf[stanza] = $.extend({}, hookDefaults, data.conf[stanza]);
@@ -3536,7 +4282,7 @@ require([
 				ce_custom_actions.parent().css("display","none");
 			} else {
 				ce_custom_actions.parent().css("display","block");
-				for (var stanza in data.conf) {
+				for (stanza in data.conf) {
 					if (data.conf.hasOwnProperty(stanza)) {
 						if (stanza.substr(0,7) === "action:") {
 							var act = $.extend({}, actionDefaults, data.conf[stanza]);
@@ -3685,7 +4431,7 @@ require([
 				setTimeout(function(){ checkFileMods(); }, fileModsCheckTimerPeriod);
 			} else {
 				fileModsCheckTimerPeriod = 10000;
-				// When the tab gains focus, immidiatly check for udpated files
+				// When the tab gains focus, immidiatly check for updated files
 				checkFileMods();
 			}
 		});

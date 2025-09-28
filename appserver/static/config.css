@@ -121,6 +121,18 @@ header {
 .ce_leftnav_highlighted {
     background-color: rgba(0, 99, 153, 1) !important;
 }
+.ce_leftnav_keyboard_selected:before {
+    font-size: 20px;
+    content: "\25B8";
+    font-family: Splunk Icons;
+    font-style: normal;
+    font-weight: 400;
+    text-decoration: inherit;
+    line-height: inherit;
+    position: absolute;
+    color: #00A4FD;
+    margin-left: -28px;
+}
 .ce_leftnav_name {
     display: inline-block;
     min-width: 300px;
@@ -143,7 +155,7 @@ header {
     vertical-align: top;
     padding-right: 20px;
 }
-.ce_leftnav_size_unit {
+.ce_opacity06 {
     opacity: 0.6;
 }
 .ce_tree_pane {
@@ -160,23 +172,48 @@ header {
     text-align: center;
 }
 .ce_tree_icons{
-	display: flex;
-	justify-content: space-evenly;
-	height: 38px;
+	max-height: 38px;
     background-color: #404040;
-    color: #ccc;
-	padding: 5px 0;
+    padding-left: 4px;
+    overflow: hidden;
+    
 }
-
 .ce_tree_icons .ce_clickable_icon {
-	border: 2px solid #404040;
-	padding-top: 3px;
-    border-radius: 6px;	
+    border: 2px solid #404040;
+    border-radius: 6px;
+    padding: 6px 8px 8px 6px;
+    margin: 4px 2px 0 2px;
+    text-align: center;
+    width: 32px;
 }
 .ce_tree_icons .ce_selected {
-	border: 2px solid #00A4FD;
-    color: #00A4FD;
+    background-color: #1d1d1d;
+    border: 0 none;
+    border-top-right-radius: 8px;
+    border-top-left-radius: 8px;
+    border-bottom-right-radius: 0;
+    border-bottom-left-radius: 0;
+    color: white;
+    box-shadow: inset -6px 0 6px 0px #1d1d1d, 0 0 15px #404040, 0 0 30px #404040;
 }
+
+.ce_tree_btn {
+    display: none;
+}
+
+.ce_tree_btn_tab, .ce_tree_btn_show {
+    display: inline-block;
+}
+
+.ce_icons_divider {
+    height: 21px;
+    width: 5px;
+    margin-right: 4px;
+    border-right: 1px solid #262626;
+    display: inline-block;
+    transform: translateY(5px);
+}
+
 .ce_treenothing .icon-warning, .ce_treeempty .icon-warning {
 	margin-right: 8px;
 }
@@ -188,6 +225,7 @@ header {
 }
 .ce_treeempty{
 	opacity: 0.4;
+    margin-left: 22px;
 }
 .ce_treehighlight,
 .ce_treenothing_text {
@@ -206,15 +244,15 @@ input[type=text].ce_treesearch_input{
     color: white;
     position: absolute;
     z-index: 9;
-    top: 38px;
-    font-size: 12px;
+    bottom: -10px;
     border: 0px none;
-    left: 19px;
+    left: 0;
     height: 28px;
     display: block;
     box-shadow: none;
-    border-top-left-radius: 0;
-    border-top-right-radius: 0;
+    border-radius: 0;
+    width: 100%;
+    padding-left: 13px;
 }
 input[type=text].ce_treesearch_input::placeholder {
   color: #bfbfbf;
@@ -234,7 +272,7 @@ input[type=text].ce_treesearch_input::placeholder {
     padding: 0;
     top: 70px;
     /* overflow-x: hidden; */
-    bottom: 4px;
+    bottom: 30px;
     width: 100%;
 }
 .ce_file_wrap {
@@ -565,7 +603,7 @@ input[type=text].ce_treesearch_input::placeholder {
 }
 .ce_editor_sidecar {
     position: absolute;
-    height: 500px;
+    height: 400px;
     width: 600px;
     border-left: 3px solid #5c5c5c;
     border-right: 3px solid #5c5c5c;
@@ -573,10 +611,17 @@ input[type=text].ce_treesearch_input::placeholder {
     right: 150px;
     background-color: #1e1e1e;
     opacity: 0;
-    transform: translateY(467px);
+    /* transform: translateY(467px); */
     transition: transform 300ms;
     box-shadow: 0 19px 38px rgba(0,0,0,0.30), 0 15px 12px rgba(0,0,0,0.22);
 }
+.ce_editor_sidecar_pin_button {
+    color: orange;
+}
+.ce_editor_sidecar_autohide_on .ce_editor_sidecar_pin_button {
+    color: white;
+}
+
 .ce_theme_vs .ce_editor_sidecar {
     background-color: #ffffff;
 }
@@ -598,8 +643,21 @@ input[type=text].ce_treesearch_input::placeholder {
     border-left-color: transparent;
     border-left-style: solid;
     transition: border-left-width 5000ms;
+    display: none;
 }
-.ce_editor_sidecar .icon-close {
+.ce_editor_sidecar_autohide_on .ce_editor_sidecar_autohide {
+    display: block;
+}
+.ce_editor_sidecar_resizer {
+    cursor: nw-resize;
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    /*background-color: red;*/
+    top: -4px;
+    left: -6px;
+}
+.ce_editor_sidecar .ce_right_icon {
     margin-top: 5px;
 }
 .ce_editor_sidecar .ce_spinner {
@@ -1008,7 +1066,7 @@ input.ce_run_cwd_radio[type=radio] {
 }
 .ce_postsave_arg1 {
     margin-left:6px;
-    width:470px;
+    width:630px;
 }
 .ce_postsave_strmatch_bad,
 .ce_postsave_strmatch_good {
@@ -1028,7 +1086,8 @@ input.ce_run_cwd_radio[type=radio] {
     border: 0 none;
 }
 .ce-server-classes a,
-.ce-server-classes-all {
+.ce-server-classes-all,
+.ce-debugrefresh-endpoints a {
     margin: 10px 12px 0 0;
     background-color: #f7f8fa;
     padding: 6px 10px;
@@ -1036,6 +1095,7 @@ input.ce_run_cwd_radio[type=radio] {
     border-radius: 3px;
 }
 .ce-server-classes a:hover,
-.ce-server-classes-all:hover {
+.ce-server-classes-all:hover,
+.ce-debugrefresh-endpoints a:hover {
     background-color: #ebeeef;
 }

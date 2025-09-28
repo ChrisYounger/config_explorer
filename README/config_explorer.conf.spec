@@ -110,38 +110,20 @@ master_apps_gutter_used_sourcetypes_date = <string>
 * Set this to the current date when the above search is run.
 * Defaults to empty
 
-manager_apps_gutter_unnecissary_config_files = <string>
-* When viewing a config file within a subfolder of the /manager-apps/ folder, if it matches this pattern, then a grey indicator 
-* will be shown in the gutter with a tooltip that shows: "In most environments, this property is not needed on indexers".
-* In many environments the following configs are not desired on Indexers and can be appended: |restmap|web|inputs
-* Set empty to disable the gray gutter warnings of unnecissary props/transforms config
-* Default: alert_actions|addon_builder|checklist|collections|datamodels|deploymentclient|distsearch|eventgen|eventtypes|macros|savedsearches|tags|times|wmi|workflow_actions
-
-manager_apps_gutter_useful_props_and_transforms = <string>
-* When viewing a props or transforms config file within a subfolder of the /manager-apps/ folder, if the property does not match 
-* this pattern, then a grey indicator will be shown in the gutter with a tooltip that shows:
-* "In most environments, this property is not needed on indexers".
-* Set empty to disable grey highlighting in props and transforms
-* Default: priority|TRUNCATE|LINE_BREAKER|LINE_BREAKER_LOOKBEHIND|SHOULD_LINEMERGE|BREAK_ONLY_BEFORE_DATE|BREAK_ONLY_BEFORE|MUST_BREAK_AFTER|MUST_NOT_BREAK_AFTER|MUST_NOT_BREAK_BEFORE|DATETIME_CONFIG|TIME_PREFIX|MAX_TIMESTAMP_LOOKAHEAD|TIME_FORMAT|TZ|TZ_ALIAS|MAX_DAYS_AGO|MAX_DAYS_HENCE|MAX_DIFF_SECS_AGO|MAX_DIFF_SECS_HENCE|ADD_EXTRA_TIME_FIELDS|METRICS_PROTOCOL|STATSD-DIM-TRANSFORMS|TRANSFORMS|CHECK_FOR_HEADER|SEDCMD|SEGMENTATION|ANNOTATE_PUNCT|description|category|REGEX|FORMAT|MATCH_LIMIT|DEPTH_LIMIT|CLONE_SOURCETYPE|LOOKAHEAD|WRITE_META|DEST_KEY|DEFAULT_VALUE|SOURCE_KEY|REPEAT_MATCH|INGEST_EVAL|REGEX|REMOVE_DIMS_FROM_METRIC_NAME|METRIC
-
-manager_apps_gutter_used_sourcetypes = <string>
-* Have you ever wondered if you have parsing stanzas in manager-apps/*/*/props.conf that are not being used in your environment? 
-* Config Explorer can show an indicator in the gutter for stanzas that do not match the pattern defined here.
-* This does not work on props stanzas like the following "[source::*", "[host::*", "[(*" 
-* Use the below search as an administraot to create the pattern:
-* | metadata type=sourcetypes index=* index=_* | fields sourcetype | format "" "" "" "" "" "" | rex mode=sed field=search "s/\"\s+sourcetype=\"/|/g" | rex mode=sed field=search "s/(\s*sourcetype=|\s*$)//g"
-* Set empty to disable grey highlighting of stanzas that are not used
-* Defaults to empty
-
-manager_apps_gutter_used_sourcetypes_date = <string>
-* As the above manager_apps_gutter_used_sourcetypes pattern is a one-off snapshot in time, this property allows you to know 
-* "how out of date" the above pattern of known sourcetypes is. Must be in the format YYYY-MM-DD
-* Set this to the current date when the above search is run.
-* Defaults to empty
-
 detect_changed_files = <bool>
 * Check if files that are open have changed on the filesystem and warn if so. 
 * Defaults to true
+
+rest_api_dashboard_list = <bool>
+* Show a new "Splunk REST API" section in the left pane, which allows opening and saving dashboard XML files using the REST API.
+* Defaults to false
+
+dashboard_xml_file_experimental_actions = <bool>
+* Right-clicking on a dashboard XML file will show options to "Attempt view in browser" and "Attempt edit via REST API". 
+* When using one of these options its importent to understand that the file that opens might not be the exact file that was clicked on. 
+* For example if you click on a XML file in APP/default/data/ui/views/ and there is a file also in APP/local/data/ui/views/, then Splunk 
+* will open the "local" version. Private user dashboards may also take priority. Only enable this option if you understand this well. 
+* Defaults to false
 
 ############################################################################
 #  Experimental features                                                   #
@@ -198,6 +180,9 @@ action = <string>
     live-diff:(1) - Show the current running config as a diff comparison of what is reported by btool.
     cd:(1) - Change the current directory in config explorer to the path specified. Path should be relative to $SPLUNKHOME
     clipboard:(1) - Copy the argument string to the clipboard
+    rest:(1) - attempt to open the resource using the Splunk REST API. The argument should be supplied as the REST API path 
+       (example: "/servicesNS/nobody/search/data/ui/nav/my_dashboard"). Currently only works with views (dashboards).
+    openurl:(1) - Attempt to open the url argument in the browser
 * The following variables can be used after the full colon:
     ${FILE} = Filename with path
     ${BASEFILE} = Filename without path
