@@ -207,12 +207,19 @@ order = <non-negative integer>
 
 [action]
 * "[action:<unique_name>]"
-* The [action:...] stanza allows creation of actions that can be run from the home tab 
+* The [action:...] stanza allows creation of actions that can be run from the home/star tab 
 
 action = <string>
 * The action name to run, full colon, then the argument (if required). Example: "run:ls -l". 
 * See hooks section above for complete list of options (except without variable substitutions).
-* Commands always run from $SPLUNK_HOME
+* In addition:
+*  There is a special option "action = heading" will render a heading row with the text of the label field. 
+*    Useful for grouping actions, with careful use of the order= property.
+*    Be careful to make sure stanza names are unique.
+*  There is a special option "action = text" will render a text string with the text of the label field instead of a button.
+*  There is a special option "action = br" will render a <br> (line-break) tag.
+* These commands always run from $SPLUNK_HOME
+* The default "Developer options" buttons/actions (incl the heading) can be customised/removed by overriding their stanzas.
 
 label = <string>
 * Display label for the button.

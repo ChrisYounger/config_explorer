@@ -22,8 +22,9 @@ hide_settings = false
 
 #max_file_size = 10
 # The maximum file size in megabytes that can be opened. 
+# Defaults to 10
 
-#cache_file_depth = 6
+#cache_file_depth = 5
 # Cache the list of files and folders for the left pane to this many levels deep. 
 # This makes navigation much faster (especially on windows) but uses more memory, 
 # causes slightly slower startup, and will not follow symbolic links. Set to 0 to 
@@ -36,12 +37,6 @@ hide_settings = false
 # doesn't work properly, so run btool yourself to confirm.
 # Defaults to true
 
-
-#btool_dirs = 
-# this is now deprecated. See 'btool_dir_for_deployment_apps', 'btool_dir_for_master_apps' and 'btool_dir_for_shcluster_apps' below
-# This has no effect
-
-
 #btool_dir_for_deployment_apps =
 # If this server is a deployment server, then set this property to a sym-linked copy of the deployment-apps folder.
 # this will enable the btool gutter-hinting in config files to work with config in the deployment-apps folder
@@ -51,7 +46,6 @@ hide_settings = false
 # 3. ln -s /opt/splunk/etc/deployment-apps apps
 # 4. Set this parameter to: btool_dir_for_deployment_apps = /opt/splunk/etc/deployment-apps-for-btool
 # For more info on why the symlinking process is necissary, please see: https://answers.splunk.com/answers/731787
-
 
 #btool_dir_for_master_apps =
 # If this server is a cluster master server, then set this property to a sym-linked copy of the master-apps folder.
@@ -73,13 +67,11 @@ hide_settings = false
 # 4. Set this parameter to: btool_dir_for_manager_apps = /opt/splunk/etc/manager-apps-for-btool
 # For more info on why the symlinking process is necissary, please see: https://answers.splunk.com/answers/731787
 
-
 #btool_dir_for_shcluster_apps = 
 # This will enable the btool gutter-hinting in config files to work with config in the shcluster/apps folder
 # Enable this if the current server is a search head deployer.
 # There is no need to create a sym-link for this path, however an absolute path to shcluster must be set.
 # e.g. /opt/splunk/etc/shcluster
-
 
 #git_autocommit = false
 # Track all file saves by automatically committing them to git with a generic message. 

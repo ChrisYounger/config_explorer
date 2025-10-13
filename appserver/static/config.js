@@ -9,7 +9,8 @@ TODO
  - Option to open a blank diffing window
  - ability to stream results from a run window
  - ability to see running config explorer commands and kill them?
- - what happens if you hit save when a post-save action is already running - Two things run at once. Seems its not too bad anyway.
+ - if you hit save when a post-save action is already running, two things run at once. Seems its not too bad anyway.
+ - the sidecar should allow rerun
 
 */
 // Loading monaco from the CDN
@@ -79,9 +80,6 @@ require([
 					"<i title='Back' class='ce_clickable_icon ce_tree_btn ce_folder_up_rest icon-arrow-left'></i>"+
 					"<i title='Refresh' class='ce_clickable_icon ce_refresh_tree ce_tree_btn ce_tree_btn_show icon-rotate-counter'></i>"+
 					//"<i title='Refresh' class='ce_clickable_icon ce_refresh_tree_rest ce_tree_btn  icon-rotate-counter'></i>"+
-					//"<i title='Filter files' class='ce_clickable_icon ce_tree_btn ce_filter ce_tree_btn_show icon-text'></i>"+
-					//"<i title='Create new file or folder in current directory' class='ce_add_folder ce_tree_btn ce_clickable_icon ce_tree_btn_show icon-folder'></i>"+
-					//"<i title='Create new file in current directory' class='ce_clickable_icon icon-report'></i>"+
 					"<i title='Create file, create folder or upload a file' class='ce_upload_file ce_clickable_icon ce_tree_btn ce_tree_btn_show icon-plus'></i>"+
 					"<i title='Run a shell command' class='ce_app_run ce_clickable_icon ce_tree_btn ce_tree_btn_show icon-expand-right'></i>"+
 					"<i title='Sort' class='ce_sort_files ce_clickable_icon ce_tree_btn ce_tree_btn_show icon-sort'></i>"+
@@ -104,50 +102,18 @@ require([
 					"<img class='ce_bg_image' src='/static/app/config_explorer/mirage-upgrade.png' />"+
 					"<div class='ce_app_name'><span class='ce_app_title'>Config Explorer</span> for <i class='icon-splunk'></i></div>"+
 					"<div class='ce_tagline'>by Chris Younger</div>"+
-					"<div class='ce_marginbottom'>"+
-						"<span class='ce_app_settings'><span class='btn'>Settings</span> Change the Config Explorer settings.</span> Theme: "+
-							"<span class='ce_theme ce_link' data-theme='vs-dark'>dark</span> | "+
-							"<span class='ce_theme ce_link'  data-theme='vs'>light</span> | "+
-							"<span class='ce_theme ce_link' data-theme='hc-black'>high contrast</span>"+
-					"</div>"+
-					"<div class='ce_marginbottom ce_app_changelog'>"+
-						"<span class='btn'>Change log</span> Review changes made using Config Explorer."+
-					"</div>"+
-					"<div class='ce_actions_wrapper'>"+
-						"<div>"+
-							"<div class='ce_app_devlinks'>"+
-								"Developer actions"+
-							"</div>"+
-							"<div class='ce_actions_area'>"+
-								"<div class='ce_marginbottom ce_app_errors'>"+
-									"<span class='btn'>btool check</span>"+
-									"Show invalid Splunk configuration"+
-								"</div>"+
-								"<div class='ce_marginbottom'>"+
-									"<span class='ce_splunk_reload btn'>debug/refresh all</span>"+
-									"Reload all endpoints"+
-								"</div>"+
-								"<div class='ce_marginbottom'>"+
-									"<span class='ce_splunk_reload_specific btn'>debug/refresh endpoint</span>"+
-									"Reload a specific endpoint"+
-								"</div>"+
-								"<div class=''>"+
-									"<span class='ce_splunk_reload btn' data-endpoint='bump'>bump</span>"+
-									"Splunk cache bump for css and js files."+
-								"</div>"+
-							"</div>"+
-						"</div>"+
-						"<div>"+
-							"<div class='ce_app_devlinks'>"+
-								"Custom actions"+
-							"</div>"+
-							"<div class='ce_custom_actions ce_actions_area'>"+
-							"</div>"+
-						"</div>"+
-					"</div>"+
 					"<div>"+
-						"<a href='/static/docs/style/style-guide.html' target='_blank'>Splunk style guide</a> | "+
-						"<a href='search?q=search%20index%3D_internal%20source%3D*config_explorer.log' target='_blank'>Logging</a> | "+
+						"<span class='ce_app_settings btn' style='margin-right:40px;'>Settings</span> Theme: "+
+							"<span class='ce_theme btn' data-theme='vs'>light</span>"+
+							"<span class='ce_theme btn' data-theme='vs-dark'>dark</span>"+
+							"<span class='ce_theme btn' data-theme='hc-black' style='margin-right:40px;'>high contrast</span>"+
+							"<span class='ce_app_changelog btn'>Change log</span>"+
+					"</div>"+
+					"<div class='ce_custom_actions'> </div>"+
+					"<div class='ce_footer_links'>"+
+						//"<a href='/static/docs/style/style-guide.html' target='_blank'>Splunk style guide</a> | "+
+						"<a href='https://buymeacoffee.com/chrisyounger' target='_blank'>Donate</a><span style='margin:0 14px'>|</span>"+
+						"<a href='search?q=search%20index%3D_internal%20source%3D*config_explorer.log' target='_blank'>Logging</a><span style='margin:0 14px'>|</span>"+
 						"<a href='https://github.com/ChrisYounger/config_explorer' target='_blank'>Config Explorer help, bugs and enhancements</a>"+
 					"</div>"+
 				"</div>"+
@@ -339,10 +305,10 @@ require([
 		$(document).off('mousemove.colresize');
 	});
 	
-	$('.ce_app_errors .btn').on('click', function(){ 
+	$('.ce_app_errors').on('click', function(){ 
 		runBToolCheck();
 	});
-	$('.ce_app_settings .btn').on('click', function(){ 
+	$('.ce_app_settings').on('click', function(){ 
 		readFile("");
 	});
 	$(".ce_theme").on('click', function(){ 
@@ -832,6 +798,10 @@ require([
 		if (typeof embeddedMode === "undefined") {
 			embeddedMode = false;
 		}
+		if (endpoint && endpoint === "?") {
+			debugRefreshEndpointSelection();
+			return;
+		}
 		if (endpoint && endpoint !== "all") {
 			if (endpoint === "bump") {
 				url += "_bump";
@@ -880,6 +850,7 @@ require([
 
 	function changeDirectory(dir){
 		if (dir) {
+			$(".ce_show_filesystem ").click();
 			readFolder(dir.replace(/[\/\\]$/g, ""), 'fwd');
 		}
 	}
@@ -887,7 +858,16 @@ require([
 	function replaceTokens(str, file){
 		var basefile = dodgyBasename(file);
 		var dirname = dodgyDirname(file);
-		return str.replace(/\$\{FILE\}/g, file).replace(/\$\{BASEFILE\}/g, basefile).replace(/\$\{DIRNAME\}/g, dirname);
+		return str.replace(/\$\{(FILE|BASEFILE|DIRNAME)(?:,(\-?\d+))?(?:,(\-?\d+))?\}/g,function(all, g1, g2, g3){
+			var ret, l;
+			if (g1=="FILE") { ret = file; }
+			if (g1=="BASEFILE") { ret = basefile; }
+			if (g1=="DIRNAME") { ret = dirname; }
+			l = ret.length;
+			if (typeof g3 !== "undefined") { g2 = parseInt(g2); g3 = parseInt(g3); return ret.substr(g2 < 0 ? l + g2 : g2,  g3 < 0 ? l + g3 : g3); }
+			if (typeof g2 !== "undefined") { g2 = parseInt(g2); return ret.substr(g2 < 0 ? l + g2 : g2); }
+			return ret;
+		});
 	}
 	
 	function runAction(actionStr, file, embeddedMode) {
@@ -1411,6 +1391,8 @@ require([
 					updateTabAsEditor(ecfg, contents, 'plaintext');
 				}
 			}
+			// refresh left pane
+			refreshFolder();
 		}).catch(function(){
 			clearInterval(interval);
 			if (embeddedMode) {
@@ -1676,6 +1658,8 @@ require([
 
 	// Read the folder from the cache
 	function readFolder(path, direction) {
+		//path = path.replace(/\/{2,}/,"/");
+		path = path.replace(/(?:\/\.|\/)+$/g,"");
 		filterModeReset();
 		var base = getTreeCache(path);
 		if (base === null || ! base.hasOwnProperty(".")){
@@ -2350,7 +2334,7 @@ require([
 		showModal({
 			title: "Delete",
 			size: 550,
-			body: "<div>Are you sure you want to delete: <code>" + file + "</code><br><br>To confirm type 'yes':<br><br><input type='text' value='' class='ce_prompt_input input input-text' style='width: 60px; background-color: #3d424d; color: #cccccc;'/></div>",
+			body: "<div>Are you sure you want to delete: <code>" + file + "</code><br><br>To confirm type '<span class='ce_type_yes' style='cursor:pointer'>yes</span>':<br><br><input type='text' value='' class='ce_prompt_input input input-text' style='width: 60px; background-color: #3d424d; color: #cccccc;'/></div>",
 			onShow: function(){ 
 				$('.ce_prompt_input').focus().on("keyup blur", function(){
 					if ($('.ce_prompt_input').val().toLowerCase() === "yes") {
@@ -2362,6 +2346,9 @@ require([
 					if (e.which === 13) {
 						$('.modal').find('button:first-child').click();
 					}
+				});
+				$('.modal').find('.ce_type_yes').on("click",function(){
+					$('.ce_prompt_input').val("yes").blur();
 				});
 			},
 			actions: [{
@@ -2420,7 +2407,7 @@ require([
 	}
 
 	function activateTab(idx){
-		if (idx < -1 || idx > (editors.length - 1) || activeTab === idx) {
+		if (idx < -1 || idx > (editors.length - 1) || (activeTab === idx && activeTab > -1)) {
 			return;
 		}
 		$ce_contents.children().addClass("ce_hidden");
@@ -2442,8 +2429,10 @@ require([
 			editors[idx].editor.focus();
 		}
 		// switching tabs. check for changes
-		clearTimeout(fileModsCheckTimer);
-		fileModsCheckTimer = setTimeout(function(){ checkFileMods(); }, 1000);
+		if (idx > -1) {
+			clearTimeout(fileModsCheckTimer);
+			fileModsCheckTimer = setTimeout(function(){ checkFileMods(); }, 1000);
+		}
 	}
 
 	// The pipe seperators are between active tabs but not on the currently active tab or the one to its left.
@@ -2780,6 +2769,8 @@ require([
 		ecfg.canBeSavedRest = (ecfg.type === "rest");
 		if (found && ecfg.canBeSavedFile && found[1] !== 'app') {
 			ecfg.matchedConf = found[1];
+		} else if (ecfg.type === "settings"){
+			ecfg.matchedConf = "config_explorer";
 		}
 		if (ecfg.canBeSavedFile || ecfg.canBeSavedRest) {
 			// Start the process of checking filemodtimes
@@ -2938,7 +2929,7 @@ require([
 					var text = ed.getValue(position);
 					var splitedText=text.split("\n");
 					var line = splitedText[position.lineNumber-1];
-					var replace = "(.{" + position.column + "}[^\\s\'\"]+).*";
+					var replace = "(.{" + position.column + "}[^\\s\'\":]+).*";
 					var re = new RegExp(replace,"g");
 					var filename_string = line.replace(re, "$1");
 					filename_string = filename_string.replace(/.*[\s\"\']/,"");
@@ -3450,7 +3441,7 @@ require([
 		if (! confIsTrue('conf_validate_on_save', true)) {
 			return;
 		}
-		if (! ecfg.hasOwnProperty('matchedConf')) {
+		if (! ecfg.hasOwnProperty('matchedConf') || ecfg.file === "") {
 			return;
 		}
 		var run_path = "";
@@ -4223,11 +4214,6 @@ require([
 			} else {
 				conf._debug_refresh_endpoints = [];
 			}
-			if ($.trim(conf.debug_refresh_endpoints) !== "") {
-				$(".ce_splunk_reload_specific").parent().css("display","block");
-			} else {
-				$(".ce_splunk_reload_specific").parent().css("display","none");
-			}
 
 			if (confIsTrue('rest_api_dashboard_list', false)) {
 				$(".ce_show_rest").css("display","");
@@ -4278,43 +4264,50 @@ require([
 			var actionDefaults = data.conf.action || {};
 			var ce_custom_actions = $(".ce_custom_actions");
 			// Build the actions buttons on the home tab
-			if (! confIsTrue('run_commands', false)) {
-				ce_custom_actions.parent().css("display","none");
-			} else {
-				ce_custom_actions.parent().css("display","block");
-				for (stanza in data.conf) {
-					if (data.conf.hasOwnProperty(stanza)) {
-						if (stanza.substr(0,7) === "action:") {
-							var act = $.extend({}, actionDefaults, data.conf[stanza]);
-							if (! isTrueValue(act.disabled)) {
-								actions.push(act);
-							}
+			ce_custom_actions.css("display","block");
+			for (stanza in data.conf) {
+				if (data.conf.hasOwnProperty(stanza)) {
+					if (stanza.substr(0,7) === "action:") {
+						var act = $.extend({}, actionDefaults, data.conf[stanza]);
+						if (! isTrueValue(act.disabled)) {
+							actions.push(act);
 						}
 					}
 				}
-				actions.sort(function(a, b) {
-					if (a.order < b.order)
-						return -1;
-					if (a.order > b.order)
-						return 1;
-					return 0;
-				});
-				if (actions.length === 0) {
-					ce_custom_actions.html("No custom actions defined");
-				} else {
-					ce_custom_actions.empty();
-					for (var i = 0; i < actions.length; i++) {
-						// add to the home screen
-						(function(a, i, l){
-							var button = $("<span class='ce_custom_action btn'></span>").text(a.label).on("click", function(){
-								runAction(a.action, undefined, false);
-							});
-							var elem = $("<div class='" + ((i+1 < l) ? "ce_marginbottom" : "") + "'></div>").text(a.description).prepend(button);
-							elem.appendTo(ce_custom_actions);
-						})(actions[i], i, actions.length);
-					}
+			}
+			actions.sort(function(a, b) {
+				if (a.order < b.order)
+					return -1;
+				if (a.order > b.order)
+					return 1;
+				return 0;
+			});
+
+			ce_custom_actions.empty();
+			for (var i = 0; i < actions.length; i++) {
+				if (actions[i].action === "heading") {
+					$("<div class='ce_actions_header'></div>").text(actions[i].label).appendTo(ce_custom_actions);
+				
+				} else if (actions[i].action === "text") {
+					$("<span class='ce_actions_text'></span>").text(actions[i].label).appendTo(ce_custom_actions);
+				
+				} else if (actions[i].action === "br") {
+					$("<br/>").appendTo(ce_custom_actions);
+				
+				} else {						
+					// add to the home screen
+					(function(a, i, l){
+						var button = $("<span class='ce_custom_action btn'></span>").text(a.label).on("click", function(){
+							runAction(a.action, undefined, false);
+						});
+						//var elem = $("<div class='" + ((i+1 < l) ? "ce_marginbottom" : "") + "'></div>").text(a.description).prepend(button);
+						//elem.appendTo(ce_custom_actions);
+						button.appendTo(ce_custom_actions);
+					})(actions[i], i, actions.length);
 				}
 			}
+			
+
 			confFiles = {};
 			confFilesSorted = [];
 			while((res = rex.exec(data.files)) !== null) {
