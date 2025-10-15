@@ -2995,6 +2995,26 @@ require([
 				openPreferences();
 			}
 		});
+		if (ecfg.type === "settings") {
+			ecfg.editor.addAction({
+				id: "settings_spec",
+				contextMenuOrder: 0.3,
+				contextMenuGroupId: 'navigation',
+				label: "Open documentation (.spec file)",
+				run: function() {
+					runAction("spec:config_explorer.conf", "", true);
+				}
+			});
+			ecfg.editor.addAction({
+				id: "settings_examples",
+				contextMenuOrder: 0.3,
+				contextMenuGroupId: 'navigation',
+				label: "Show default config",
+				run: function() {
+					runAction("read:./etc/apps/config_explorer/default/config_explorer.conf", "", true);
+				}
+			});
+		}
 		if (ecfg.type === "read") {
 			for (var j = 0; j < hooksActive.length; j++) {
 				var hook = hooksActive[j];
@@ -4297,11 +4317,9 @@ require([
 				} else {						
 					// add to the home screen
 					(function(a, i, l){
-						var button = $("<span class='ce_custom_action btn'></span>").text(a.label).on("click", function(){
+						var button = $("<span class='ce_custom_action btn'></span>").text(a.label).attr("title",a.description).on("click", function(){
 							runAction(a.action, undefined, false);
 						});
-						//var elem = $("<div class='" + ((i+1 < l) ? "ce_marginbottom" : "") + "'></div>").text(a.description).prepend(button);
-						//elem.appendTo(ce_custom_actions);
 						button.appendTo(ce_custom_actions);
 					})(actions[i], i, actions.length);
 				}
