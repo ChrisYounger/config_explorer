@@ -89,7 +89,7 @@ require([
 				"<div class='ce_file_list'>"+
 					"<div class='ce_file_wrap'></div>"+
 				"</div>"+
-				"<input class='ce_treesearch_input' autocorrect='off' autocapitalize='off' spellcheck='false' type='text' wrap='off' aria-label='Filter list' placeholder='Filter list' title='Filter list'>"+
+				"<input class='ce_treesearch_input' autocorrect='off' autocapitalize='off' spellcheck='false' type='text' wrap='off' aria-label='Filter list' placeholder='Tree filter          CTRL SHIFT /' title='Filter list'>"+
 			"</div>"+
 				"<div class='ce_resize_column'></div>"+
 			"<div class='ce_container'>"+
@@ -266,14 +266,16 @@ require([
 
 	// Set the "save" hotkey at a global level instead of on the editor, this way the editor doesnt need to have focus.
 	$(window).on('keydown', function(event) {
-		if (event.ctrlKey || event.metaKey) {
-			switch (String.fromCharCode(event.which).toLowerCase()) {
-			case 's':
-				event.preventDefault();
-				saveActiveTab();
-				break;
-			}
+		// CTRL-SHIFT-/ focus the bottom left filter. can use just forward slash if nothing is currently focused.
+		if (((event.ctrlKey || event.metaKey) && event.shiftKey && event.which===191) || (event.which===191 && document.activeElement.tagName === "BODY")) {
+			// if the editor is focused, then the keydown event wont bubble up to the window
+			$(".ce_treesearch_input").focus();
 		}
+		// CTRL-S to save active tab
+		if ((event.ctrlKey || event.metaKey) && event.which===83) {
+			event.preventDefault();
+			saveActiveTab();
+		} 
 
 	// Prevent people from navigating away when they have unsaved changes
     }).on("beforeunload", function() {
@@ -2223,6 +2225,12 @@ require([
 			"<div style='margin-bottom:50px;'>Select upload file: <input type='file' class='ce_file_upload_input' style='width: 245px;'/> <label style='display:inline; margin-right:10px; '><input type='checkbox' class='ce_file_upload_extract' />Extract</label><button type='button' class='btn btn-primary ce_prompt_btn_upload'>Upload</button></div>"+
 				"</div>",
 			onShow: function(){ 
+				$('.ce_prompt_input_file').focus().on('keydown', function(e) {
+					// submit form on enter key
+					if (e.which === 13) {
+						$('.ce_prompt_btn_file').click();
+					}
+				}); 				
 				$('.ce_prompt_btn_file').on("click", function(){
 					$('.modal').one('hidden.bs.modal', function() {
 						var fname = $('.ce_prompt_input_file').val();
@@ -2237,6 +2245,12 @@ require([
 						}
 					}).modal('hide');					
 				});
+				$('.ce_prompt_input_folder').on('keydown', function(e) {
+					// submit form on enter key
+					if (e.which === 13) {
+						$('.ce_prompt_btn_folder').click();
+					}
+				}); 
 				$('.ce_prompt_btn_folder').on("click", function(){
 					$('.modal').one('hidden.bs.modal', function() {
 						var fname = $('.ce_prompt_input_folder').val();

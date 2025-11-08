@@ -125,6 +125,10 @@ dashboard_xml_file_experimental_actions = <bool>
 * will open the "local" version. Private user dashboards may also take priority. Only enable this option if you understand this well. 
 * Defaults to false
 
+debug_refresh_endpoints = <string>
+* A list of endpoints that will show when you click the button "Debug/refresh endpoint" button on the config explorer home page. 
+* Set to a blank string to hide the button. Some Splunk TAs may add their own debug/refresh endpoints.
+
 ############################################################################
 #  Experimental features                                                   #
 ############################################################################
