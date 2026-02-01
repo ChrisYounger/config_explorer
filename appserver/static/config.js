@@ -3240,9 +3240,14 @@ require([
 
 				service.post(ecfg.file, {"eai:data": saved_value}, function(err, r) {
 					if (err) {
+						if (err.data.hasOwnProperty('messages')) {
+							errText = "<pre>" + htmlEncode(err.data.messages["0"].text) + "</pre>";
+						} else {
+							errText = "<pre>" + htmlEncode(JSON.stringify(err)) + "</pre>";
+						}
 						showModal({
 							title: "Warning",
-							body: "<div class='alert alert-warning'><i class='icon-alert'></i>Error while saving: <pre>" + htmlEncode(err) + "</pre></div>", // err.data.messages["0"].text
+							body: "<div class='alert alert-warning'><i class='icon-alert'></i>Error while saving: " + errText + "</div>",
 							size: 500
 						});							
 						console.log(err);
@@ -3478,6 +3483,10 @@ require([
 		if (! ecfg.hasOwnProperty('matchedConf') || ecfg.file === "") {
 			return;
 		}
+		if (conf._conf_validate_on_save_exclusions.test(ecfg.matchedConf)) {
+			console.log("Not doing btool validation in code gutter for [" + ecfg.matchedConf + "] becuase it matches conf_validate_on_save_exclusions.");
+			return;
+		} 
 		var run_path = "";
 		var run_path_parts = ecfg.file.split(/[\/\\]/);
 		if (run_path_parts[0] === ".") {
@@ -3575,6 +3584,8 @@ require([
 			console.log("no btool contents for ", ecfg.matchedConf);
 			normalBtoolChecks = false;
 		}
+
+		//console.log("hinting file for [" + ecfg.matchedConf + "] is MB long: " + Math.round(btoolcontents.length / 1024) / 1024);
 
 		if (normalBtoolChecks) {
 			btoolcontents = btoolcontents.replace(/\\/g,'/');
@@ -4198,6 +4209,21 @@ require([
 			if (conf.btool_dir_for_shcluster_apps) {
 				conf.btool_dir_for_shcluster_apps = $.trim(conf.btool_dir_for_shcluster_apps).replace(/\/$/, "");
 			}
+
+			if (conf.hasOwnProperty('conf_validate_on_save_exclusions')) {
+				conf.conf_validate_on_save_exclusions = $.trim(conf.conf_validate_on_save_exclusions);
+				if (conf.conf_validate_on_save_exclusions !== "") {
+					try {
+						conf._conf_validate_on_save_exclusions = new RegExp(conf.conf_validate_on_save_exclusions, '');
+					} catch (e) {
+						console.error("Config file property: \"conf_validate_on_save_exclusions\" has bad regular expression and will be ignored.");
+					}
+				}
+			}
+			if (typeof conf._conf_validate_on_save_exclusions !== "object") {
+				conf._conf_validate_on_save_exclusions = new RegExp("savedsearches", '');
+			}
+
 
 			if (conf.hasOwnProperty('master_apps_gutter_useful_props_and_transforms')) {
 				conf.master_apps_gutter_useful_props_and_transforms = $.trim(conf.master_apps_gutter_useful_props_and_transforms);

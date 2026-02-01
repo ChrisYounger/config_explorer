@@ -37,6 +37,12 @@ hide_settings = false
 # doesn't work properly, so run btool yourself to confirm.
 # Defaults to true
 
+#conf_validate_on_save_exclusions = savedsearches
+# a pipe seperated list of btool config types that should not perform the gutter hints. 
+# If the 'btool list' output for a config type is very large, it will cause the web browser 
+# to run out of memory and crash.
+# Defaults to savedsearches
+
 #btool_dir_for_deployment_apps =
 # If this server is a deployment server, then set this property to a sym-linked copy of the deployment-apps folder.
 # this will enable the btool gutter-hinting in config files to work with config in the deployment-apps folder

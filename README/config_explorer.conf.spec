@@ -36,6 +36,12 @@ conf_validate_on_save = <bool>
   reliable this can be wrong.
 * Defaults to true
 
+conf_validate_on_save_exclusions = <string>
+* a pipe seperated list of btool config types that should not perform the gutter hints. 
+* If the 'btool list' output for a config type is very large, it will cause the web browser 
+  to run out of memory and crash.
+* Defaults to savedsearches
+
 git_autocommit = <bool>
 * Track all file saves by automatically committing them to git with a generic message.   
   Note you must first configure the git repo using "git init". Please see the documentation.
