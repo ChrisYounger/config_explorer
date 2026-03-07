@@ -89,7 +89,7 @@ require([
 				"<div class='ce_file_list'>"+
 					"<div class='ce_file_wrap'></div>"+
 				"</div>"+
-				"<input class='ce_treesearch_input' autocorrect='off' autocapitalize='off' spellcheck='false' type='text' wrap='off' aria-label='Filter list' placeholder='Tree filter          CTRL SHIFT /' title='Filter list'>"+
+				"<input class='ce_treesearch_input' autocorrect='off' autocapitalize='off' spellcheck='false' type='text' wrap='off' aria-label='Filter list' placeholder='Filter' title='Filter list, and use up/down keys to navigate. Enter to open. Backspace to go up a level.     Hotkey: CTRL SHIFT /'>"+
 			"</div>"+
 				"<div class='ce_resize_column'></div>"+
 			"<div class='ce_container'>"+
@@ -261,6 +261,7 @@ require([
 	var $ce_tabs = $(".ce_tabs");
 	var $ce_home_tab = $(".ce_home_tab");
 	var $ce_context_menu_overlay = $(".ce_context_menu_overlay");
+	var $ce_treesearch_input = $(".ce_treesearch_input");
 	var broadcastChannel = new BroadcastChannel("config_explorer");
 	broadcastChannel.onmessage = handleBroadcastMessage;
 
@@ -269,7 +270,7 @@ require([
 		// CTRL-SHIFT-/ focus the bottom left filter. can use just forward slash if nothing is currently focused.
 		if (((event.ctrlKey || event.metaKey) && event.shiftKey && event.which===191) || (event.which===191 && document.activeElement.tagName === "BODY")) {
 			// if the editor is focused, then the keydown event wont bubble up to the window
-			$(".ce_treesearch_input").focus();
+			$ce_treesearch_input.focus();
 		}
 		// CTRL-S to save active tab
 		if ((event.ctrlKey || event.metaKey) && event.which===83) {
@@ -443,18 +444,18 @@ require([
 		}
 	});
 
-	$('.ce_treesearch_input').on("input", function(){
+	$ce_treesearch_input.on("input", function(){
 		if ($(".ce_tree_icons .ce_show_filesystem.ce_selected").length) {
-			leftPaneFileList($(this).val().toLowerCase());
+			leftPaneFileList();
 		}
 		if ($(".ce_tree_icons .ce_recent_files.ce_selected").length) {
-			leftPaneRecentList($(this).val().toLowerCase());
+			leftPaneRecentList();
 		}
 		if ($(".ce_tree_icons .ce_show_confs.ce_selected").length) {
-			leftPaneConfList($(this).val().toLowerCase());
+			leftPaneConfList();
 		}
 		if ($(".ce_tree_icons .ce_show_rest.ce_selected").length) {
-			leftPaneRestList($(this).val().toLowerCase());
+			leftPaneRestList();
 		}		
 	}).on("focus", function(e){
 		if ($(".ce_leftnav_keyboard_selected").length == 0) {
@@ -494,7 +495,7 @@ require([
 	
 
 	function filterModeReset(){
-		$(".ce_treesearch_input").val("");
+		$ce_treesearch_input.val("");
 	}
 	
 	function addHookActionToTree(hook, file, actions, matchtype) {
@@ -966,6 +967,18 @@ require([
 					type: event.data.type,
 					path: event.data.path
 				});
+				if (Notification.permission !== "granted")
+					Notification.requestPermission();
+				else {
+					var notification = new Notification('Opened', {
+						body: "Click here to go to Config Explorer tab",
+					});
+					notification.onclick = function() {
+						parent.focus();
+						window.focus(); //just in case, older browsers
+						this.close();
+					};
+				}
 			}
 		}
 	}
@@ -1825,7 +1838,7 @@ require([
 		return d.toLocaleString();
 	}
 
-	function leftPaneFileList(filter){
+	function leftPaneFileList(){
 		leftPaneRemoveSpinner();
 		$ce_file_wrap.empty();
 		$ce_file_path.empty();
@@ -1838,6 +1851,7 @@ require([
 		$("<span></span><bdi></bdi>").appendTo($ce_file_path);
 		var files = 0;
 		var filter_re;
+		var filter = $ce_treesearch_input.val().trim().toLowerCase();
 		if (filter) {
 			filter_re = new RegExp(escapeRegExp(filter), 'gi'); 
 		}
@@ -2918,7 +2932,7 @@ require([
 				}
 			});
 		}
-		if (ecfg.canBeSavedFile) {
+		if (ecfg.canBeSavedFile || ecfg.canBeSavedRest) {
 			ecfg.editor.addAction({
 				id: 'link-to-highlight',
 				contextMenuOrder: 3,
@@ -3028,6 +3042,15 @@ require([
 					runAction("read:./etc/apps/config_explorer/default/config_explorer.conf", "", true);
 				}
 			});
+			ecfg.editor.addAction({
+				id: "orig_compare",
+				contextMenuOrder: 0.3,
+				contextMenuGroupId: 'navigation',
+				label: "Diff against default",
+				run: function() {
+					compareFiles("./etc/apps/config_explorer/local/config_explorer.conf", "./etc/apps/config_explorer/default/config_explorer.conf.example");
+				}
+			});			
 		}
 		if (ecfg.type === "read") {
 			for (var j = 0; j < hooksActive.length; j++) {
@@ -3088,6 +3111,7 @@ require([
 		
 		}
 		if (ecfg.type === "rest") {
+			var file_parts_for_openurl_rest = ecfg.file.match(/([^\/]+)\/([^\/]+)\/data\/ui\/views\/(.*)$/);
 			// reload rest 
 			ecfg.editor.addAction({
 				id: 'reload',
@@ -3099,15 +3123,40 @@ require([
 					hooksCfg.rest(ecfg.file);
 				}
 			});
-			var file_parts_for_openurl_rest = ecfg.file.match(/([^\/]+)\/data\/ui\/views\/(.*)$/);
-			if (file_parts_for_openurl_rest) {		
+			ecfg.editor.addAction({
+				id: 'editorchanges',
+				contextMenuOrder: 0.3,
+				contextMenuGroupId: 'navigation',
+				label: 'Diff unsaved changes',
+				run: function() {
+					openDiffOfUnsavedChanges(ecfg);
+				}
+			});
+
+			if (confIsTrue('dashboard_xml_file_experimental_actions', false) && file_parts_for_openurl_rest) {	 
+				ecfg.editor.addAction({
+					id: 'restopenfiletree',
+					contextMenuOrder: 0.33,
+					contextMenuGroupId: 'navigation',
+					label: 'Attempt open containing folder',
+					run: function() {
+						console.log("parts=", file_parts_for_openurl_rest);
+						var gofolder = "etc/apps/" + file_parts_for_openurl_rest[2] + "/local/data/ui/views/";
+						if (file_parts_for_openurl_rest[1] !== "nobody") {
+							gofolder = "etc/users/" + file_parts_for_openurl_rest[1] + "/apps/" + file_parts_for_openurl_rest[2] + "/local/data/ui/views/";
+						}
+						console.log(gofolder);
+						changeDirectory(gofolder);
+					}
+				});		
+
 				ecfg.editor.addAction({
 					id: 'opendashboard',
 					contextMenuOrder: 0.31,
 					contextMenuGroupId: 'navigation',
 					label: 'Attempt view in browser',
 					run: function() {
-						hooksCfg.openurl("/app/" + file_parts_for_openurl_rest[1] + "/" + file_parts_for_openurl_rest[2]);
+						hooksCfg.openurl("/app/" + file_parts_for_openurl_rest[2] + "/" + file_parts_for_openurl_rest[3]);
 					}
 				});	
 			}
@@ -3132,11 +3181,21 @@ require([
 	function openDiffOfUnsavedChanges(ecfg) {
 		var ecfgDiff = createTab('diff', ecfg.file, "<span class='ce-dim'>diff:</span> " + ecfg.file);
 		var saved_value = ecfg.editor.getValue();
-		serverActionWithoutFlicker({action: 'read', path: ecfg.file}).then(function(contents){
-			updateTabAsDiffer(ecfgDiff, ecfg.file + " (on disk)\n" + contents, "(Unsaved changes)\n" + saved_value);
-		}).catch(function(){ 
-			closeTabByCfg(ecfgDiff);
-		});			
+		if (ecfg.type=="read") {
+			serverActionWithoutFlicker({action: ecfg.type, path: ecfg.file}).then(function(contents){
+				updateTabAsDiffer(ecfgDiff, ecfg.file + "\n" + contents, "(Unsaved changes)\n" + saved_value);
+			}).catch(function(){ 
+				closeTabByCfg(ecfgDiff);
+			});	
+		} else if (ecfg.type=="rest") {
+			getRest(ecfg.file, null).then(function(restData) {
+				if (restData.length === 1) {
+					updateTabAsDiffer(ecfgDiff, ecfg.file + "\n" + restData[0].content['eai:data'], "(Unsaved changes)\n" + saved_value);
+				} else {
+					closeTabByCfg(ecfgDiff);
+				}
+			});
+		}	
 	}
 	
 	function saveActiveTab(cb){
@@ -4416,6 +4475,18 @@ require([
 		$ce_tree_icons.find('i').tooltip({delay: 100, placement: 'bottom'});
 
 		$("body").css("overflow","");
+
+		if (conf.hasOwnProperty('tree_filter_display') && conf.tree_filter_display==="none") {
+			// nothing
+		} else if (conf.hasOwnProperty('tree_filter_display') && conf.tree_filter_display==="bottom") {
+			// bottom
+			$ce_file_list.css({"top":"70px", "bottom":"30px"});
+			$ce_treesearch_input.css({"display":"block", "top":"", "bottom":"-10px", "width":"100%", "left":"0"});
+		} else {
+			// top
+			$ce_file_list.css({"top":"101px", "bottom":"0"});
+			$ce_treesearch_input.css({"display":"block", "top":"73px", "bottom":"", "width":"250px", "left":"15px"});
+		}
 
 		readUrlHash();
 		

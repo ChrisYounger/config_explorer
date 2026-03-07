@@ -240,6 +240,7 @@ header {
     opacity: 0.95
 }
 input[type=text].ce_treesearch_input{
+    display: none;
     background-color: rgb(64, 64, 64);
     color: white;
     position: absolute;
@@ -248,11 +249,10 @@ input[type=text].ce_treesearch_input{
     border: 0px none;
     left: 0;
     height: 28px;
-    display: block;
     box-shadow: none;
     border-radius: 0;
     width: 100%;
-    padding-left: 13px;
+    padding-left: 18px;
 }
 input[type=text].ce_treesearch_input::placeholder {
   color: #bfbfbf;
@@ -272,7 +272,7 @@ input[type=text].ce_treesearch_input::placeholder {
     padding: 0;
     top: 70px;
     /* overflow-x: hidden; */
-    bottom: 30px;
+    bottom: 0;
     width: 100%;
 }
 .ce_file_wrap {

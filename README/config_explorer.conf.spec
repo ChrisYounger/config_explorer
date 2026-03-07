@@ -135,6 +135,10 @@ debug_refresh_endpoints = <string>
 * A list of endpoints that will show when you click the button "Debug/refresh endpoint" button on the config explorer home page. 
 * Set to a blank string to hide the button. Some Splunk TAs may add their own debug/refresh endpoints.
 
+tree_filter_display = <string>
+* The position to show the text search filter in the left tree pane. Valid options: "top","bottom","none"
+* Defaults to top
+
 ############################################################################
 #  Experimental features                                                   #
 ############################################################################
