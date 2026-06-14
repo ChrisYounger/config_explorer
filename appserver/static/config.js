@@ -67,8 +67,7 @@ require([
 			"<div class='bounce2'></div>"+
 			"<div class='bounce3'></div>"+
 		"</div>"+
-		"<div class='ce_app_bar'></div>"+
-		"<div class='ce_wrap'>"+
+		"<div class='ce_wrap' style='height:0;'>"+
 			"<div class='ce_tree_pane'>"+
 				"<div class='ce_tree_icons'>"+
 					"<i title='Filesystem' class='ce_show_filesystem ce_selected ce_clickable_icon ce_tree_btn_tab icon-dashboard'></i>"+
@@ -1888,7 +1887,7 @@ require([
 		filePathRTLCheck();		
 	}
 
-	function leftPaneRestList(filter){
+	function leftPaneRestList(){
 		//leftPaneRemoveSpinner();
 		$ce_file_wrap.empty();
 		$ce_file_path.empty();
@@ -1900,10 +1899,10 @@ require([
 		} else if (inFolderRestApp === "") {
 			$(".ce_folder_up_rest").addClass("ce_disabled");
 			crumbs = "."; //inFolderRestType;
-			leftPaneRestListGet("apps", filter);
+			leftPaneRestListGet("apps");
 		} else {
-			crumbs =  "./" + inFolderRestApp; //inFolderRestType +
-			leftPaneRestListGet(inFolderRestType, filter);
+			crumbs =  "./" + inFolderRestApp;
+			leftPaneRestListGet(inFolderRestType);
 		}
 		$("<span></span><bdi></bdi>").appendTo($ce_file_path);
 		$ce_file_path.find("span, bdi").attr("title", crumbs).text(crumbs + '/');
@@ -1926,11 +1925,12 @@ require([
 
 	};
 
-	function leftPaneRestListGet(type, filter) {
+	function leftPaneRestListGet(type) {
 		var label;
 		var files = false;
 		var i;
 		var filter_re;
+		var filter = $ce_treesearch_input.val().trim().toLowerCase();
 		if (filter) {
 			filter_re = new RegExp(escapeRegExp(filter), 'gi'); 
 		}
@@ -1970,7 +1970,7 @@ require([
 					restTypes[inFolderRestType].cache.push(item);
 				}
 				// try again
-				leftPaneRestListGet(type, filter);
+				leftPaneRestListGet(type);
 			}).catch(function(){
 				showModal({
 					title: "Warning",
@@ -2121,10 +2121,11 @@ require([
 
 
 	// The conf file list
-	function leftPaneConfList(filter) {
+	function leftPaneConfList() {
 		$ce_file_wrap.empty();
 		$ce_file_path.removeClass('ce_rtl').empty();
 		var filter_re;
+		var filter = $ce_treesearch_input.val().trim().toLowerCase();
 		var files = false;
 		if (filter) {
 			filter_re = new RegExp(escapeRegExp(filter), 'gi'); 
@@ -2153,10 +2154,11 @@ require([
 
 	// Click handler for Recent Files button in top right
 	// TODO [low] can we enhance this so it shows files by how often you use them?
-	function leftPaneRecentList(filter) {
+	function leftPaneRecentList() {
 		$ce_file_wrap.empty();
 		$ce_file_path.removeClass('ce_rtl').empty();
 		var filter_re;
+		var filter = $ce_treesearch_input.val().trim().toLowerCase();
 		if (filter) {
 			filter_re = new RegExp(escapeRegExp(filter), 'gi'); 
 		}		
@@ -4474,7 +4476,7 @@ require([
 		// Add tooltips
 		$ce_tree_icons.find('i').tooltip({delay: 100, placement: 'bottom'});
 
-		$("body").css("overflow","");
+		$(".ce_wrap").css({"height": "calc(100vh - " + $(".ce_wrap").offset().top + "px)"})
 
 		if (conf.hasOwnProperty('tree_filter_display') && conf.tree_filter_display==="none") {
 			// nothing
